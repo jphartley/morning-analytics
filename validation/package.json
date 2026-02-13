@@ -1,0 +1,14 @@
+{
+  "name": "morning-analytics",
+  "type": "module",
+  "scripts": {
+    "test-prompt": "node test-prompt.mjs",
+    "test-discord": "node test-discord.mjs",
+    "test-midjourney": "node test-midjourney.mjs"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5"
+  }
+}
