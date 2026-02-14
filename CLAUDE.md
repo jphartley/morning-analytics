@@ -27,6 +27,11 @@ npm run test-midjourney  # Test Midjourney integration
 
 Set `USE_MOCKS=true` in `/app/.env.local` for testing without API calls.
 
+Admin Utilities:
+```bash
+node scripts/cleanup-history.js --keep 5    # Delete all but 5 most recent analyses (CLI only, requires confirmation)
+```
+
 ## Architecture
 
 ### Directory Structure
