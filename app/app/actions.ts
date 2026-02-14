@@ -5,15 +5,13 @@ import { existsSync } from "fs";
 import { readFile, readdir } from "fs/promises";
 import { v4 as uuidv4 } from "uuid";
 import { analyzeWithGemini } from "@/lib/gemini";
+import { assertServerSupabaseEnv } from "@/lib/supabase";
 import { triggerImagine } from "@/lib/discord/trigger";
 import { waitForImages } from "@/lib/discord/listener";
 import { splitGridImage } from "@/lib/image-splitter";
-import {
-  saveAnalysis as saveToStorage,
-  getAnalysisById as getFromStorage,
-  listAnalyses as listFromStorage,
-  uploadImagesToStorage,
-} from "@/lib/analytics-storage";
+import { saveAnalysis as saveToStorage, uploadImagesToStorage } from "@/lib/analytics-storage";
+
+assertServerSupabaseEnv();
 
 // Response types
 export interface TextAnalysisResponse {
@@ -46,29 +44,6 @@ export interface SaveAnalysisResponse {
   error?: string;
 }
 
-export interface HistoryListResponse {
-  success: boolean;
-  data?: Array<{
-    id: string;
-    created_at: string;
-    input_preview: string;
-  }>;
-  error?: string;
-}
-
-export interface HistoryItemResponse {
-  success: boolean;
-  data?: {
-    id: string;
-    created_at: string;
-    input_text: string;
-    analysis_text: string;
-    image_prompt: string | null;
-    model_id: string;
-    imageUrls: string[];
-  };
-  error?: string;
-}
 
 const MOCK_IMAGE_COUNT = 4;
 const MOCK_IMAGE_DELAY_MS = 1000;
@@ -296,38 +271,6 @@ export async function saveAnalysis(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to save analysis.",
-    };
-  }
-}
-
-/**
- * Get list of past analyses for history sidebar
- */
-export async function getHistoryList(): Promise<HistoryListResponse> {
-  try {
-    const result = await listFromStorage();
-    return result;
-  } catch (error) {
-    console.error("Get history list error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to load history.",
-    };
-  }
-}
-
-/**
- * Get a specific analysis by ID for viewing
- */
-export async function getHistoryItem(id: string): Promise<HistoryItemResponse> {
-  try {
-    const result = await getFromStorage(id);
-    return result;
-  } catch (error) {
-    console.error("Get history item error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to load analysis.",
     };
   }
 }

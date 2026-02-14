@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getHistoryList } from "@/app/actions";
+import { listAnalyses } from "@/lib/analytics-storage-client";
 
 interface HistoryEntry {
   id: string;
@@ -42,7 +42,7 @@ export function HistorySidebar({
       setIsLoading(true);
       setError(null);
 
-      const result = await getHistoryList();
+      const result = await listAnalyses();
 
       if (result.success && result.data) {
         setEntries(result.data);

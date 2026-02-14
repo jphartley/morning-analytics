@@ -34,12 +34,12 @@ The system SHALL upload analysis images to Supabase Storage bucket `analysis-ima
 - **AND** stores images as JPEG or PNG blobs before upload
 
 ### Requirement: Retrieve analysis by ID
-The system SHALL retrieve a complete analysis record by its UUID, including signed URLs for all associated images.
+The system SHALL retrieve a complete analysis record by its UUID, including public URLs for all associated images.
 
 #### Scenario: Fetch existing analysis
 - **WHEN** user requests analysis with valid UUID
 - **THEN** system returns the full record from Postgres
-- **AND** generates signed URLs for each image in storage
+- **AND** generates public URLs for each image in storage
 
 #### Scenario: Fetch non-existent analysis
 - **WHEN** user requests analysis with unknown UUID

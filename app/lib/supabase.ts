@@ -26,6 +26,8 @@ export interface AnalysisListItem {
   input_preview: string;
 }
 
+const SERVER_ENV_VARS = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
+
 // Environment validation
 function getEnvVar(name: string, required: boolean = true): string {
   const value = process.env[name];
@@ -33,6 +35,35 @@ function getEnvVar(name: string, required: boolean = true): string {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value || "";
+}
+
+function validateEnvVars(names: string[]): void {
+  names.forEach((name) => {
+    getEnvVar(name);
+  });
+}
+
+function getClientEnv(): { url: string; anonKey: string } {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url) {
+    throw new Error("Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL");
+  }
+
+  if (!anonKey) {
+    throw new Error("Missing required environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+
+  return { url, anonKey };
+}
+
+export function assertServerSupabaseEnv(): void {
+  validateEnvVars(SERVER_ENV_VARS);
+}
+
+export function assertClientSupabaseEnv(): void {
+  getClientEnv();
 }
 
 // Lazy initialization to avoid errors during build
@@ -45,6 +76,7 @@ let browserClient: SupabaseClient | null = null;
  */
 export function getServerSupabase(): SupabaseClient {
   if (!serverClient) {
+    assertServerSupabaseEnv();
     const url = getEnvVar("NEXT_PUBLIC_SUPABASE_URL");
     const serviceKey = getEnvVar("SUPABASE_SERVICE_ROLE_KEY");
     serverClient = createClient(url, serviceKey);
@@ -58,21 +90,9 @@ export function getServerSupabase(): SupabaseClient {
  */
 export function getBrowserSupabase(): SupabaseClient {
   if (!browserClient) {
-    const url = getEnvVar("NEXT_PUBLIC_SUPABASE_URL");
-    const anonKey = getEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    assertClientSupabaseEnv();
+    const { url, anonKey } = getClientEnv();
     browserClient = createClient(url, anonKey);
   }
   return browserClient;
-}
-
-/**
- * Check if Supabase is configured
- * Returns false if env vars are missing (allows app to run without Supabase)
- */
-export function isSupabaseConfigured(): boolean {
-  return !!(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
 }

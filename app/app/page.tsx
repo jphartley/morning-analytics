@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition, useCallback } from "react";
-import { analyzeText, generateImages, saveAnalysis, getHistoryItem, TextAnalysisResponse } from "./actions";
+import { analyzeText, generateImages, saveAnalysis, TextAnalysisResponse } from "./actions";
+import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { JournalInput } from "@/components/JournalInput";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { ImageGrid } from "@/components/ImageGrid";
@@ -136,7 +137,7 @@ export default function Home() {
     setState("viewing-history");
     setError(null);
 
-    const result = await getHistoryItem(id);
+    const result = await getAnalysisById(id);
 
     if (result.success && result.data) {
       setHistoryViewData({

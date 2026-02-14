@@ -83,7 +83,7 @@ Left sidebar on the main page showing past analyses:
 Create a singleton Supabase client in `lib/supabase.ts`:
 
 - Server-side client for Server Actions (using service role key)
-- Client-side client for history browsing (using anon key with RLS)
+- Client-side client for history browsing (using anon key with RLS) and public URLs for images
 - RLS policies disabled for now (single-user), enabled when auth added
 
 **Rationale:** Separating server/client follows Supabase best practices. Service role key bypasses RLS for writes. Anon key respects RLS for reads (future-proofing).

@@ -44,6 +44,8 @@ Copy `.env.example` to `.env.local` and fill in the values. Variables prefixed w
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: public anon key for client reads.
 - `SUPABASE_SERVICE_ROLE_KEY`: server-side key for writes (keep secret).
 
+Supabase env vars are validated at server startup; missing values will prevent the app from booting.
+
 ### Mocking and local testing
 
 - `USE_AI_MOCKS`: when `true`, mocks Gemini + Discord/Midjourney (no external calls).
