@@ -10,6 +10,7 @@ import { LoadingState } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
 import { Lightbox } from "@/components/Lightbox";
 import { ModelPicker } from "@/components/ModelPicker";
+import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 
@@ -20,6 +21,7 @@ interface HistoryViewData {
   inputText: string;
   analysisText: string;
   imageUrls: string[];
+  analystPersona?: string | null;
 }
 
 const isMockMode = process.env.NEXT_PUBLIC_IMAGE_PROVIDER === "mock";
@@ -33,6 +35,7 @@ export default function Home() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
+  const [selectedPersona, setSelectedPersona] = useState<string>("jungian");
   const [isPending, startTransition] = useTransition();
 
   // History state
@@ -44,6 +47,10 @@ export default function Home() {
     setSelectedModel(modelId);
   }, []);
 
+  const handlePersonaChange = useCallback((persona: string) => {
+    setSelectedPersona(persona);
+  }, []);
+
   const handleAnalyze = () => {
     setState("analyzing");
     setError(null);
@@ -53,7 +60,7 @@ export default function Home() {
 
     startTransition(async () => {
       // Phase 1: Get text analysis
-      const textResult = await analyzeText(journalText, selectedModel);
+      const textResult = await analyzeText(journalText, selectedModel, selectedPersona);
 
       if (!textResult.success) {
         setError(textResult.error || "Failed to analyze text.");
@@ -95,7 +102,8 @@ export default function Home() {
         textResult.imagePrompt || null,
         selectedModel,
         imagePaths,
-        analysisId
+        analysisId,
+        selectedPersona
       );
 
       const nonBlockingErrorMessage = imageGenerationErrorMessage || uploadErrorMessage;
@@ -145,6 +153,7 @@ export default function Home() {
         inputText: result.data.input_text,
         analysisText: result.data.analysis_text,
         imageUrls: result.data.imageUrls,
+        analystPersona: result.data.analyst_persona,
       });
     } else {
       setError(result.error || "Failed to load analysis");
@@ -181,7 +190,10 @@ export default function Home() {
           <header className="mb-12">
             <div className="flex justify-between items-start mb-4">
               <div />
-              <ModelPicker onModelChange={handleModelChange} />
+              <div className="flex gap-3">
+                <AnalystPicker onPersonaChange={handlePersonaChange} />
+                <ModelPicker onModelChange={handleModelChange} />
+              </div>
             </div>
             <div className="text-center">
               <h1 className="text-4xl font-bold text-stone-800 mb-2">
@@ -236,6 +248,20 @@ export default function Home() {
           {/* Viewing historical analysis */}
           {state === "viewing-history" && historyViewData && (
             <div className="space-y-8">
+              {historyViewData.analystPersona && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-amber-900">
+                    <span className="font-medium">Analyzed by:</span>{" "}
+                    {historyViewData.analystPersona === "jungian"
+                      ? "Jungian Analyst"
+                      : historyViewData.analystPersona === "mel-robbins"
+                        ? "Mel Robbins"
+                        : historyViewData.analystPersona === "loving-parent"
+                          ? "Loving Parent"
+                          : historyViewData.analystPersona}
+                  </p>
+                </div>
+              )}
               <div className="bg-stone-50 border border-stone-200 rounded-lg p-4 mb-4">
                 <h3 className="text-sm font-medium text-stone-500 mb-2">Original Input</h3>
                 <p className="text-stone-700 whitespace-pre-wrap">{historyViewData.inputText}</p>

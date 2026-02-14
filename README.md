@@ -106,6 +106,7 @@ npm run lint
 
 ## Documentation
 
+- `docs/current-architecture.md`: data flow, system architecture, and code organization.
 - `docs/prd.md`: product requirements and MVP scope.
 - `docs/prompt.md`: Gemini prompt and analysis structure.
 - `docs/technical-feasibility.md`: integration validation notes.

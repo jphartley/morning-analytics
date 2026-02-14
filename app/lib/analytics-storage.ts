@@ -92,7 +92,8 @@ export async function saveAnalysis(
   imagePrompt: string | null,
   modelId: string,
   imagePaths: string[],
-  analysisId?: string
+  analysisId?: string,
+  analystPersona: string = "jungian"
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   const supabase = getServerSupabase();
 
@@ -102,6 +103,7 @@ export async function saveAnalysis(
     image_prompt: imagePrompt,
     model_id: modelId,
     image_paths: imagePaths.length > 0 ? imagePaths : null,
+    analyst_persona: analystPersona,
     ...(analysisId ? { id: analysisId } : {}),
   };
 

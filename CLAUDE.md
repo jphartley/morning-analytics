@@ -68,6 +68,32 @@ Debug flags:
 DEBUG_DISCORD=true   # Verbose Discord/Midjourney listener logging
 ```
 
+## Git Workflow
+
+This project is maintained on GitHub using the `gh` CLI tool. **After completing work on features or changes, commit and push regularly:**
+
+```bash
+# Check status and staged changes
+git status
+git diff
+
+# Stage and commit implementation
+git add <specific-files>
+git commit -m "Clear, concise message describing the change"
+
+# Push to remote
+git push origin main
+```
+
+**Note**: Use `git add` with specific file names rather than `git add .` to avoid accidentally committing secrets or large files. After archiving OpenSpec changes with `/opsx:archive`, create a commit with those changes.
+
 ## OpenSpec Workflow
 
 This project uses OpenSpec for structured change management. Feature specs live in `/openspec/specs/`. Use the OpenSpec skills (`/opsx:new`, `/opsx:continue`, `/opsx:apply`, etc.) for creating and implementing changes.
+
+**After archiving a change with `/opsx:archive`, commit the archived artifacts:**
+```bash
+git add openspec/changes/archive/
+git commit -m "Archive: [change-name] - completed and verified"
+git push origin main
+```

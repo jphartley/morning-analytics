@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Display model selection options
 
@@ -17,7 +17,7 @@ The system SHALL display a model picker with three options in the header, alongs
 
 ### Requirement: Default model selection
 
-The system SHALL use `gemini-3-pro-preview` as the default model when no selection has been saved.
+The system SHALL use `gemini-3-pro-preview` as the default model when no selection has been saved. This requirement is unchanged from the original spec.
 
 #### Scenario: First-time user sees default
 - **WHEN** user loads the app with no saved model preference
@@ -25,7 +25,7 @@ The system SHALL use `gemini-3-pro-preview` as the default model when no selecti
 
 ### Requirement: Persist model selection
 
-The system SHALL save the user's model selection to localStorage under the key `gemini-model`.
+The system SHALL save the user's model selection to localStorage under the key `gemini-model`. This requirement is unchanged from the original spec.
 
 #### Scenario: User changes model selection
 - **WHEN** user selects a different model from the picker
@@ -37,7 +37,7 @@ The system SHALL save the user's model selection to localStorage under the key `
 
 ### Requirement: Graceful fallback when localStorage unavailable
 
-The system SHALL fall back to the default model without error when localStorage is unavailable.
+The system SHALL fall back to the default model without error when localStorage is unavailable. This requirement is unchanged from the original spec.
 
 #### Scenario: localStorage unavailable
 - **WHEN** localStorage is unavailable (SSR, private browsing, or disabled)
@@ -46,7 +46,7 @@ The system SHALL fall back to the default model without error when localStorage 
 
 ### Requirement: Pass model selection to analysis
 
-The system SHALL pass the selected model ID to the `analyzeText` server action when analyzing journal text.
+The system SHALL pass the selected model ID to the `analyzeText` server action when analyzing journal text. This requirement is unchanged from the original spec.
 
 #### Scenario: Analysis uses selected model
 - **WHEN** user submits journal text for analysis

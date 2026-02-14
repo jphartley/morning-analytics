@@ -102,7 +102,8 @@ async function delay(ms: number): Promise<void> {
  */
 export async function analyzeText(
   journalText: string,
-  modelId?: string
+  modelId?: string,
+  persona: string = "jungian"
 ): Promise<TextAnalysisResponse> {
   try {
     if (!journalText || journalText.trim().length === 0) {
@@ -112,7 +113,7 @@ export async function analyzeText(
       };
     }
 
-    const geminiResult = await analyzeWithGemini(journalText, modelId);
+    const geminiResult = await analyzeWithGemini(journalText, modelId, persona);
 
     return {
       success: true,
@@ -254,7 +255,8 @@ export async function saveAnalysis(
   imagePrompt: string | null,
   modelId: string,
   imagePaths: string[],
-  analysisId?: string
+  analysisId?: string,
+  analystPersona: string = "jungian"
 ): Promise<SaveAnalysisResponse> {
   try {
     const result = await saveToStorage(
@@ -263,7 +265,8 @@ export async function saveAnalysis(
       imagePrompt,
       modelId,
       imagePaths,
-      analysisId
+      analysisId,
+      analystPersona
     );
     return result;
   } catch (error) {

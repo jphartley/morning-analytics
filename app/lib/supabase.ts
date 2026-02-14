@@ -9,6 +9,7 @@ export interface AnalysisRecord {
   image_prompt: string | null;
   model_id: string;
   image_paths: string[] | null;
+  analyst_persona?: string | null;
 }
 
 export interface AnalysisInsert {
@@ -18,6 +19,7 @@ export interface AnalysisInsert {
   image_prompt?: string | null;
   model_id: string;
   image_paths?: string[] | null;
+  analyst_persona?: string;
 }
 
 export interface AnalysisListItem {

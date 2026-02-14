@@ -41,6 +41,7 @@ function parseResponse(response: string): AnalysisResult {
 }
 
 let systemPrompt: string | null = null;
+let personaPrompts: { [key: string]: string } | null = null;
 
 function getSystemPrompt(): string {
   if (!systemPrompt) {
@@ -50,15 +51,56 @@ function getSystemPrompt(): string {
   return systemPrompt;
 }
 
+function loadPersonaPrompts(): { [key: string]: string } {
+  if (!personaPrompts) {
+    const personas = ["jungian", "mel-robbins", "loving-parent"];
+    personaPrompts = {};
+
+    for (const persona of personas) {
+      try {
+        const promptPath = join(process.cwd(), "..", "prompts", `${persona}.md`);
+        personaPrompts[persona] = readFileSync(promptPath, "utf-8");
+        console.log(`[PROMPT] Loaded ${persona} persona prompt`);
+      } catch (error) {
+        console.error(
+          `[ERROR] Failed to load ${persona} persona prompt:`,
+          error
+        );
+        throw new Error(
+          `Failed to load ${persona} persona prompt. Check that prompts/${persona}.md exists.`
+        );
+      }
+    }
+  }
+  return personaPrompts;
+}
+
+function getPromptForPersona(persona: string = "jungian"): string {
+  const personas = loadPersonaPrompts();
+
+  if (!personas[persona]) {
+    console.error(
+      `[ERROR] Unknown persona: ${persona}. Falling back to jungian.`
+    );
+    return personas["jungian"];
+  }
+
+  return personas[persona];
+}
+
 export async function analyzeWithGemini(
   journalText: string,
-  modelId?: string
+  modelId?: string,
+  persona: string = "jungian"
 ): Promise<AnalysisResult> {
   const useMocks = process.env.USE_AI_MOCKS === "true";
 
   if (useMocks) {
     await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
-    console.log("[MOCK] Gemini analysis for:", journalText.slice(0, 50) + "...");
+    console.log(
+      `[MOCK] Gemini analysis (${persona}) for:`,
+      journalText.slice(0, 50) + "..."
+    );
     return parseResponse(MOCK_RESPONSE);
   }
 
@@ -70,9 +112,10 @@ export async function analyzeWithGemini(
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const effectiveModelId = modelId || process.env.GEMINI_MODEL || DEFAULT_MODEL_ID;
+  const systemPrompt = getPromptForPersona(persona);
   const model = genAI.getGenerativeModel({
     model: effectiveModelId,
-    systemInstruction: getSystemPrompt(),
+    systemInstruction: systemPrompt,
   });
 
   const result = await model.generateContent(journalText);
