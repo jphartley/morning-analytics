@@ -54,7 +54,7 @@ export async function analyzeWithGemini(
   journalText: string,
   modelId?: string
 ): Promise<AnalysisResult> {
-  const useMocks = process.env.USE_MOCKS === "true";
+  const useMocks = process.env.USE_AI_MOCKS === "true";
 
   if (useMocks) {
     await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));

@@ -8,6 +8,7 @@ Users cannot review past morning page analyses to track patterns and insights ov
 - Automatically save each analysis after completion (input text, analysis text, images, model, timestamp)
 - Add a history browser UI for viewing past analyses chronologically
 - Download and store images locally rather than relying on Discord CDN URLs
+- Add a mock image provider for local development to speed testing
 
 ## Capabilities
 
@@ -29,3 +30,4 @@ None. The persistence layer will be called from the existing analysis flow, but 
 - **Storage**: New bucket in Supabase Storage for images
 - **UI**: New history view accessible from main interface
 - **Data flow**: Post-analysis hook to persist results before/after display
+- **Dev tooling**: Optional NEXT_PUBLIC_IMAGE_PROVIDER env flag and static mock images

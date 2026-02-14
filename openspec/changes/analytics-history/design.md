@@ -46,9 +46,9 @@ create table analyses (
 Store images in Supabase Storage bucket, not in the database:
 
 - Bucket name: `analysis-images`
-- Path pattern: `{analysis_id}/{index}.jpg` (e.g., `abc123/0.jpg`)
+- Path pattern: `{analysis_id}/{index}.{ext}` where `{ext}` is `jpg` or `png`
 - Store 4 images per analysis (the quadrants from Midjourney grid)
-- Images stored as JPEG blobs, not base64 strings
+- Images stored as JPEG or PNG blobs, not base64 strings
 
 **Rationale:** Blob storage is cheaper and more efficient than storing base64 in Postgres. Supabase Storage provides signed URLs for retrieval. Path pattern keeps images organized by analysis.
 
@@ -87,6 +87,17 @@ Create a singleton Supabase client in `lib/supabase.ts`:
 - RLS policies disabled for now (single-user), enabled when auth added
 
 **Rationale:** Separating server/client follows Supabase best practices. Service role key bypasses RLS for writes. Anon key respects RLS for reads (future-proofing).
+
+### 6. Mock Image Provider (Development)
+
+Enable a mock image provider for local development to avoid long Midjourney waits:
+
+- Controlled via `NEXT_PUBLIC_IMAGE_PROVIDER` env var (`midjourney` default, `mock` for local testing)
+- `mock` returns 4 static images from `public/mock-images/{0..3}.jpg`
+- Introduce a short (~1s) delay to simulate async behavior
+- Mock images still flow through the normal Supabase upload pipeline
+
+**Rationale:** Faster local iteration while still exercising the storage and history workflow.
 
 ## Risks / Trade-offs
 

@@ -16,16 +16,22 @@ The system SHALL persist a complete analysis record after images are generated. 
 - **AND** displays an error notification to the user
 
 ### Requirement: Store images in blob storage
-The system SHALL upload analysis images to Supabase Storage bucket `analysis-images`. Images SHALL be stored at path `{analysis_id}/{index}.jpg` where index is 0-3.
+The system SHALL upload analysis images to Supabase Storage bucket `analysis-images`. Images SHALL be stored at path `{analysis_id}/{index}.{ext}` where index is 0-3 and `{ext}` is `jpg` or `png`.
 
 #### Scenario: Upload images to storage
 - **WHEN** saving an analysis with 4 images
-- **THEN** system uploads each image as a JPEG blob
+- **THEN** system uploads each image as a JPEG or PNG blob
 - **AND** stores paths as `{analysis_id}/0.jpg` through `{analysis_id}/3.jpg`
+
+#### Scenario: Upload PNG images
+- **WHEN** saving an analysis with PNG images
+- **THEN** system uploads each image with content type `image/png`
+- **AND** stores paths as `{analysis_id}/0.png` through `{analysis_id}/3.png`
 
 #### Scenario: Image format conversion
 - **WHEN** images are provided as base64 data URLs
-- **THEN** system converts them to JPEG blobs before upload
+- **THEN** system preserves the original format when possible (JPEG or PNG)
+- **AND** stores images as JPEG or PNG blobs before upload
 
 ### Requirement: Retrieve analysis by ID
 The system SHALL retrieve a complete analysis record by its UUID, including signed URLs for all associated images.
@@ -65,3 +71,16 @@ The system SHALL require Supabase configuration via environment variables: NEXT_
 #### Scenario: Missing configuration
 - **WHEN** required environment variables are not set
 - **THEN** system throws a clear error at startup indicating which variables are missing
+
+### Requirement: Mock image provider for development
+The system SHALL support a mock image provider for local development to avoid long image generation waits. The provider SHALL be controlled by `NEXT_PUBLIC_IMAGE_PROVIDER` (default `midjourney`, optional `mock`).
+
+#### Scenario: Mock provider enabled
+- **WHEN** `NEXT_PUBLIC_IMAGE_PROVIDER=mock`
+- **THEN** system returns 4 static images within ~1 second
+- **AND** images are sourced from `public/mock-images` (jpg or png)
+
+#### Scenario: Mock images follow normal storage flow
+- **WHEN** mock images are generated
+- **THEN** system uploads them through the normal Supabase storage pipeline
+- **AND** returns storage paths for the saved analysis

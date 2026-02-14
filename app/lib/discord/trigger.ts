@@ -7,7 +7,7 @@ export interface TriggerResult {
 const MOCK_DELAY_MS = 500;
 
 export async function triggerImagine(imagePrompt: string): Promise<TriggerResult> {
-  const useMocks = process.env.USE_MOCKS === "true";
+  const useMocks = process.env.USE_AI_MOCKS === "true";
   const nonce = Date.now().toString();
 
   if (useMocks) {

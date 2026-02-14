@@ -49,7 +49,7 @@ async function getBot(): Promise<Client> {
   });
 
   return new Promise((resolve, reject) => {
-    botClient!.once("ready", () => {
+    botClient!.once("clientReady", () => {
       console.log("[Discord Bot] Connected as", botClient!.user?.tag);
       botReady = true;
       resolve(botClient!);
@@ -99,7 +99,7 @@ function isCompletedGrid(message: Message): boolean {
 }
 
 export async function waitForImages(nonce: string): Promise<ListenerResult> {
-  const useMocks = process.env.USE_MOCKS === "true";
+  const useMocks = process.env.USE_AI_MOCKS === "true";
 
   if (useMocks) {
     await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
