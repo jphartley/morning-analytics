@@ -1,9 +1,15 @@
 # Dependencies
 node_modules/
 
+# Build output
+**/.next/
+
 # Environment
 .env
 .env.local
+
+# Local reports
+gitleaks-report.json
 
 # OS
 .DS_Store
