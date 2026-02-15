@@ -40,16 +40,7 @@ function parseResponse(response: string): AnalysisResult {
   };
 }
 
-let systemPrompt: string | null = null;
 let personaPrompts: { [key: string]: string } | null = null;
-
-function getSystemPrompt(): string {
-  if (!systemPrompt) {
-    const promptPath = join(process.cwd(), "..", "docs", "prompt.md");
-    systemPrompt = readFileSync(promptPath, "utf-8");
-  }
-  return systemPrompt;
-}
 
 function loadPersonaPrompts(): { [key: string]: string } {
   if (!personaPrompts) {
@@ -58,7 +49,7 @@ function loadPersonaPrompts(): { [key: string]: string } {
 
     for (const persona of personas) {
       try {
-        const promptPath = join(process.cwd(), "..", "prompts", `${persona}.md`);
+        const promptPath = join(process.cwd(), "prompts", `${persona}.md`);
         personaPrompts[persona] = readFileSync(promptPath, "utf-8");
         console.log(`[PROMPT] Loaded ${persona} persona prompt`);
       } catch (error) {

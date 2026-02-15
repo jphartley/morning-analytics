@@ -31,7 +31,7 @@ Set `USE_MOCKS=true` in `/app/.env.local` for testing without API calls.
 
 ### Adding a New Analyst Persona
 
-1. Create new prompt file: `/prompts/{new-persona}.md`
+1. Create new prompt file: `/app/prompts/{new-persona}.md`
 2. Add system instruction (e.g., tone, analysis approach, format)
 3. Update `AnalystPicker.tsx` component:
    ```tsx
@@ -234,17 +234,11 @@ Users see analysis text within ~2 seconds, images load while they read.
 │  └─ discord/
 │     ├─ trigger.ts             # Discord user token: POST /imagine to Discord API
 │     └─ listener.ts            # Discord bot token: listen for Midjourney responses
+├─ prompts/                      # Analyst persona system prompts
+│  ├─ jungian.md                # Jungian analyst (psychoanalytic depth)
+│  ├─ mel-robbins.md            # Mel Robbins (action-oriented)
+│  └─ loving-parent.md          # Loving parent (compassionate)
 └─ public/mock-images/          # 4 local JPEG/PNG files for mock testing
-
-/supabase/
-└─ migrations/
-   ├─ 20250214110300_add_analyst_persona_column.sql
-   └─ 20250215100000_add_user_id_and_rls.sql
-
-/prompts/
-├─ jungian.md                   # Jungian analyst system prompt (psychoanalytic depth)
-├─ mel-robbins.md               # Mel Robbins system prompt (action-oriented)
-└─ loving-parent.md             # Loving parent system prompt (compassionate)
 
 /scripts/
 └─ cleanup-history.js           # Admin CLI: delete old analyses + their images
@@ -274,7 +268,7 @@ ERROR can occur at any phase:
 **analyzeText(journalText, userId, modelId?, persona?)**
 - Requires authenticated userId (passed from client's useAuth hook)
 - Calls Gemini API with selected model + persona
-- Persona determines system instruction (loaded from `/prompts/{persona}.md`)
+- Persona determines system instruction (loaded from `/app/prompts/{persona}.md`)
 - Returns: `{ success, analysisText, imagePrompt, error? }`
 - If `imagePrompt` is null (analysis doesn't warrant images), image generation skipped
 
@@ -352,7 +346,7 @@ Public URLs (client-side only): `https://kjfzaflmpaqldrxkfija.supabase.co/storag
 
 Model choice persisted to browser localStorage by ModelPicker component.
 
-**Analyst Personas** (system instructions in `/prompts/{persona}.md`):
+**Analyst Personas** (system instructions in `/app/prompts/{persona}.md`):
 - **Jungian**: Psychoanalytic depth, symbols, spiritual insights
 - **Mel Robbins**: Action-oriented, bold moves, practical steps
 - **Loving Parent**: Compassionate, empathetic support, nurturing
@@ -417,7 +411,7 @@ Why not official Midjourney API?
 User pastes "I felt stuck today..." and clicks Analyze with model=gemini-3-pro-preview, persona=jungian:
 
 1. **Client → Server**: `analyzeText("I felt stuck today...", userId, "gemini-3-pro-preview", "jungian")`
-2. **Server**: Load `/prompts/jungian.md` system instruction
+2. **Server**: Load `/app/prompts/jungian.md` system instruction
 3. **Server**: Call Gemini API with both model and system instruction
 4. **Gemini Response**: `"<analysis about Jung archetypes>...\n---IMAGE PROMPT---\n<surreal imagery prompt>"`
 5. **Server**: Split on `---IMAGE PROMPT---` delimiter
