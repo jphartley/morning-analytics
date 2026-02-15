@@ -141,23 +141,20 @@ Users might request export functionality. Current approach:
   3. Download images from URLs
   4. Package into JSON/ZIP export
 
-## Database Queries & RLS (Future Multi-User)
+## Database Queries & RLS
 
-Current state (all queries accessible):
+RLS is enabled on the `analyses` table. The anon client (used for reads) automatically filters by the authenticated user's session:
+
 ```sql
-SELECT * FROM analyses;  -- Returns ALL analyses (anon client)
+-- Anon client queries (RLS enforced):
+SELECT * FROM analyses;  -- Returns only current user's analyses
+-- INSERT, UPDATE, DELETE similarly restricted to user's own rows
+
+-- Service role client (bypasses RLS, used for server-side writes):
+INSERT INTO analyses (..., user_id) VALUES (..., '<userId>');
 ```
 
-Future state (with RLS enabled):
-```sql
-SELECT * FROM analyses WHERE user_id = auth.uid();  -- Returns only current user's analyses
-INSERT INTO analyses (...) VALUES (...);  -- Sets user_id automatically to auth.uid()
-```
-
-No code changes needed when RLS is enabled; just requires:
-1. Create auth system (JWT, OAuth, etc.)
-2. Enable RLS policy on `analyses` table
-3. Supabase handles enforcement automatically
+**RLS policies**: SELECT, INSERT, UPDATE, DELETE all enforce `user_id = auth.uid()`.
 
 ## Performance Notes
 
@@ -208,9 +205,14 @@ Users see analysis text within ~2 seconds, images load while they read.
 /app/
 ├─ app/                          # Next.js App Router
 │  ├─ page.tsx                  # Main UI orchestrator, state machine
-│  ├─ layout.tsx                # Root layout
-│  └─ actions.ts                # Server actions (3 main ones: analyzeText, generateImages, saveAnalysis)
+│  ├─ layout.tsx                # Root layout (wraps with AuthSessionProvider)
+│  ├─ actions.ts                # Server actions (3 main ones: analyzeText, generateImages, saveAnalysis)
+│  └─ (auth)/                   # Auth route group (public, no auth required)
+│     ├─ signin/page.tsx        # Email/password sign in
+│     └─ signup/page.tsx        # Email/password sign up
 ├─ components/                   # React components
+│  ├─ AuthSessionProvider.tsx   # Auth context provider, route protection, session listener
+│  ├─ AppHeader.tsx             # User email display + sign out button
 │  ├─ JournalInput.tsx          # Text input + Analyze button
 │  ├─ ModelPicker.tsx           # Gemini model dropdown (persisted to localStorage)
 │  ├─ AnalystPicker.tsx         # Analyst persona dropdown (jungian, mel-robbins, loving-parent)
@@ -222,6 +224,7 @@ Users see analysis text within ~2 seconds, images load while they read.
 │  └─ ErrorState.tsx            # Error message + retry button
 ├─ lib/                          # Utility libraries
 │  ├─ supabase.ts               # Supabase client (server + browser instances)
+│  ├─ useAuth.ts                # Auth hook (reads from AuthContext)
 │  ├─ gemini.ts                 # Gemini API client, loads persona prompts from disk
 │  ├─ analytics-storage.ts      # Supabase storage upload (base64 → JPEG) + DB insert
 │  ├─ analytics-storage-client.ts # Supabase anon client reads (converts paths → public URLs)
@@ -234,7 +237,8 @@ Users see analysis text within ~2 seconds, images load while they read.
 
 /supabase/
 └─ migrations/
-   └─ 20250214110300_add_analyst_persona_column.sql
+   ├─ 20250214110300_add_analyst_persona_column.sql
+   └─ 20250215100000_add_user_id_and_rls.sql
 
 /prompts/
 ├─ jungian.md                   # Jungian analyst system prompt (psychoanalytic depth)
@@ -266,21 +270,24 @@ ERROR can occur at any phase:
 
 ### Three Server Actions (in `/app/app/actions.ts`)
 
-**analyzeText(journalText, modelId?, persona?)**
+**analyzeText(journalText, userId, modelId?, persona?)**
+- Requires authenticated userId (passed from client's useAuth hook)
 - Calls Gemini API with selected model + persona
 - Persona determines system instruction (loaded from `/prompts/{persona}.md`)
 - Returns: `{ success, analysisText, imagePrompt, error? }`
 - If `imagePrompt` is null (analysis doesn't warrant images), image generation skipped
 
-**generateImages(imagePrompt)**
+**generateImages(imagePrompt, userId)**
+- Requires authenticated userId
 - **Mock mode** (`NEXT_PUBLIC_IMAGE_PROVIDER=mock`): Reads 4 local images from `/app/public/mock-images/`
 - **Real mode**: Discord user token → Midjourney → Discord bot listens → Download grid → Sharp splits → Upload to S3
 - Returns: `{ success, imageUrls: base64[], imagePaths: storagePaths[], analysisId, error? }`
 - `imageUrls` are base64 data URLs for immediate display
 - `imagePaths` are storage paths (e.g., `550e8400-123/0.jpg`) for DB storage
 
-**saveAnalysis(inputText, analysisText, imagePrompt, modelId, imagePaths, analysisId?, persona?)**
-- Inserts row into `analyses` table with all metadata
+**saveAnalysis(inputText, analysisText, imagePrompt, modelId, imagePaths, userId, analysisId?, persona?)**
+- Requires authenticated userId
+- Inserts row into `analyses` table with all metadata including user_id
 - Returns: `{ success, id, error? }`
 
 ### Image Pipeline
@@ -329,7 +336,7 @@ Public URLs (client-side only): `https://kjfzaflmpaqldrxkfija.supabase.co/storag
 | `model_id` | TEXT | Gemini model used (e.g., "gemini-3-pro-preview") |
 | `image_paths` | JSONB | Array of storage paths: `["id/0.jpg", "id/1.jpg", "id/2.jpg", "id/3.jpg"]` (nullable) |
 | `analyst_persona` | TEXT | Selected persona ("jungian", "mel-robbins", "loving-parent") (nullable) |
-| `user_id` | UUID | Reserved for multi-user support (currently null for all) |
+| `user_id` | UUID | Owner of this analysis (NOT NULL, set from authenticated user) |
 
 **Storage Bucket: `analysis-images`**
 - Public read access enabled
@@ -363,25 +370,40 @@ Why not official Midjourney API?
 
 ### Authentication & Multi-User Design
 
-**Current (Single-User)**:
-- No authentication implemented
-- All users share all analyses (demo/prototype mode)
-- Anon Supabase client used for reads (no restrictions)
+**Current (Multi-User with Supabase Auth)**:
+- Email/password authentication via Supabase Auth
+- Signup at `/signup`, signin at `/signin`
+- Client-side route protection via `AuthSessionProvider` (wraps app in `layout.tsx`)
+- `useAuth()` hook provides `user`, `loading`, `logout` throughout the app
+- RLS policies on `analyses` table enforce per-user data isolation for reads
+- Server actions receive `userId` from client session (see TechnicalDebt.md for production hardening)
 - Service role key used for writes (server-side, bypasses RLS)
+- Sessions stored in browser localStorage (14-day expiry configured in Supabase)
 
-**Future (Multi-User Ready)**:
-- Add auth framework (JWT, OAuth, etc.)
-- Enable RLS policies: `SELECT/INSERT WHERE user_id = auth.uid()`
-- Anon client + RLS will enforce user isolation automatically
-- No code changes needed; infrastructure already supports it
+**Auth flow**:
+1. `AuthSessionProvider` checks session on mount
+2. No session → redirect to `/signin`
+3. Session found → render app, provide user context via `AuthContext`
+4. `onAuthStateChange` listener handles SIGNED_IN/SIGNED_OUT events
+5. Server actions receive `userId` parameter from client's `useAuth().user.id`
+
+**Key files**:
+- `/app/components/AuthSessionProvider.tsx` — Auth context provider, route protection
+- `/app/lib/useAuth.ts` — Hook to access auth state
+- `/app/components/AppHeader.tsx` — Shows user email + sign out button
+- `/app/app/(auth)/signin/page.tsx` — Sign in page
+- `/app/app/(auth)/signup/page.tsx` — Sign up page
+
+**Note**: Server-side middleware was removed during implementation because Supabase JS stores tokens in localStorage (not cookies), making server-side cookie checks impossible without `@supabase/ssr`. See TechnicalDebt.md for the planned production fix.
 
 ### State Management
 
 **Client-side:**
+- Auth state via `AuthSessionProvider` context (user, loading, logout)
 - Main page state via `useState()` in `/app/app/page.tsx` (no Redux)
 - Model selection persisted to localStorage
 - Persona selection stored in React state only
-- History list fetched client-side on demand
+- History list fetched client-side on demand (filtered by RLS per user)
 
 **Server-side:**
 - Server actions are stateless (called per request)
@@ -392,13 +414,13 @@ Why not official Midjourney API?
 
 User pastes "I felt stuck today..." and clicks Analyze with model=gemini-3-pro-preview, persona=jungian:
 
-1. **Client → Server**: `analyzeText("I felt stuck today...", "gemini-3-pro-preview", "jungian")`
+1. **Client → Server**: `analyzeText("I felt stuck today...", userId, "gemini-3-pro-preview", "jungian")`
 2. **Server**: Load `/prompts/jungian.md` system instruction
 3. **Server**: Call Gemini API with both model and system instruction
 4. **Gemini Response**: `"<analysis about Jung archetypes>...\n---IMAGE PROMPT---\n<surreal imagery prompt>"`
 5. **Server**: Split on `---IMAGE PROMPT---` delimiter
 6. **Client**: Display analysis text (text-ready state)
-7. **Client → Server**: `generateImages("<surreal imagery prompt>")`
+7. **Client → Server**: `generateImages("<surreal imagery prompt>", userId)`
 8. **Server**:
    - Generate unique analysisId (UUID)
    - Trigger Midjourney via Discord user token (nonce-based)
@@ -408,7 +430,7 @@ User pastes "I felt stuck today..." and clicks Analyze with model=gemini-3-pro-p
    - Upload each quadrant to Supabase storage
    - Return base64 URLs for display + storage paths
 9. **Client**: Display 4 images (complete state)
-10. **Client → Server**: `saveAnalysis(input, analysis, imagePrompt, modelId, imagePaths, analysisId, persona)`
+10. **Client → Server**: `saveAnalysis(input, analysis, imagePrompt, modelId, imagePaths, userId, analysisId, persona)`
 11. **Server**: Insert into `analyses` table
 12. **Client**: Auto-refresh history sidebar
 13. **History Sidebar**: Queries `listAnalyses()`, displays new entry at top
@@ -603,6 +625,23 @@ Skips Gemini API calls, uses mock responses. 2-second total time instead of 65-9
 2. Should show "Online" status
 3. If offline, bot.login() failed in listener.ts (check token validity)
 
+## Technical Debt
+
+**⚠️ IMPORTANT: See `/TechnicalDebt.md` at the project root.** This file maintains a prioritized list of deferred features, known limitations, and planned future work:
+
+- Features deferred from MVP (password reset, account deletion, email confirmation enforcement)
+- Performance optimizations not yet implemented
+- Monitoring and analytics to be added later
+
+**Workflow Reminders**:
+1. **When starting a new change**: Check `/TechnicalDebt.md` to see if any deferred work applies or could be addressed
+2. **After archiving a change**: Review your implementation and update `/TechnicalDebt.md` with any new technical debt introduced
+3. **When reviewing code**: Flag any shortcuts or `TODO` comments for potential inclusion in technical debt
+
+This ensures technical debt is visible and doesn't accumulate silently.
+
+## OpenSpec Workflow
+
 This project uses OpenSpec for structured change management. Feature specs live in `/openspec/specs/`. Use the OpenSpec skills (`/opsx:new`, `/opsx:continue`, `/opsx:apply`, etc.) for creating and implementing changes.
 
 **After archiving a change with `/opsx:archive`, commit the archived artifacts:**
@@ -611,3 +650,5 @@ git add openspec/changes/archive/
 git commit -m "Archive: [change-name] - completed and verified"
 git push origin main
 ```
+
+**Reminder**: After archiving a change, also check and update `/TechnicalDebt.md` with any deferred work. This is important for maintaining a complete picture of the project's remaining work.

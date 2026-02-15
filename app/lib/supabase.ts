@@ -1,9 +1,17 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
+// Auth types
+export interface AuthUser {
+  id: string;
+  email: string;
+  user_metadata?: Record<string, unknown>;
+}
+
 // Database types
 export interface AnalysisRecord {
   id: string;
   created_at: string;
+  user_id: string;
   input_text: string;
   analysis_text: string;
   image_prompt: string | null;
@@ -14,6 +22,7 @@ export interface AnalysisRecord {
 
 export interface AnalysisInsert {
   id?: string;
+  user_id: string;
   input_text: string;
   analysis_text: string;
   image_prompt?: string | null;
@@ -97,4 +106,16 @@ export function getBrowserSupabase(): SupabaseClient {
     browserClient = createClient(url, anonKey);
   }
   return browserClient;
+}
+
+/**
+ * Get current user session on client
+ * Returns user ID and email for authenticated operations
+ */
+export async function getClientAuth() {
+  const supabase = getBrowserSupabase();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.user;
 }

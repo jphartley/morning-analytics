@@ -30,14 +30,6 @@ export interface ImageGenerationResponse {
   error?: string;
 }
 
-// Legacy type for backwards compatibility
-export interface AnalysisResponse {
-  success: boolean;
-  analysisText?: string;
-  imageUrls?: string[];
-  error?: string;
-}
-
 export interface SaveAnalysisResponse {
   success: boolean;
   id?: string;
@@ -99,13 +91,22 @@ async function delay(ms: number): Promise<void> {
 /**
  * Phase 1: Analyze text with Gemini
  * Returns analysis text and image prompt for Phase 2
+ * Requires authenticated user - userId passed from client session
  */
 export async function analyzeText(
   journalText: string,
+  userId: string,
   modelId?: string,
   persona: string = "jungian"
 ): Promise<TextAnalysisResponse> {
   try {
+    if (!userId) {
+      return {
+        success: false,
+        error: "User must be authenticated to analyze text.",
+      };
+    }
+
     if (!journalText || journalText.trim().length === 0) {
       return {
         success: false,
@@ -133,19 +134,29 @@ export async function analyzeText(
  * Phase 2: Generate images with Midjourney
  * Takes image prompt from Phase 1, returns 4 split images
  * Also uploads to Supabase storage and returns paths
+ * Requires authenticated user - userId passed from client session
  */
 export async function generateImages(
-  imagePrompt: string
+  imagePrompt: string,
+  userId: string
 ): Promise<ImageGenerationResponse> {
   const analysisId = uuidv4();
 
   try {
+    if (!userId) {
+      return {
+        success: false,
+        analysisId,
+        error: "User must be authenticated to generate images.",
+      };
+    }
+
     const imageProvider = getImageProvider();
 
     if (imageProvider === "mock") {
       await delay(MOCK_IMAGE_DELAY_MS);
       const mockImages = await loadMockImages();
-      const uploadResult = await uploadImagesToStorage(analysisId, mockImages);
+      const uploadResult = await uploadImagesToStorage(analysisId, mockImages, userId);
 
       return {
         success: true,
@@ -197,7 +208,7 @@ export async function generateImages(
     const splitImages = await splitGridImage(gridImageUrl);
 
     // Upload images to Supabase storage (server-side, no client round-trip)
-    const uploadResult = await uploadImagesToStorage(analysisId, splitImages);
+    const uploadResult = await uploadImagesToStorage(analysisId, splitImages, userId);
 
     return {
       success: true,
@@ -217,37 +228,9 @@ export async function generateImages(
 }
 
 /**
- * @deprecated Use analyzeText() and generateImages() separately for progressive loading
- */
-export async function analyzeJournal(
-  journalText: string
-): Promise<AnalysisResponse> {
-  const textResult = await analyzeText(journalText);
-  if (!textResult.success) {
-    return {
-      success: false,
-      error: textResult.error,
-    };
-  }
-
-  let imageUrls: string[] = [];
-  if (textResult.imagePrompt) {
-    const imageResult = await generateImages(textResult.imagePrompt);
-    if (imageResult.success && imageResult.imageUrls) {
-      imageUrls = imageResult.imageUrls;
-    }
-  }
-
-  return {
-    success: true,
-    analysisText: textResult.analysisText,
-    imageUrls,
-  };
-}
-
-/**
  * Save an analysis to persistent storage
  * imagePaths should be storage paths from generateImages, not base64 data
+ * Requires authenticated user - userId passed from client session
  */
 export async function saveAnalysis(
   inputText: string,
@@ -255,10 +238,18 @@ export async function saveAnalysis(
   imagePrompt: string | null,
   modelId: string,
   imagePaths: string[],
+  userId: string,
   analysisId?: string,
   analystPersona: string = "jungian"
 ): Promise<SaveAnalysisResponse> {
   try {
+    if (!userId) {
+      return {
+        success: false,
+        error: "User must be authenticated to save analysis.",
+      };
+    }
+
     const result = await saveToStorage(
       inputText,
       analysisText,
@@ -266,7 +257,8 @@ export async function saveAnalysis(
       modelId,
       imagePaths,
       analysisId,
-      analystPersona
+      analystPersona,
+      userId
     );
     return result;
   } catch (error) {

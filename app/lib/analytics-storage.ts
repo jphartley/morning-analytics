@@ -30,10 +30,12 @@ function getFileExtension(contentType: string): string {
  * Upload images to Supabase Storage with retry logic
  * Called from server-side only (generateImages)
  * Returns array of storage paths
+ * userId: Used for audit logging and future user-scoped operations
  */
 export async function uploadImagesToStorage(
   analysisId: string,
-  imageDataUrls: string[]
+  imageDataUrls: string[],
+  userId: string
 ): Promise<{ paths: string[]; error?: string }> {
   const supabase = getServerSupabase();
   const paths: string[] = [];
@@ -85,6 +87,7 @@ export async function uploadImagesToStorage(
 
 /**
  * Save a complete analysis record (images should already be uploaded)
+ * Requires authenticated user_id - passed from client's useAuth() hook
  */
 export async function saveAnalysis(
   inputText: string,
@@ -92,12 +95,14 @@ export async function saveAnalysis(
   imagePrompt: string | null,
   modelId: string,
   imagePaths: string[],
-  analysisId?: string,
-  analystPersona: string = "jungian"
+  analysisId: string | undefined,
+  analystPersona: string = "jungian",
+  userId: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   const supabase = getServerSupabase();
 
   const insertPayload: AnalysisInsert = {
+    user_id: userId, // Always set from authenticated session
     input_text: inputText,
     analysis_text: analysisText,
     image_prompt: imagePrompt,

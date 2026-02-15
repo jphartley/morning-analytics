@@ -12,6 +12,8 @@ import { Lightbox } from "@/components/Lightbox";
 import { ModelPicker } from "@/components/ModelPicker";
 import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar } from "@/components/HistorySidebar";
+import { AppHeader } from "@/components/AppHeader";
+import { useAuth } from "@/lib/useAuth";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 
 type AppState = "idle" | "analyzing" | "text-ready" | "complete" | "error" | "viewing-history";
@@ -27,6 +29,7 @@ interface HistoryViewData {
 const isMockMode = process.env.NEXT_PUBLIC_IMAGE_PROVIDER === "mock";
 
 export default function Home() {
+  const { user } = useAuth();
   const [state, setState] = useState<AppState>("idle");
   const [journalText, setJournalText] = useState("");
   const [analysisResult, setAnalysisResult] = useState<TextAnalysisResponse | null>(null);
@@ -60,7 +63,7 @@ export default function Home() {
 
     startTransition(async () => {
       // Phase 1: Get text analysis
-      const textResult = await analyzeText(journalText, selectedModel, selectedPersona);
+      const textResult = await analyzeText(journalText, user!.id, selectedModel, selectedPersona);
 
       if (!textResult.success) {
         setError(textResult.error || "Failed to analyze text.");
@@ -78,7 +81,7 @@ export default function Home() {
       let imageGenerationErrorMessage: string | null = null;
       let analysisId: string | undefined;
       if (textResult.imagePrompt) {
-        const imageResult = await generateImages(textResult.imagePrompt);
+        const imageResult = await generateImages(textResult.imagePrompt, user!.id);
 
         if (imageResult.success && imageResult.imageUrls) {
           setImageUrls(imageResult.imageUrls);
@@ -102,6 +105,7 @@ export default function Home() {
         textResult.imagePrompt || null,
         selectedModel,
         imagePaths,
+        user!.id,
         analysisId,
         selectedPersona
       );
@@ -170,7 +174,9 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-100 flex">
+    <>
+      <AppHeader />
+      <div className="min-h-screen bg-stone-100 flex">
       {/* History Sidebar */}
       <HistorySidebar
         selectedId={selectedHistoryId}
@@ -293,6 +299,7 @@ export default function Home() {
           </button>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
