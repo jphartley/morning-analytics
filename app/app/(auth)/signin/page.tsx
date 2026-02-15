@@ -57,20 +57,20 @@ export default function SigninPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-      <div className="w-full max-w-md p-8 bg-slate-800 rounded-lg shadow-lg">
-        <h1 className="text-3xl font-bold text-center mb-2 text-white">Sign In</h1>
-        <p className="text-center text-slate-400 mb-6">Welcome back to Morning Analytics</p>
+    <div className="flex items-center justify-center min-h-screen bg-page">
+      <div className="w-full max-w-md p-8 bg-surface rounded-lg shadow-lg border border-outline">
+        <h1 className="text-3xl font-bold text-center mb-2 text-ink">Sign In</h1>
+        <p className="text-center text-ink-muted mb-6">Welcome back to Morning Analytics</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-900/20 border border-red-700 rounded text-red-300 text-sm">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSignin} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-ink mb-1">
               Email
             </label>
             <input
@@ -78,14 +78,14 @@ export default function SigninPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 bg-page border border-outline rounded text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
               placeholder="your@email.com"
               disabled={loading}
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-slate-200 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-ink mb-1">
               Password
             </label>
             <input
@@ -93,7 +93,7 @@ export default function SigninPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 bg-page border border-outline rounded text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
               placeholder="Your password"
               disabled={loading}
             />
@@ -102,15 +102,15 @@ export default function SigninPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-medium rounded transition"
+            className="w-full py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded transition"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
-        <div className="mt-4 text-center text-slate-400 text-sm">
-          Don't have an account?{' '}
-          <Link href="/signup" className="text-blue-400 hover:text-blue-300">
+        <div className="mt-4 text-center text-ink-muted text-sm">
+          Don&apos;t have an account?{' '}
+          <Link href="/signup" className="text-accent hover:text-accent-hover">
             Sign Up
           </Link>
         </div>

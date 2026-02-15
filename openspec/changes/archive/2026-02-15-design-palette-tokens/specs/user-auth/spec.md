@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: Email/password signup
 The system SHALL allow users to create a new account using an email address and password via the signup page. The signup page SHALL use the same design token palette as the main app (`bg-page` page background, `bg-surface` card background, `bg-accent` button color, `text-ink` text color, `border-outline` input borders).
 

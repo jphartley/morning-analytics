@@ -58,7 +58,7 @@ export function Lightbox({ imageUrl, onClose }: LightboxProps) {
         />
         <button
           onClick={onClose}
-          className="absolute -top-4 -right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white text-stone-800 hover:bg-stone-100 shadow-lg transition-colors"
+          className="absolute -top-4 -right-4 w-10 h-10 flex items-center justify-center rounded-full bg-surface text-ink hover:bg-page shadow-lg transition-colors"
           aria-label="Close"
         >
           <svg

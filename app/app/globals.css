@@ -1,26 +1,264 @@
 @import "tailwindcss";
 
+/* =============================================================
+   DESIGN TOKENS — 20 palettes, switched via data-palette attribute
+   ============================================================= */
+
+/* 1. Reverie (violet) — default */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #faf8f6;
+  --surface: #ffffff;
+  --text: #2e2a3b;
+  --text-muted: #6e6580;
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-soft: #f5f3ff;
+  --border: #e8e4df;
+}
+
+/* 2. Moss Garden (emerald) */
+:root[data-palette="moss"] {
+  --bg: #f6f5f0;
+  --surface: #fdfcf8;
+  --text: #2a3631;
+  --text-muted: #5f7068;
+  --accent: #059669;
+  --accent-hover: #047857;
+  --accent-soft: #ecfdf5;
+  --border: #ddd9cf;
+}
+
+/* 3. Inkwell (indigo) */
+:root[data-palette="inkwell"] {
+  --bg: #f5f3ee;
+  --surface: #faf8f4;
+  --text: #1e1b4b;
+  --text-muted: #4338ca;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-soft: #eef2ff;
+  --border: #d6d3cd;
+}
+
+/* 4. Dusk Rose */
+:root[data-palette="dusk-rose"] {
+  --bg: #faf6f7;
+  --surface: #ffffff;
+  --text: #3b2a33;
+  --text-muted: #8a6b7a;
+  --accent: #be185d;
+  --accent-hover: #9d174d;
+  --accent-soft: #fdf2f8;
+  --border: #e8dde2;
+}
+
+/* 5. Amber Den */
+:root[data-palette="amber-den"] {
+  --bg: #faf8f3;
+  --surface: #fffefa;
+  --text: #3d2e1a;
+  --text-muted: #8a7356;
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-soft: #fffbeb;
+  --border: #e6ddd0;
+}
+
+/* 6. Sage Whisper */
+:root[data-palette="sage"] {
+  --bg: #f5f6f2;
+  --surface: #fcfcf9;
+  --text: #2d3328;
+  --text-muted: #6b7564;
+  --accent: #4d7c0f;
+  --accent-hover: #3f6212;
+  --accent-soft: #f7fee7;
+  --border: #d8ddd0;
+}
+
+/* 7. Plum Depths */
+:root[data-palette="plum"] {
+  --bg: #f9f5fa;
+  --surface: #fefcff;
+  --text: #351a3b;
+  --text-muted: #7e5a8a;
+  --accent: #9333ea;
+  --accent-hover: #7e22ce;
+  --accent-soft: #faf5ff;
+  --border: #e4d8ea;
+}
+
+/* 8. Terracotta */
+:root[data-palette="terracotta"] {
+  --bg: #f9f5f1;
+  --surface: #fefcf9;
+  --text: #3c2415;
+  --text-muted: #8b6b55;
+  --accent: #c2410c;
+  --accent-hover: #9a3412;
+  --accent-soft: #fff7ed;
+  --border: #e6d8cb;
+}
+
+/* 9. Ocean */
+:root[data-palette="ocean"] {
+  --bg: #f2f7f9;
+  --surface: #f9fcfd;
+  --text: #164e63;
+  --text-muted: #557b8a;
+  --accent: #0891b2;
+  --accent-hover: #0e7490;
+  --accent-soft: #ecfeff;
+  --border: #cee0e6;
+}
+
+/* 10. Lavender Haze */
+:root[data-palette="lavender"] {
+  --bg: #f7f5fa;
+  --surface: #fdfcfe;
+  --text: #2e2848;
+  --text-muted: #7c72a0;
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-soft: #f5f3ff;
+  --border: #e0dae8;
+}
+
+/* 11. Sepia */
+:root[data-palette="sepia"] {
+  --bg: #f8f4ec;
+  --surface: #fdfaf3;
+  --text: #3e3122;
+  --text-muted: #87735a;
+  --accent: #a16207;
+  --accent-hover: #854d0e;
+  --accent-soft: #fefce8;
+  --border: #e2d8c6;
+}
+
+/* 12. Nordic */
+:root[data-palette="nordic"] {
+  --bg: #f3f5f7;
+  --surface: #f9fafb;
+  --text: #1f2937;
+  --text-muted: #6b7280;
+  --accent: #4b5563;
+  --accent-hover: #374151;
+  --accent-soft: #f3f4f6;
+  --border: #d1d5db;
+}
+
+/* 13. Cherry Blossom */
+:root[data-palette="cherry"] {
+  --bg: #fdf5f6;
+  --surface: #fffbfb;
+  --text: #3b1c25;
+  --text-muted: #9e6b7a;
+  --accent: #e11d48;
+  --accent-hover: #be123c;
+  --accent-soft: #fff1f2;
+  --border: #f0d5db;
+}
+
+/* 14. Forest */
+:root[data-palette="forest"] {
+  --bg: #f2f5f3;
+  --surface: #f9fbf9;
+  --text: #1a2e22;
+  --text-muted: #4d6b58;
+  --accent: #15803d;
+  --accent-hover: #166534;
+  --accent-soft: #f0fdf4;
+  --border: #cddbd2;
+}
+
+/* 15. Copper */
+:root[data-palette="copper"] {
+  --bg: #f9f6f3;
+  --surface: #fefcfa;
+  --text: #402a1a;
+  --text-muted: #8a6e55;
+  --accent: #b8621b;
+  --accent-hover: #9a5118;
+  --accent-soft: #fef3eb;
+  --border: #e4d6c8;
+}
+
+/* 16. Twilight */
+:root[data-palette="twilight"] {
+  --bg: #f3f2f8;
+  --surface: #faf9fd;
+  --text: #1e1a3a;
+  --text-muted: #6560a0;
+  --accent: #5b4fc7;
+  --accent-hover: #4c3fb0;
+  --accent-soft: #eeecfb;
+  --border: #d5d2e4;
+}
+
+/* 17. Matcha */
+:root[data-palette="matcha"] {
+  --bg: #f5f6f0;
+  --surface: #fbfcf7;
+  --text: #2c3325;
+  --text-muted: #6a7560;
+  --accent: #65803d;
+  --accent-hover: #547030;
+  --accent-soft: #f4f8ec;
+  --border: #d4dbc8;
+}
+
+/* 18. Slate Coral */
+:root[data-palette="slate-coral"] {
+  --bg: #f5f5f6;
+  --surface: #fafafa;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --accent: #f43f5e;
+  --accent-hover: #e11d48;
+  --accent-soft: #fff1f2;
+  --border: #d4d7dc;
+}
+
+/* 19. Midnight */
+:root[data-palette="midnight"] {
+  --bg: #1a1a2e;
+  --surface: #23233d;
+  --text: #e2e1f0;
+  --text-muted: #9594b0;
+  --accent: #a78bfa;
+  --accent-hover: #8b5cf6;
+  --accent-soft: #2d2b4a;
+  --border: #33335a;
+}
+
+/* 20. Sandstorm */
+:root[data-palette="sandstorm"] {
+  --bg: #f9f5ee;
+  --surface: #fefcf6;
+  --text: #3e3425;
+  --text-muted: #8a7c64;
+  --accent: #c07028;
+  --accent-hover: #a35d1e;
+  --accent-soft: #fdf6ed;
+  --border: #e2d8c4;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-page: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--text);
+  --color-ink-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-outline: var(--border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
 }

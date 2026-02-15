@@ -119,7 +119,7 @@ To change:
 
 1. Create file: `/app/components/NewComponent.tsx`
 2. Follow existing pattern (props interface, export named component)
-3. Use Tailwind CSS for styling (no CSS modules)
+3. Use Tailwind CSS with design token classes for styling (`bg-page`, `text-ink`, `bg-accent`, `border-outline`, etc. — not hardcoded colors like `bg-stone-100`)
 4. Import in `/app/app/page.tsx` or parent component
 
 ### Modifying Supabase Schema
@@ -205,7 +205,7 @@ Users see analysis text within ~2 seconds, images load while they read.
 /app/
 ├─ app/                          # Next.js App Router
 │  ├─ page.tsx                  # Main UI orchestrator, state machine
-│  ├─ layout.tsx                # Root layout (wraps with AuthSessionProvider)
+│  ├─ layout.tsx                # Root layout (AuthSessionProvider + PalettePicker)
 │  ├─ actions.ts                # Server actions (3 main ones: analyzeText, generateImages, saveAnalysis)
 │  └─ (auth)/                   # Auth route group (public, no auth required)
 │     ├─ signin/page.tsx        # Email/password sign in
@@ -221,7 +221,8 @@ Users see analysis text within ~2 seconds, images load while they read.
 │  ├─ Lightbox.tsx              # Full-screen image viewer
 │  ├─ HistorySidebar.tsx        # Lists past analyses, "New Analysis" button
 │  ├─ LoadingState.tsx          # Spinner + message
-│  └─ ErrorState.tsx            # Error message + retry button
+│  ├─ ErrorState.tsx            # Error message + retry button
+│  └─ PalettePicker.tsx         # Floating palette switcher (20 palettes, localStorage persistence)
 ├─ lib/                          # Utility libraries
 │  ├─ supabase.ts               # Supabase client (server + browser instances)
 │  ├─ useAuth.ts                # Auth hook (reads from AuthContext)
@@ -402,6 +403,7 @@ Why not official Midjourney API?
 - Auth state via `AuthSessionProvider` context (user, loading, logout)
 - Main page state via `useState()` in `/app/app/page.tsx` (no Redux)
 - Model selection persisted to localStorage
+- Palette selection persisted to localStorage (key: `palette`), applied via `data-palette` attribute on `<html>`
 - Persona selection stored in React state only
 - History list fetched client-side on demand (filtered by RLS per user)
 

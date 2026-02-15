@@ -15,17 +15,17 @@ export function AppHeader() {
   };
 
   return (
-    <header className="border-b border-stone-200 bg-white">
+    <header className="border-b border-outline bg-surface">
       <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-        <Link href="/" className="text-lg font-semibold text-stone-900">
+        <Link href="/" className="text-lg font-semibold text-ink">
           Morning Analytics
         </Link>
 
         <div className="flex items-center gap-4">
-          <span className="text-sm text-stone-600">{user.email}</span>
+          <span className="text-sm text-ink-muted">{user.email}</span>
           <button
             onClick={handleLogout}
-            className="text-sm px-3 py-1 bg-stone-200 hover:bg-stone-300 text-stone-900 rounded transition"
+            className="text-sm px-3 py-1 bg-page hover:opacity-80 text-ink rounded transition"
           >
             Sign Out
           </button>

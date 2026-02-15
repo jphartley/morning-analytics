@@ -21,9 +21,9 @@ export function ErrorState({ message, onRetry }: ErrorStateProps) {
           />
         </svg>
       </div>
-      <p className="text-lg text-stone-700 text-center max-w-md">{message}</p>
+      <p className="text-lg text-ink text-center max-w-md">{message}</p>
       <button
-        className="py-2 px-6 text-base font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 transition-colors"
+        className="py-2 px-6 text-base font-medium text-white bg-accent rounded-lg hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors"
         onClick={onRetry}
       >
         Try Again

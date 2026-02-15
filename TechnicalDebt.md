@@ -28,6 +28,13 @@ This document tracks technical decisions deferred from MVP and features planned 
 
 - [ ] **Auth metrics**: Track signup rate, signin failures, auth errors, session timeout events. Useful for debugging production issues and understanding user behavior.
 
+## Design & Palette System (from design-palette-tokens)
+
+- [ ] **Flash of default palette on page load**: The stored palette is applied in a `useEffect`, so there's a brief flash of the default Reverie palette before the stored palette activates. Could be solved with a blocking `<script>` in `<head>` that reads localStorage and sets `data-palette` before first paint.
+- [ ] **Palette preference not synced to database**: Palette selection is localStorage-only. Resets if user clears browser data or uses a different device. Consider syncing to user profile in Supabase if cross-device persistence is desired.
+- [ ] **No system-preference dark mode**: The Midnight palette provides one dark option, but there's no `prefers-color-scheme` media query integration. Full system-preference dark mode support can be added later.
+- [ ] **Error state colors not tokenized**: `ErrorState.tsx` and save-error toast use hardcoded `bg-red-*` / `text-red-*` classes. These are semantic error colors independent of the palette, but could be tokenized (e.g., `--error`, `--error-soft`) for full palette theming.
+
 ## Notes
 
 - Each item should include context: where it originated (change/commit), why it was deferred, and rough effort estimate if known.

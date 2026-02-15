@@ -176,7 +176,7 @@ export default function Home() {
   return (
     <>
       <AppHeader />
-      <div className="min-h-screen bg-stone-100 flex">
+      <div className="min-h-screen bg-page flex">
       {/* History Sidebar */}
       <HistorySidebar
         selectedId={selectedHistoryId}
@@ -189,7 +189,7 @@ export default function Home() {
       <div className="flex-1 overflow-auto">
         <main className="max-w-3xl mx-auto px-4 py-12">
           {isMockMode && (
-            <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900">
+            <div className="mb-6 rounded-lg border border-outline bg-accent-soft px-4 py-2 text-center text-sm text-ink">
               Mock mode active — using local images for faster testing.
             </div>
           )}
@@ -202,10 +202,10 @@ export default function Home() {
               </div>
             </div>
             <div className="text-center">
-              <h1 className="text-4xl font-bold text-stone-800 mb-2">
+              <h1 className="text-4xl font-bold text-ink mb-2">
                 Morning Analytics
               </h1>
-              <p className="text-lg text-stone-600">
+              <p className="text-lg text-ink-muted">
                 AI-powered insights from your morning pages
               </p>
             </div>
@@ -235,11 +235,11 @@ export default function Home() {
 
               {state === "text-ready" && (
                 <div className="w-full">
-                  <h2 className="text-xl font-semibold text-stone-800 mb-4">Generated Images</h2>
-                  <div className="flex items-center justify-center py-12 bg-stone-50 border border-stone-200 rounded-lg">
+                  <h2 className="text-xl font-semibold text-ink mb-4">Generated Images</h2>
+                  <div className="flex items-center justify-center py-12 bg-surface border border-outline rounded-lg">
                     <div className="flex flex-col items-center space-y-3">
-                      <div className="w-10 h-10 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin" />
-                      <p className="text-stone-600">Generating images...</p>
+                      <div className="w-10 h-10 border-4 border-accent-soft border-t-accent rounded-full animate-spin" />
+                      <p className="text-ink-muted">Generating images...</p>
                     </div>
                   </div>
                 </div>
@@ -255,8 +255,8 @@ export default function Home() {
           {state === "viewing-history" && historyViewData && (
             <div className="space-y-8">
               {historyViewData.analystPersona && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-amber-900">
+                <div className="bg-accent-soft border border-outline rounded-lg p-3 mb-4">
+                  <p className="text-sm text-ink">
                     <span className="font-medium">Analyzed by:</span>{" "}
                     {historyViewData.analystPersona === "jungian"
                       ? "Jungian Analyst"
@@ -268,9 +268,9 @@ export default function Home() {
                   </p>
                 </div>
               )}
-              <div className="bg-stone-50 border border-stone-200 rounded-lg p-4 mb-4">
-                <h3 className="text-sm font-medium text-stone-500 mb-2">Original Input</h3>
-                <p className="text-stone-700 whitespace-pre-wrap">{historyViewData.inputText}</p>
+              <div className="bg-surface border border-outline rounded-lg p-4 mb-4">
+                <h3 className="text-sm font-medium text-ink-muted mb-2">Original Input</h3>
+                <p className="text-ink whitespace-pre-wrap">{historyViewData.inputText}</p>
               </div>
 
               <AnalysisPanel analysisText={historyViewData.analysisText} />

@@ -57,11 +57,11 @@ export function HistorySidebar({
   }, [refreshTrigger]);
 
   return (
-    <aside className="hidden md:flex w-64 bg-stone-50 border-r border-stone-200 flex-col h-full">
-      <div className="p-4 border-b border-stone-200">
+    <aside className="hidden md:flex w-64 bg-surface border-r border-outline flex-col h-full">
+      <div className="p-4 border-b border-outline">
         <button
           onClick={onNewAnalysis}
-          className="w-full py-2 px-4 bg-amber-600 text-white font-medium rounded-lg hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 transition-colors"
+          className="w-full py-2 px-4 bg-accent text-white font-medium rounded-lg hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors"
         >
           + New Analysis
         </button>
@@ -69,8 +69,8 @@ export function HistorySidebar({
 
       <div className="flex-1 overflow-y-auto">
         {isLoading && (
-          <div className="p-4 text-center text-stone-500">
-            <div className="w-6 h-6 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin mx-auto mb-2" />
+          <div className="p-4 text-center text-ink-muted">
+            <div className="w-6 h-6 border-2 border-outline border-t-ink-muted rounded-full animate-spin mx-auto mb-2" />
             Loading history...
           </div>
         )}
@@ -82,27 +82,27 @@ export function HistorySidebar({
         )}
 
         {!isLoading && !error && entries.length === 0 && (
-          <div className="p-4 text-center text-stone-500 text-sm">
+          <div className="p-4 text-center text-ink-muted text-sm">
             No analyses yet. Create your first one!
           </div>
         )}
 
         {!isLoading && !error && entries.length > 0 && (
-          <ul className="divide-y divide-stone-200">
+          <ul className="divide-y divide-outline">
             {entries.map((entry) => (
               <li key={entry.id}>
                 <button
                   onClick={() => onSelect(entry.id)}
-                  className={`w-full text-left p-3 hover:bg-stone-100 transition-colors ${
+                  className={`w-full text-left p-3 hover:bg-page transition-colors ${
                     selectedId === entry.id
-                      ? "bg-amber-50 border-l-2 border-amber-600"
+                      ? "bg-accent-soft border-l-2 border-accent"
                       : ""
                   }`}
                 >
-                  <div className="text-xs text-stone-500 mb-1">
+                  <div className="text-xs text-ink-muted mb-1">
                     {formatDateTime(entry.created_at)}
                   </div>
-                  <div className="text-sm text-stone-700 line-clamp-2">
+                  <div className="text-sm text-ink line-clamp-2">
                     {entry.input_preview}...
                   </div>
                 </button>

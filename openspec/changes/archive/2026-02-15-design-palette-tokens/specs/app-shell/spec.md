@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: Provide text input for journal entry
 
 The system SHALL display a large text area where users can paste or write their morning pages. The text area SHALL use design token Tailwind classes (`bg-surface` background, `text-ink` text color, `border-outline` border, `ring-accent` focus ring).

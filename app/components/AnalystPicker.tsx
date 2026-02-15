@@ -42,7 +42,7 @@ export function AnalystPicker({ onPersonaChange }: AnalystPickerProps) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm text-stone-600 bg-white border border-stone-200 rounded-lg hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm text-ink-muted bg-surface border border-outline rounded-lg hover:bg-page focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors"
       >
         <span className="font-medium">{currentPersona.displayName}</span>
         <svg
@@ -58,17 +58,17 @@ export function AnalystPicker({ onPersonaChange }: AnalystPickerProps) {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-2 w-72 bg-white border border-stone-200 rounded-lg shadow-lg z-20">
+          <div className="absolute right-0 mt-2 w-72 bg-surface border border-outline rounded-lg shadow-lg z-20">
             {ANALYST_PERSONAS.map((persona) => (
               <button
                 key={persona.id}
                 onClick={() => handleSelect(persona.id)}
-                className={`w-full px-4 py-3 text-left hover:bg-stone-50 first:rounded-t-lg last:rounded-b-lg transition-colors ${
-                  persona.id === selectedPersona ? "bg-amber-50" : ""
+                className={`w-full px-4 py-3 text-left hover:bg-page first:rounded-t-lg last:rounded-b-lg transition-colors ${
+                  persona.id === selectedPersona ? "bg-accent-soft" : ""
                 }`}
               >
-                <div className="font-medium text-stone-800">{persona.displayName}</div>
-                <div className="text-sm text-stone-500">{persona.description}</div>
+                <div className="font-medium text-ink">{persona.displayName}</div>
+                <div className="text-sm text-ink-muted">{persona.description}</div>
               </button>
             ))}
           </div>
