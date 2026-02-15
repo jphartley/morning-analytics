@@ -1,16 +1,21 @@
-FROM node:22-slim
+FROM node:22-slim AS base
+
+# Install bun for faster, more memory-efficient installs
+RUN npm install -g bun
 
 WORKDIR /app
 
-# Copy package files and install (sharp includes prebuilt libvips)
+# Copy package files
 COPY package.json package-lock.json ./
-RUN NODE_OPTIONS=--max-old-space-size=4096 npm install
+
+# Use bun to install (much lower memory than npm)
+RUN bun install
 
 # Copy app source
 COPY . .
 
-# Build Next.js
-RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
+# Build Next.js (uses Node, not bun)
+RUN npm run build
 
 # Start
 EXPOSE 3000
