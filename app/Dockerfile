@@ -2,14 +2,9 @@ FROM node:22-slim
 
 WORKDIR /app
 
-# Install dependencies for sharp
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libvips-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy package files and install
+# Copy package files and install (sharp includes prebuilt libvips)
 COPY package.json package-lock.json ./
-RUN npm install --production
+RUN npm install
 
 # Copy app source
 COPY . .
