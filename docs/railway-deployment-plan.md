@@ -4,48 +4,50 @@
 
 ---
 
-## Phase 1: Railway Project Setup
+## Phase 1: Railway Project Setup ✅ DONE
 
-1. Go to [railway.com](https://railway.com) → Dashboard → **"New Project"**
-2. Select **"Deploy from GitHub Repo"**
-3. Connect your GitHub account (if not already connected)
-4. Select the `morning-openspec` repo
-5. **Set the root directory to `app`** in the service Settings tab
-   - The Next.js app lives in `/app`, not the repo root
-   - Railway needs to know this so Nixpacks finds `package.json` and `next.config.ts`
+1. ~~Go to railway.com → Dashboard → "New Project"~~
+2. ~~Select "Deploy from GitHub Repo"~~
+3. ~~Connect GitHub account~~
+4. ~~Select the `morning-openspec` repo~~
+5. ~~Set the root directory to `app` in service Settings~~
 
 ---
 
-## Phase 2: Environment Variables
+## Phase 2: Environment Variables ✅ DONE
 
-In Railway → your service → **Variables** tab, add all of these:
+All variables set in Railway → service → Variables tab:
 
 ```
-GEMINI_API_KEY=...
-DISCORD_BOT_TOKEN=...
-DISCORD_USER_TOKEN=...
-DISCORD_GUILD_ID=...
-DISCORD_CHANNEL_ID=...
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-NEXT_PUBLIC_IMAGE_PROVIDER=midjourney
-PORT=3000
+GEMINI_API_KEY
+GEMINI_MODEL
+DISCORD_BOT_TOKEN
+DISCORD_USER_TOKEN
+DISCORD_GUILD_ID
+DISCORD_CHANNEL_ID
+MIDJOURNEY_APP_ID
+MIDJOURNEY_IMAGINE_COMMAND_ID
+USE_AI_MOCKS
+NEXT_PUBLIC_IMAGE_PROVIDER
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
 ```
 
-Copy values from your local `/app/.env.local`.
+Note: `PORT` is not needed — Railway injects its own.
 
 ---
 
-## Phase 3: Deploy & Verify
+## Phase 3: Build & Deploy ✅ BUILD FIXED
 
-1. Railway will auto-build once variables are saved (Nixpacks detects Next.js)
-2. Watch the **build logs** for errors — common issues:
-   - Sharp compilation failure → check Node version is 22
-   - Missing env vars → check all are set
-   - Wrong root directory → should be `app`
-3. Once deployed, Railway gives you a `*.railway.app` URL
-4. Quick test at the Railway URL:
+**Issue encountered:** `npm ci` crashed with "Exit handler never called."
+**Verified root cause:** `app/package-lock.json` had `resolved` entries pinned to `jfrog.booking.com`, which Railway could not use.
+**Fix applied:** normalize lockfile `resolved` URLs to `registry.npmjs.org`, then deploy with Node 22.
+
+### Verify deployment
+1. Check build logs show green "Deployed" status
+2. Railway provides a `*.railway.app` URL
+3. Quick test at the Railway URL:
    - [ ] App loads (sign-in page appears)
    - [ ] Can sign up / sign in
    - [ ] Analysis works (~2s for text)
@@ -59,16 +61,16 @@ Copy values from your local `/app/.env.local`.
 ### Railway side
 1. In Railway → service → **Settings** → **"Custom Domain"**
 2. Add: `morning-analytics.ink`
-3. Railway gives you a CNAME value (something like `xyz.railway.app`)
+3. Railway shows the exact DNS records required for verification/routing.
 
 ### Namecheap side
 1. Go to [namecheap.com](https://namecheap.com) → **Domain List** → `morning-analytics.ink` → **Manage**
 2. Go to **"Advanced DNS"** tab
 3. Delete any default parking records
-4. Add a **CNAME record**:
-   - Host: `@`
-   - Value: *(the CNAME value Railway gave you)*
-   - TTL: Automatic
+4. Add the records Railway requests (do not assume a fixed record type).  
+   Example that worked for this deployment:
+   - `CNAME` record: `@` → `2si4e0ms.up.railway.app.` (TTL Automatic)
+   - `TXT` record: `_railway-verify` → `railway-verify=<token>` (TTL Automatic)
 5. If you also want `www.morning-analytics.ink`:
    - Add another CNAME record with Host: `www` and the same value
 
@@ -102,13 +104,29 @@ Full end-to-end test on the live domain:
 
 | Problem | Likely Cause | Fix |
 |---------|-------------|-----|
+| Build fails on `npm ci` | Lockfile pinned to private registry | Ensure `app/package-lock.json` does not contain `jfrog.booking.com`; use `registry.npmjs.org` entries |
 | Build fails | Wrong root directory | Set to `app` in Settings |
-| Build fails on Sharp | Node version wrong | Check `.nvmrc` has `22` |
+| Build fails after Node pin change | App and lockfile engine metadata out of sync | Keep `app/.nvmrc`, `app/package.json`, and lockfile root `engines.node` aligned |
 | App loads but analysis fails | Missing `GEMINI_API_KEY` | Check Variables tab |
 | Images don't generate | Missing Discord env vars | Check all `DISCORD_*` vars |
 | Images 403 Forbidden | Supabase bucket not public | Enable public read on `analysis-images` bucket |
-| Custom domain not resolving | DNS not propagated yet | Wait 15-30 min, check CNAME is correct |
+| Custom domain not resolving | Missing/mismatched Railway verification record | Ensure both app routing record and `_railway-verify` TXT record match Railway exactly |
 | HTTPS not working | SSL not provisioned yet | Railway does this automatically, wait a few minutes |
+
+---
+
+## Local Dev Parity (Node + Lockfile Hygiene)
+
+1. Use Node 22 for local work in this repo:
+   - repo root: `nvm use`
+   - app dir: `cd app && nvm use`
+2. If your work laptop/global npm config points to a private registry, lockfile entries can leak that host.
+3. Before pushing lockfile changes, verify:
+   - `rg 'jfrog\\.booking\\.com' app/package-lock.json`
+4. If matches are found, normalize lockfile URLs back to public npm before commit:
+   - `perl -pi -e 's#https://jfrog\\.booking\\.com:443/artifactory/api/npm/npm/#https://registry.npmjs.org/#g' app/package-lock.json`
+5. Re-check:
+   - `rg 'jfrog\\.booking\\.com' app/package-lock.json` should return no matches.
 
 ---
 
