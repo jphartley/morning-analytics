@@ -9,7 +9,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:lockfile-registry": "node scripts/check-lockfile-registry.mjs",
+    "fix:lockfile-registry": "node scripts/fix-lockfile-registry.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

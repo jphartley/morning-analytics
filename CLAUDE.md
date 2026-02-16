@@ -15,6 +15,8 @@ cd app
 npm run dev      # Start dev server at localhost:3000
 npm run build    # Production build
 npm run lint     # ESLint
+npm run check:lockfile-registry  # Ensure lockfile does not leak private registry URLs
+npm run fix:lockfile-registry    # Normalize leaked lockfile URLs to registry.npmjs.org
 ```
 
 Validation scripts (run from `/validation`):
@@ -26,6 +28,30 @@ npm run test-midjourney  # Test Midjourney integration
 ```
 
 Set `USE_MOCKS=true` in `/app/.env.local` for testing without API calls.
+
+## Local vs Railway npm Registry Workflow
+
+This project supports two registry contexts:
+
+1. **Local development** may use a private registry from `~/.npmrc` (for example, corporate VPN setup).
+2. **Railway deploys** must use public npm.
+
+To keep both working:
+
+- Railway service variables:
+  - `NPM_CONFIG_REGISTRY=https://registry.npmjs.org/`
+  - `NPM_CONFIG_REPLACE_REGISTRY_HOST=always`
+- Before committing dependency changes from local:
+  - `cd app && npm run check:lockfile-registry`
+  - If check fails: `cd app && npm run fix:lockfile-registry`, then re-run check
+- Keep Node pins aligned across:
+  - `/app/.nvmrc`
+  - `/app/package.json` (`engines.node`)
+  - `/app/package-lock.json` root `engines.node`
+
+Detailed references:
+- `/docs/railway-deployment-plan.md`
+- `/docs/research/railway-npm-ci-failure.md`
 
 ## Common Development Tasks
 
@@ -584,6 +610,7 @@ NEXT_PUBLIC_IMAGE_PROVIDER=midjourney
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | "Missing required env var" | `.env.local` incomplete or wrong path | Copy `.env.example` → `.env.local`, fill in secrets |
+| Railway `npm ci` fails unexpectedly | `app/package-lock.json` contains private registry URLs | Run `cd app && npm run check:lockfile-registry`; if needed run `npm run fix:lockfile-registry` before commit |
 | Gemini returns empty response | Model overloaded or API key invalid | Check GEMINI_API_KEY validity, try different model |
 | Midjourney timeout (120s) | Image generation taking too long or Discord bot not connected | Check Discord bot is online, Midjourney has capacity, try again |
 | Images don't appear after generation | Upload to Supabase failed | Check SUPABASE_SERVICE_ROLE_KEY, bucket permissions, storage quota |
