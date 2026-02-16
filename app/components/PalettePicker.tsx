@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const STORAGE_KEY = "palette";
 
@@ -47,12 +47,24 @@ function applyPalette(id: string) {
 export function PalettePicker() {
   const [current, setCurrent] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const stored = getStoredPalette();
     applyPalette(stored);
     setCurrent(stored);
   }, []);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [expanded]);
 
   const handleSwitch = (id: string) => {
     applyPalette(id);
@@ -69,7 +81,7 @@ export function PalettePicker() {
   const currentLabel = PALETTES.find((p) => p.id === current)?.label || "Reverie";
 
   return (
-    <div className="fixed bottom-4 left-4 z-50">
+    <div ref={containerRef} className="fixed bottom-4 left-4 z-50">
       {expanded && (
         <div className="mb-2 rounded-xl bg-black/85 p-3 shadow-xl backdrop-blur max-w-xs">
           <p className="text-[11px] font-semibold text-white/60 uppercase tracking-wider mb-2 px-0.5">
