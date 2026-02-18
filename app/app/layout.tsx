@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Morning Analytics",
-  description: "AI-powered psychoanalytic insights and symbolic imagery from morning pages journaling",
+  description: "Insights from your morning pages",
 };
 
 export default function RootLayout({

@@ -206,7 +206,7 @@ export default function Home() {
                 Morning Analytics
               </h1>
               <p className="text-lg text-ink-muted">
-                AI-powered insights from your morning pages
+                Insights From Your Morning Pages
               </p>
             </div>
           </header>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function SigninPage() {
   const router = useRouter();
@@ -59,6 +60,16 @@ export default function SigninPage() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-page">
       <div className="w-full max-w-md p-8 bg-surface rounded-lg shadow-lg border border-outline">
+        <div className="flex justify-center mb-6">
+          <Image
+            src="/logo-full.png"
+            alt="Morning Analytics"
+            width={1000}
+            height={579}
+            className="max-w-xs w-full h-auto"
+            priority
+          />
+        </div>
         <h1 className="text-3xl font-bold text-center mb-2 text-ink">Sign In</h1>
         <p className="text-center text-ink-muted mb-6">Welcome back to Morning Analytics</p>
 

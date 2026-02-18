@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/useAuth';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export function AppHeader() {
   const { user, logout } = useAuth();
@@ -16,9 +17,16 @@ export function AppHeader() {
 
   return (
     <header className="border-b border-outline bg-surface">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-        <Link href="/" className="text-lg font-semibold text-ink">
-          Morning Analytics
+      <div className="max-w-7xl mx-auto px-4 py-5 flex justify-between items-center">
+        <Link href="/" className="flex items-center">
+          <Image
+            src="/logo-header.png"
+            alt="Morning Analytics - Home"
+            width={472}
+            height={100}
+            className="h-12 w-auto"
+            priority
+          />
         </Link>
 
         <div className="flex items-center gap-4">
