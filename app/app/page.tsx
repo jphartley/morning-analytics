@@ -6,7 +6,7 @@ import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { JournalInput } from "@/components/JournalInput";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { ImageGrid } from "@/components/ImageGrid";
-import { LoadingState } from "@/components/LoadingState";
+import { LoadingState, ANALYSIS_MESSAGES, IMAGE_MESSAGES } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
 import { Lightbox } from "@/components/Lightbox";
 import { ModelPicker } from "@/components/ModelPicker";
@@ -220,7 +220,7 @@ export default function Home() {
             />
           )}
 
-          {state === "analyzing" && <LoadingState message="Analyzing your morning pages..." />}
+          {state === "analyzing" && <LoadingState messages={ANALYSIS_MESSAGES} durationHint="Usually takes ~15 seconds" />}
 
           {state === "error" && error && (
             <ErrorState
@@ -236,11 +236,8 @@ export default function Home() {
               {state === "text-ready" && (
                 <div className="w-full">
                   <h2 className="text-xl font-semibold text-ink mb-4">Generated Images</h2>
-                  <div className="flex items-center justify-center py-12 bg-surface border border-outline rounded-lg">
-                    <div className="flex flex-col items-center space-y-3">
-                      <div className="w-10 h-10 border-4 border-accent-soft border-t-accent rounded-full animate-spin" />
-                      <p className="text-ink-muted">Generating images...</p>
-                    </div>
+                  <div className="bg-surface border border-outline rounded-lg">
+                    <LoadingState messages={IMAGE_MESSAGES} durationHint="Usually takes about a minute" />
                   </div>
                 </div>
               )}
