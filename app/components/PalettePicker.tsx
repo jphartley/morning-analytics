@@ -27,13 +27,15 @@ const PALETTES = [
   { id: "sandstorm", label: "Sandstorm", color: "#c07028" },
 ];
 
+const DEFAULT_PALETTE = "inkwell";
+
 function getStoredPalette(): string {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
-      return localStorage.getItem(STORAGE_KEY) || "";
+      return localStorage.getItem(STORAGE_KEY) || DEFAULT_PALETTE;
     }
   } catch {}
-  return "";
+  return DEFAULT_PALETTE;
 }
 
 function applyPalette(id: string) {
@@ -45,7 +47,7 @@ function applyPalette(id: string) {
 }
 
 export function PalettePicker() {
-  const [current, setCurrent] = useState("");
+  const [current, setCurrent] = useState(DEFAULT_PALETTE);
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
