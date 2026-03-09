@@ -36,7 +36,7 @@ export default function Home() {
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
   const [selectedPersona, setSelectedPersona] = useState<string>("jungian");
   const [isPending, startTransition] = useTransition();
@@ -165,12 +165,12 @@ export default function Home() {
     }
   };
 
-  const handleImageClick = (imageUrl: string) => {
-    setLightboxImage(imageUrl);
+  const handleImageClick = (index: number) => {
+    setLightboxIndex(index);
   };
 
   const handleCloseLightbox = () => {
-    setLightboxImage(null);
+    setLightboxIndex(null);
   };
 
   return (
@@ -280,8 +280,12 @@ export default function Home() {
         </main>
       </div>
 
-      {lightboxImage && (
-        <Lightbox imageUrl={lightboxImage} onClose={handleCloseLightbox} />
+      {lightboxIndex !== null && (
+        <Lightbox
+          imageUrls={state === "viewing-history" && historyViewData ? historyViewData.imageUrls : imageUrls}
+          initialIndex={lightboxIndex}
+          onClose={handleCloseLightbox}
+        />
       )}
 
       {/* Save error toast */}
