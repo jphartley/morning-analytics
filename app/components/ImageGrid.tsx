@@ -2,7 +2,7 @@
 
 interface ImageGridProps {
   imageUrls: string[];
-  onImageClick?: (imageUrl: string) => void;
+  onImageClick?: (index: number) => void;
 }
 
 export function ImageGrid({ imageUrls, onImageClick }: ImageGridProps) {
@@ -17,7 +17,7 @@ export function ImageGrid({ imageUrls, onImageClick }: ImageGridProps) {
         {imageUrls.map((url, index) => (
           <button
             key={index}
-            onClick={() => onImageClick?.(url)}
+            onClick={() => onImageClick?.(index)}
             className="aspect-square rounded-lg overflow-hidden bg-surface hover:ring-4 hover:ring-accent focus:outline-none focus:ring-4 focus:ring-accent transition-all cursor-pointer"
           >
             <img

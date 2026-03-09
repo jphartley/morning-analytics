@@ -1,39 +1,5 @@
 ## ADDED Requirements
 
-### Requirement: View image in lightbox
-
-The system SHALL display a full-size image in a modal overlay when clicked, with access to the full set of generated images for navigation.
-
-#### Scenario: Open lightbox
-
-- **WHEN** user clicks on an image in the grid
-- **THEN** system displays a modal overlay with that image at full size
-- **THEN** system provides navigation controls to cycle through all images in the set
-
-### Requirement: Close lightbox
-
-The system SHALL allow closing the lightbox by clicking outside or pressing Escape.
-
-#### Scenario: Close by clicking backdrop
-
-- **WHEN** lightbox is open and user clicks outside the image
-- **THEN** system closes the lightbox and returns to normal view
-
-#### Scenario: Close by pressing Escape
-
-- **WHEN** lightbox is open and user presses Escape key
-- **THEN** system closes the lightbox and returns to normal view
-
-### Requirement: Prevent background scroll
-
-The system SHALL prevent page scrolling while the lightbox is open.
-
-#### Scenario: Body scroll locked
-
-- **WHEN** lightbox is open
-- **THEN** page body does not scroll
-- **THEN** scroll is restored when lightbox closes
-
 ### Requirement: Navigate between images with arrow buttons
 
 The system SHALL display previous and next arrow buttons flanking the main image in the lightbox backdrop area.
@@ -94,3 +60,15 @@ The system SHALL display a fully opaque black backdrop when the lightbox is open
 - **WHEN** lightbox is open
 - **THEN** the backdrop SHALL be fully opaque black
 - **THEN** the page content behind the lightbox SHALL NOT be visible
+
+## MODIFIED Requirements
+
+### Requirement: View image in lightbox
+
+The system SHALL display a full-size image in a modal overlay when clicked, with access to the full set of generated images for navigation.
+
+#### Scenario: Open lightbox
+
+- **WHEN** user clicks on an image in the grid
+- **THEN** system displays a modal overlay with that image at full size
+- **THEN** system provides navigation controls to cycle through all images in the set
