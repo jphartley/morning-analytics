@@ -49,9 +49,14 @@ To keep both working:
   - `/app/package.json` (`engines.node`)
   - `/app/package-lock.json` root `engines.node`
 
+### If `npm install` fails with E401 or ECONNRESET
+
+JFrog auth token has expired. Follow the login and lockfile fix steps in `/docs/research/jfrog-npm-login-workflow.md`.
+
 Detailed references:
 - `/docs/railway-deployment-plan.md`
 - `/docs/research/railway-npm-ci-failure.md`
+- `/docs/research/jfrog-npm-login-workflow.md`
 
 ## Common Development Tasks
 
