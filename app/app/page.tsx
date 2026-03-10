@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { analyzeText, generateImages, saveAnalysis, TextAnalysisResponse } from "./actions";
 import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { JournalInput } from "@/components/JournalInput";
@@ -267,7 +268,34 @@ export default function Home() {
               )}
               <div className="bg-surface border border-outline rounded-lg p-4 mb-4">
                 <h3 className="text-sm font-medium text-ink-muted mb-2">Original Input</h3>
-                <p className="text-ink whitespace-pre-wrap">{historyViewData.inputText}</p>
+                <ReactMarkdown
+                  allowedElements={["h1", "h2", "h3", "strong", "em", "ul", "ol", "li", "p", "br"]}
+                  components={{
+                    h1: ({ node, ...props }) => (
+                      <h1 className="text-xl font-bold text-ink mt-6 mb-4" {...props} />
+                    ),
+                    h2: ({ node, ...props }) => (
+                      <h2 className="text-lg font-bold text-ink mt-5 mb-3" {...props} />
+                    ),
+                    h3: ({ node, ...props }) => (
+                      <h3 className="text-base font-bold text-ink mt-4 mb-2" {...props} />
+                    ),
+                    p: ({ node, ...props }) => (
+                      <p className="mb-4 text-ink leading-relaxed" {...props} />
+                    ),
+                    ul: ({ node, ...props }) => (
+                      <ul className="list-disc list-inside mb-4 text-ink" {...props} />
+                    ),
+                    ol: ({ node, ...props }) => (
+                      <ol className="list-decimal list-inside mb-4 text-ink" {...props} />
+                    ),
+                    li: ({ node, ...props }) => (
+                      <li className="mb-1" {...props} />
+                    ),
+                  }}
+                >
+                  {historyViewData.inputText}
+                </ReactMarkdown>
               </div>
 
               <AnalysisPanel analysisText={historyViewData.analysisText} />
