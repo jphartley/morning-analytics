@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { analyzeText, generateImages, saveAnalysis, TextAnalysisResponse } from "./actions";
+import { analyzeText, generateImages, saveAnalysis, regenerateImages, TextAnalysisResponse } from "./actions";
 import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { JournalInput } from "@/components/JournalInput";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { ImageGrid } from "@/components/ImageGrid";
+import { RegenerateButton } from "@/components/RegenerateButton";
 import { LoadingState, ANALYSIS_MESSAGES, IMAGE_MESSAGES } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
 import { Lightbox } from "@/components/Lightbox";
@@ -24,9 +25,11 @@ interface HistoryViewData {
   inputText: string;
   analysisText: string;
   imageUrls: string[];
+  imagePrompt?: string | null;
   analystPersona?: string | null;
 }
 
+const MAX_IMAGES = 20;
 const isMockMode = process.env.NEXT_PUBLIC_IMAGE_PROVIDER === "mock";
 
 export default function Home() {
@@ -46,6 +49,19 @@ export default function Home() {
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [historyViewData, setHistoryViewData] = useState<HistoryViewData | null>(null);
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+
+  // Regeneration state
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
+  const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  // Auto-dismiss success toast
+  useEffect(() => {
+    if (!successToast) return;
+    const timer = setTimeout(() => setSuccessToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [successToast]);
 
   const handleModelChange = useCallback((modelId: string) => {
     setSelectedModel(modelId);
@@ -75,6 +91,7 @@ export default function Home() {
 
       // Show text immediately
       setAnalysisResult(textResult);
+      setCurrentImagePrompt(textResult.imagePrompt || null);
       setState("text-ready");
 
       // Phase 2: Generate images in background
@@ -118,6 +135,7 @@ export default function Home() {
         // Refresh history and select the new entry
         setHistoryRefreshTrigger((prev) => prev + 1);
         setSelectedHistoryId(saveResult.id);
+        setCurrentAnalysisId(saveResult.id);
         if (nonBlockingErrorMessage) {
           setSaveError(nonBlockingErrorMessage);
         }
@@ -144,6 +162,8 @@ export default function Home() {
     setSaveError(null);
     setSelectedHistoryId(null);
     setHistoryViewData(null);
+    setCurrentAnalysisId(null);
+    setCurrentImagePrompt(null);
   };
 
   const handleHistorySelect = async (id: string) => {
@@ -159,6 +179,7 @@ export default function Home() {
         inputText: result.data.input_text,
         analysisText: result.data.analysis_text,
         imageUrls: result.data.imageUrls,
+        imagePrompt: result.data.image_prompt,
         analystPersona: result.data.analyst_persona,
       });
     } else {
@@ -173,6 +194,39 @@ export default function Home() {
 
   const handleCloseLightbox = () => {
     setLightboxIndex(null);
+  };
+
+  const handleRegenerate = async () => {
+    // Determine which analysis to regenerate for
+    const analysisId = state === "viewing-history" ? historyViewData?.id : currentAnalysisId;
+    if (!analysisId || !user) return;
+
+    setIsRegenerating(true);
+    setSaveError(null);
+
+    const result = await regenerateImages(analysisId, user.id);
+
+    if (result.success && result.imageUrls) {
+      if (state === "viewing-history" && historyViewData) {
+        // Refresh the history view with appended images
+        setHistoryViewData({
+          ...historyViewData,
+          imageUrls: [...historyViewData.imageUrls, ...result.imageUrls],
+        });
+      } else {
+        // Append to current analysis images
+        setImageUrls((prev) => [...prev, ...result.imageUrls!]);
+      }
+      if (result.uploadError) {
+        setSaveError(result.uploadError);
+      } else {
+        setSuccessToast("4 new images added");
+      }
+    } else {
+      setSaveError(result.error || "Failed to regenerate images");
+    }
+
+    setIsRegenerating(false);
   };
 
   return (
@@ -245,7 +299,17 @@ export default function Home() {
               )}
 
               {state === "complete" && (
-                <ImageGrid imageUrls={imageUrls} onImageClick={handleImageClick} />
+                <>
+                  <ImageGrid imageUrls={imageUrls} onImageClick={handleImageClick} />
+                  {currentImagePrompt && currentAnalysisId && (
+                    <RegenerateButton
+                      onClick={handleRegenerate}
+                      isRegenerating={isRegenerating}
+                      imageCount={imageUrls.length}
+                      maxImages={MAX_IMAGES}
+                    />
+                  )}
+                </>
               )}
             </div>
           )}
@@ -304,6 +368,14 @@ export default function Home() {
               {historyViewData.imageUrls.length > 0 && (
                 <ImageGrid imageUrls={historyViewData.imageUrls} onImageClick={handleImageClick} />
               )}
+              {historyViewData.imagePrompt && (
+                <RegenerateButton
+                  onClick={handleRegenerate}
+                  isRegenerating={isRegenerating}
+                  imageCount={historyViewData.imageUrls.length}
+                  maxImages={MAX_IMAGES}
+                />
+              )}
             </div>
           )}
         </main>
@@ -324,6 +396,19 @@ export default function Home() {
           <button
             onClick={() => setSaveError(null)}
             className="text-red-600 hover:text-red-800 font-bold"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Success toast */}
+      {successToast && (
+        <div className="fixed bottom-4 right-4 bg-accent-soft border border-outline text-ink px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+          <span className="text-sm">{successToast}</span>
+          <button
+            onClick={() => setSuccessToast(null)}
+            className="text-ink-muted hover:text-ink font-bold"
           >
             ×
           </button>

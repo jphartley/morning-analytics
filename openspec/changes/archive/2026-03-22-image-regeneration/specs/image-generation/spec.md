@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Trigger Midjourney image generation
 
@@ -17,27 +17,6 @@ The system SHALL send an image prompt to Midjourney via Discord and return the g
 - **THEN** system uses the stored image prompt from the analysis record
 - **THEN** system uploads images with indices offset by the current image count
 - **THEN** system returns 4 new image URLs
-
-#### Scenario: Generation timeout
-
-- **WHEN** Midjourney does not respond within the timeout period
-- **THEN** system returns a timeout error
-
-### Requirement: Capture Midjourney response
-
-The system SHALL listen for Midjourney's response, extract the grid image, and split it into 4 separate images.
-
-#### Scenario: Generation completes
-
-- **WHEN** Midjourney posts the completed image grid
-- **THEN** system fetches the grid image from Discord CDN
-- **THEN** system splits the image into 4 quadrants (dividing width and height by 2)
-- **THEN** system returns 4 separate image URLs or data
-
-#### Scenario: Split handles variable aspect ratios
-
-- **WHEN** Midjourney returns a grid with non-square aspect ratio
-- **THEN** system correctly calculates quadrant dimensions based on actual image width and height
 
 #### Scenario: Generation timeout
 

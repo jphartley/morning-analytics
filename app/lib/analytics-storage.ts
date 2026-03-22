@@ -35,7 +35,8 @@ function getFileExtension(contentType: string): string {
 export async function uploadImagesToStorage(
   analysisId: string,
   imageDataUrls: string[],
-  userId: string
+  userId: string,
+  startIndex: number = 0
 ): Promise<{ paths: string[]; error?: string }> {
   const supabase = getServerSupabase();
   const paths: string[] = [];
@@ -44,7 +45,7 @@ export async function uploadImagesToStorage(
   for (let i = 0; i < imageDataUrls.length; i++) {
     const { buffer, contentType } = base64ToBuffer(imageDataUrls[i]);
     const extension = getFileExtension(contentType);
-    const path = `${analysisId}/${i}.${extension}`;
+    const path = `${analysisId}/${startIndex + i}.${extension}`;
 
     // Try upload with one retry
     let lastError: Error | null = null;
@@ -82,6 +83,43 @@ export async function uploadImagesToStorage(
   }
 
   return { paths };
+}
+
+
+/**
+ * Append new image paths to an existing analysis's image_paths array.
+ * Uses service role client (bypasses RLS).
+ */
+export async function updateAnalysisImagePaths(
+  analysisId: string,
+  newPaths: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getServerSupabase();
+
+  // Fetch current paths
+  const { data, error: fetchError } = await supabase
+    .from("analyses")
+    .select("image_paths")
+    .eq("id", analysisId)
+    .single();
+
+  if (fetchError || !data) {
+    return { success: false, error: fetchError?.message || "Analysis not found" };
+  }
+
+  const currentPaths: string[] = data.image_paths || [];
+  const updatedPaths = [...currentPaths, ...newPaths];
+
+  const { error: updateError } = await supabase
+    .from("analyses")
+    .update({ image_paths: updatedPaths })
+    .eq("id", analysisId);
+
+  if (updateError) {
+    return { success: false, error: updateError.message };
+  }
+
+  return { success: true };
 }
 
 

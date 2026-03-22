@@ -9,7 +9,8 @@ import { assertServerSupabaseEnv } from "@/lib/supabase";
 import { triggerImagine } from "@/lib/discord/trigger";
 import { waitForImages } from "@/lib/discord/listener";
 import { splitGridImage } from "@/lib/image-splitter";
-import { saveAnalysis as saveToStorage, uploadImagesToStorage } from "@/lib/analytics-storage";
+import { saveAnalysis as saveToStorage, uploadImagesToStorage, updateAnalysisImagePaths } from "@/lib/analytics-storage";
+import { getServerSupabase } from "@/lib/supabase";
 
 assertServerSupabaseEnv();
 
@@ -36,7 +37,15 @@ export interface SaveAnalysisResponse {
   error?: string;
 }
 
+export interface RegenerateImagesResponse {
+  success: boolean;
+  imageUrls?: string[];
+  imagePaths?: string[];
+  uploadError?: string;
+  error?: string;
+}
 
+const MAX_IMAGES_PER_ANALYSIS = 20;
 const MOCK_IMAGE_COUNT = 4;
 const MOCK_IMAGE_DELAY_MS = 1000;
 
@@ -266,6 +275,103 @@ export async function saveAnalysis(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to save analysis.",
+    };
+  }
+}
+
+/**
+ * Regenerate images for an existing analysis.
+ * Reuses the stored image_prompt, appends new images to existing paths.
+ */
+export async function regenerateImages(
+  analysisId: string,
+  userId: string
+): Promise<RegenerateImagesResponse> {
+  try {
+    if (!userId) {
+      return { success: false, error: "User must be authenticated to regenerate images." };
+    }
+
+    // Fetch the existing analysis (service role bypasses RLS)
+    const supabase = getServerSupabase();
+    const { data: analysis, error: fetchError } = await supabase
+      .from("analyses")
+      .select("image_prompt, image_paths, user_id")
+      .eq("id", analysisId)
+      .single();
+
+    if (fetchError || !analysis) {
+      return { success: false, error: "Analysis not found." };
+    }
+
+    if (analysis.user_id !== userId) {
+      return { success: false, error: "Not authorized to modify this analysis." };
+    }
+
+    if (!analysis.image_prompt) {
+      return { success: false, error: "This analysis has no image prompt." };
+    }
+
+    const currentPaths: string[] = analysis.image_paths || [];
+    if (currentPaths.length + 4 > MAX_IMAGES_PER_ANALYSIS) {
+      return { success: false, error: `Maximum of ${MAX_IMAGES_PER_ANALYSIS} images reached.` };
+    }
+
+    const startIndex = currentPaths.length;
+    const imageProvider = getImageProvider();
+
+    let newImageUrls: string[];
+
+    if (imageProvider === "mock") {
+      await delay(MOCK_IMAGE_DELAY_MS);
+      newImageUrls = await loadMockImages();
+    } else {
+      const triggerResult = await triggerImagine(analysis.image_prompt);
+      if (!triggerResult.success) {
+        return { success: false, error: triggerResult.error || "Failed to trigger image generation." };
+      }
+
+      const listenerResult = await waitForImages(triggerResult.nonce);
+      if (!listenerResult.success) {
+        return { success: false, error: listenerResult.error || "Failed to receive generated images." };
+      }
+
+      const gridImageUrl = listenerResult.imageUrls[0];
+      if (!gridImageUrl) {
+        return { success: false, error: "No image URL received from Midjourney." };
+      }
+
+      newImageUrls = await splitGridImage(gridImageUrl);
+    }
+
+    // Upload with offset index
+    const uploadResult = await uploadImagesToStorage(analysisId, newImageUrls, userId, startIndex);
+
+    if (uploadResult.error) {
+      return { success: false, error: uploadResult.error };
+    }
+
+    // Append paths to the database record
+    const updateResult = await updateAnalysisImagePaths(analysisId, uploadResult.paths);
+    if (!updateResult.success) {
+      return {
+        success: true,
+        imageUrls: newImageUrls,
+        imagePaths: uploadResult.paths,
+        uploadError: "Images generated but failed to update database: " + updateResult.error,
+      };
+    }
+
+    return {
+      success: true,
+      imageUrls: newImageUrls,
+      imagePaths: uploadResult.paths,
+    };
+  } catch (error) {
+    console.error("Image regeneration error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to regenerate images.",
     };
   }
 }
