@@ -56,6 +56,7 @@ export default function Home() {
   }, []);
 
   const handleAnalyze = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
     setState("analyzing");
     setError(null);
     setSaveError(null);

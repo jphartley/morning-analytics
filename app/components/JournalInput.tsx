@@ -32,6 +32,8 @@ export function JournalInput({
   disabled,
 }: JournalInputProps) {
   const isUpdatingFromProp = useRef(false);
+  const pasteDetected = useRef(false);
+  const shouldAutoAnalyze = useRef(false);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -59,14 +61,35 @@ export function JournalInput({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const md = (editor.storage as any).markdown.getMarkdown() as string;
       onChange(md);
+
+      const wasPaste = pasteDetected.current;
+      pasteDetected.current = false;
+      if (wasPaste && !disabled) {
+        const wordCount = md.split(/\s+/).filter(Boolean).length;
+        if (wordCount >= 300) {
+          shouldAutoAnalyze.current = true;
+        }
+      }
     },
     editorProps: {
       attributes: {
         class:
           "w-full min-h-[16rem] p-4 text-lg bg-surface text-ink outline-none",
       },
+      handlePaste: () => {
+        pasteDetected.current = true;
+        return false;
+      },
     },
   });
+
+  // Trigger auto-analyze after React re-renders with updated value
+  useEffect(() => {
+    if (shouldAutoAnalyze.current) {
+      shouldAutoAnalyze.current = false;
+      onAnalyze();
+    }
+  }, [value, onAnalyze]);
 
   // Sync external value prop changes into editor
   useEffect(() => {
