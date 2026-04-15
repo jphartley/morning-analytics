@@ -31,9 +31,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Script id="palette-bootstrap" strategy="beforeInteractive">
-          {PALETTE_BOOTSTRAP_SCRIPT}
-        </Script>
+        <Script
+          id="palette-bootstrap"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: PALETTE_BOOTSTRAP_SCRIPT }}
+        />
         <AuthSessionProvider>
           {children}
         </AuthSessionProvider>
