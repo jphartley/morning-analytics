@@ -5,7 +5,7 @@ import {
   applyPaletteToDocument,
   DEFAULT_PALETTE_ID,
   getStoredPaletteId,
-  PALETTE_STORAGE_KEY,
+  writeStoredPaletteId,
 } from "@/lib/palette-storage";
 
 const PALETTES = [
@@ -59,11 +59,7 @@ export function PalettePicker() {
     applyPaletteToDocument(id);
     setCurrent(id);
     try {
-      if (id) {
-        localStorage.setItem(PALETTE_STORAGE_KEY, id);
-      } else {
-        localStorage.removeItem(PALETTE_STORAGE_KEY);
-      }
+      writeStoredPaletteId(id);
     } catch {
       /* storage full or disabled */
     }
