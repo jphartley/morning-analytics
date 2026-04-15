@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-
-const STORAGE_KEY = "palette";
+import {
+  applyPaletteToDocument,
+  DEFAULT_PALETTE_ID,
+  getStoredPaletteId,
+  PALETTE_STORAGE_KEY,
+} from "@/lib/palette-storage";
 
 const PALETTES = [
   { id: "", label: "Reverie", color: "#7c3aed" },
@@ -27,33 +31,16 @@ const PALETTES = [
   { id: "sandstorm", label: "Sandstorm", color: "#c07028" },
 ];
 
-const DEFAULT_PALETTE = "inkwell";
-
-function getStoredPalette(): string {
-  try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      return localStorage.getItem(STORAGE_KEY) || DEFAULT_PALETTE;
-    }
-  } catch {}
-  return DEFAULT_PALETTE;
-}
-
-function applyPalette(id: string) {
-  if (id) {
-    document.documentElement.dataset.palette = id;
-  } else {
-    delete document.documentElement.dataset.palette;
-  }
-}
-
 export function PalettePicker() {
-  const [current, setCurrent] = useState(DEFAULT_PALETTE);
+  const [current, setCurrent] = useState(DEFAULT_PALETTE_ID);
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const stored = getStoredPalette();
-    applyPalette(stored);
+    const stored = getStoredPaletteId();
+    applyPaletteToDocument(stored);
+    // localStorage is unavailable during SSR; sync label after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional post-mount read
     setCurrent(stored);
   }, []);
 
@@ -69,15 +56,17 @@ export function PalettePicker() {
   }, [expanded]);
 
   const handleSwitch = (id: string) => {
-    applyPalette(id);
+    applyPaletteToDocument(id);
     setCurrent(id);
     try {
       if (id) {
-        localStorage.setItem(STORAGE_KEY, id);
+        localStorage.setItem(PALETTE_STORAGE_KEY, id);
       } else {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(PALETTE_STORAGE_KEY);
       }
-    } catch {}
+    } catch {
+      /* storage full or disabled */
+    }
   };
 
   const currentLabel = PALETTES.find((p) => p.id === current)?.label || "Reverie";
