@@ -1,0 +1,13 @@
+---
+description: Prefer plain language; spell out or explain abbreviations
+alwaysApply: true
+---
+
+# Communication style
+
+When writing explanations, documentation, or user-facing text in this project:
+
+- Avoid abbreviations when they might be unclear. When you use one, spell it out the first time or add a short gloss (for example: "content delivery network (CDN)").
+- Common technology terms that most developers recognize without explanation are fine to use as-is (examples: API, HTML, CSS, URL, HTTP).
+
+This keeps answers readable for humans who do not share the same shorthand.
