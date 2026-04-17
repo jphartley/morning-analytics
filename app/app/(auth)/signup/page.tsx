@@ -98,7 +98,7 @@ export default function SignupPage() {
         <p className="text-center text-ink-muted mb-6">Join Morning Analytics</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-error-surface border border-error-border rounded text-error-muted text-sm">
             {error}
           </div>
         )}
