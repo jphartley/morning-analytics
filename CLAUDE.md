@@ -668,6 +668,15 @@ Skips Gemini API calls, uses mock responses. 2-second total time instead of 65-9
 
 This ensures technical debt is visible and doesn't accumulate silently.
 
+## GitHub Issues & Labels
+
+**See `/docs/github-label-definitions.md`** for the full label taxonomy, color codes, issue body template, and automation query examples. When creating new GitHub issues, follow the labeling checklist in that document to ensure consistency.
+
+Key points:
+- `enhancement` is the primary label for all feature backlog items
+- Every issue gets exactly one label from each group: type, category, size, difficulty, scope
+- The feature backlog is at `/docs/feature-backlog.md`
+
 ## OpenSpec Workflow
 
 This project uses OpenSpec for structured change management. Feature specs live in `/openspec/specs/`. Use the OpenSpec skills (`/opsx:new`, `/opsx:continue`, `/opsx:apply`, etc.) for creating and implementing changes.
