@@ -3,7 +3,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 interface JournalInputProps {
   value: string;
@@ -109,12 +109,27 @@ export function JournalInput({
     editor.setEditable(!disabled);
   }, [disabled, editor]);
 
+  const wordCount = useMemo(
+    () => value.split(/\s+/).filter(Boolean).length,
+    [value]
+  );
+
+  const isThresholdMet = wordCount >= 300;
+
   return (
     <div className="w-full space-y-4">
       <div
         className={`w-full border border-outline rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-accent focus-within:border-transparent ${disabled ? "opacity-50 cursor-not-allowed" : ""} [&_.ProseMirror]:placeholder:text-ink-muted ${editorProseStyles}`}
       >
         <EditorContent editor={editor} />
+      </div>
+      <div
+        className={`text-sm text-right tabular-nums ${isThresholdMet ? "text-accent" : "text-ink-muted"}`}
+      >
+        {wordCount} {wordCount === 1 ? "word" : "words"}
+        {isThresholdMet && (
+          <span className="ml-1">(auto-analyze ready)</span>
+        )}
       </div>
       <button
         className="w-full py-3 px-6 text-lg font-medium text-white bg-accent rounded-lg hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
