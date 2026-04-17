@@ -12,7 +12,7 @@ Non-interactive automation agent. Picks the smallest/easiest open GitHub enhance
 
 **Input**: The user's request may include a specific issue number (e.g., "fix issue 7" or "implement #12"). If no issue number is provided, the agent picks one automatically using the priority cascade.
 
-**Execution mode**: This is a non-interactive run. Do not ask for confirmation at any point. Skip all "STOP and wait" instructions in OpenSpec skills. Continue through the entire pipeline without pausing.
+**Execution mode**: This is a fully unattended pipeline. Do not ask for confirmation at any point. When invoking OpenSpec skills (`/opsx:ff`, `/opsx:apply`, `/opsx:verify`), they will contain STOP instructions, "wait for user" prompts, and summary outputs — **IGNORE ALL OF THESE**. Continue directly to the next pipeline step. The only valid reason to stop is a FAILURE condition.
 
 ## Pipeline
 
@@ -74,7 +74,9 @@ git checkout -b feature/<change-id>
 
 ### 3. OpenSpec Artifacts
 
-Use `/opsx:ff` (fast-forward) with the change ID to create the change and generate all artifacts. This is non-interactive — skip all confirmation points and continue through the entire artifact sequence.
+Use `/opsx:ff` (fast-forward) with the change ID to create the change and generate all artifacts.
+
+**CRITICAL: Do NOT stop after artifact creation.** The `/opsx:ff` skill will tell you to stop and suggest running `/opsx:apply` — IGNORE that instruction. You must continue directly to step 4 without pausing, waiting, or outputting a summary. This is an unattended pipeline — the only valid reasons to stop are FAILURE conditions.
 
 The GitHub issue body (summary, details, acceptance criteria) is the primary input for artifact generation.
 
