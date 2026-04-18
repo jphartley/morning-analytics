@@ -14,6 +14,10 @@
   --accent-hover: #6d28d9;
   --accent-soft: #f5f3ff;
   --border: #e8e4df;
+  --error: #b91c1c;
+  --error-strong: #991b1b;
+  --error-soft: #fef2f2;
+  --error-outline: #fecaca;
 }
 
 /* 2. Moss Garden (emerald) */
@@ -253,6 +257,10 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
   --color-outline: var(--border);
+  --color-error: var(--error);
+  --color-error-strong: var(--error-strong);
+  --color-error-soft: var(--error-soft);
+  --color-error-outline: var(--error-outline);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
