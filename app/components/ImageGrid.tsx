@@ -11,7 +11,7 @@ export function ImageGrid({ imageUrls, onImageClick }: ImageGridProps) {
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full animate-fade-in-up">
       <h2 className="text-xl font-semibold text-ink mb-4">Generated Images</h2>
       <div className="grid grid-cols-2 gap-6">
         {imageUrls.map((url, index) => (

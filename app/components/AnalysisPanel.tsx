@@ -6,7 +6,7 @@ interface AnalysisPanelProps {
 
 export function AnalysisPanel({ analysisText }: AnalysisPanelProps) {
   return (
-    <div className="w-full p-6 bg-surface border border-outline rounded-lg">
+    <div className="w-full p-6 bg-surface border border-outline rounded-lg animate-fade-in-up">
       <h2 className="text-xl font-semibold text-ink mb-4">Analysis</h2>
       <div className="prose max-w-none">
         <ReactMarkdown
