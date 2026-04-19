@@ -98,7 +98,7 @@ docs(<change-id>): add OpenSpec artifacts for #<issue-number>
 
 ### 6. Implementation
 
-Use `/opsx:apply` to implement the tasks. Skip all confirmation points — implement all tasks sequentially without pausing.
+Use `/opsx:apply` to implement the tasks. **IGNORE its stop/summary instructions when all tasks are complete** — continue directly to step 7.
 
 ### 7. Repository Validation
 
@@ -118,7 +118,7 @@ feat(<change-id>): implement <short description> (#<issue-number>)
 
 ### 9. Post-Implementation Verification
 
-Use `/opsx:verify` to run verification. Fix any CRITICAL or WARNING issues. Ignore SUGGESTION-level findings.
+Use `/opsx:verify` to run verification. **IGNORE its stop/summary instructions** — continue directly to step 10. Fix any CRITICAL or WARNING issues. Ignore SUGGESTION-level findings.
 
 ### 10. Push & PR
 
