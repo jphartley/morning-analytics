@@ -13,4 +13,4 @@
 ## 3. Validation and debt tracking
 
 - [x] 3.1 Update `TechnicalDebt.md` to remove the resolved error color tokenization debt item
-- [ ] 3.2 Run targeted linting and a production build for the changed files
+- [x] 3.2 Run targeted linting and a production build for the changed files
