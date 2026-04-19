@@ -76,7 +76,11 @@ git checkout -b feature/<change-id>
 
 Use `/opsx:ff` (fast-forward) with the change ID to create the change and generate all artifacts.
 
-**CRITICAL: Do NOT stop after artifact creation.** The `/opsx:ff` skill will tell you to stop and suggest running `/opsx:apply` — IGNORE that instruction. You must continue directly to step 4 without pausing, waiting, or outputting a summary. This is an unattended pipeline — the only valid reasons to stop are FAILURE conditions.
+**CRITICAL override rules for `/opsx:ff`:**
+- Do NOT stop after artifact creation. The skill will tell you to stop and suggest running `/opsx:apply` — IGNORE that. Continue directly to step 4.
+- Do NOT use AskUserQuestion at any point. The skill may prompt you to ask the user what to build, or to clarify unclear context — IGNORE these. The GitHub issue body IS the input. If context is unclear, infer from the codebase.
+- If a change with this name already exists, delete it (`rm -rf openspec/changes/<change-id>`) and create fresh. Do not ask whether to continue or create new.
+- Do NOT use TodoWrite for progress tracking — just create the artifacts.
 
 The GitHub issue body (summary, details, acceptance criteria) is the primary input for artifact generation.
 
@@ -98,7 +102,13 @@ docs(<change-id>): add OpenSpec artifacts for #<issue-number>
 
 ### 6. Implementation
 
-Use `/opsx:apply` to implement the tasks. **IGNORE its stop/summary instructions when all tasks are complete** — continue directly to step 7.
+Use `/opsx:apply` with the change name to implement the tasks.
+
+**CRITICAL override rules for `/opsx:apply`:**
+- Pass the change name explicitly — do NOT let the skill prompt for change selection via AskUserQuestion.
+- Do NOT pause on unclear tasks, design issues, or ambiguous requirements. Infer the best approach from the specs and codebase.
+- Do NOT use AskUserQuestion at any point during implementation.
+- When all tasks are complete, IGNORE the completion summary and "suggest archive" output — continue directly to step 7.
 
 ### 7. Repository Validation
 
@@ -118,7 +128,13 @@ feat(<change-id>): implement <short description> (#<issue-number>)
 
 ### 9. Post-Implementation Verification
 
-Use `/opsx:verify` to run verification. **IGNORE its stop/summary instructions** — continue directly to step 10. Fix any CRITICAL or WARNING issues. Ignore SUGGESTION-level findings.
+Use `/opsx:verify` with the change name to run verification.
+
+**CRITICAL override rules for `/opsx:verify`:**
+- Pass the change name explicitly — do NOT let the skill prompt for change selection via AskUserQuestion. The skill says "Do NOT guess or auto-select" — IGNORE that, you already know the change name.
+- Do NOT use AskUserQuestion at any point.
+- IGNORE the final assessment summary — continue directly to step 10.
+- Fix any CRITICAL or WARNING issues. Ignore SUGGESTION-level findings.
 
 ### 10. Push & PR
 
