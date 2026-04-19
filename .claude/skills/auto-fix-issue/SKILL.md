@@ -40,6 +40,30 @@ Ensure a clean starting state before doing anything else.
 
 Do NOT stash changes — uncommitted work on main is a human problem that the automation should not silently override.
 
+6. Clean up local branches fully merged into main:
+   ```bash
+   git branch --merged main | grep -vE '^\*|^  main$' | sed 's/^  //'
+   ```
+   Delete each listed branch with `git branch -d <branch>`. Note which `feature/*` branches were deleted — these represent merged PRs.
+
+7. Archive completed OpenSpec changes:
+   For each `feature/<change-id>` branch deleted in step 6, check if `openspec/changes/<change-id>/` exists (not inside `archive/`). If it does, invoke `/opsx:archive` with the change name.
+
+   **CRITICAL override rules for `/opsx:archive`:**
+   - Pass the change name explicitly — do NOT let the skill prompt for change selection via AskUserQuestion.
+   - If warned about incomplete artifacts or tasks, always proceed — do NOT use AskUserQuestion to confirm.
+   - If delta specs exist, always choose "Sync now" — do NOT use AskUserQuestion to prompt for sync options.
+   - Do NOT use AskUserQuestion at any point.
+   - IGNORE the completion summary output — continue to the next change or to step 8.
+
+   After all archives are complete, commit and push:
+   ```bash
+   git add openspec/changes/ openspec/specs/
+   git commit -m "chore: archive completed OpenSpec changes"
+   git push origin main
+   ```
+   If no branches were deleted or no corresponding OpenSpec changes found, skip this step.
+
 ### 1. Issue Selection
 
 If a specific issue number was provided, fetch that issue:
@@ -112,13 +136,13 @@ Use `/opsx:apply` with the change name to implement the tasks.
 
 ### 7. Repository Validation
 
-Run validation from the `/app` directory as separate commands (do not chain with `cd`):
+Run **exactly** these two commands — no other validation commands (do not lint individual files, do not run npx directly):
 ```bash
 npm run build --prefix app
 npm run lint --prefix app
 ```
 
-If validation fails, fix the issues and re-run. Only proceed once validation passes.
+If validation fails, fix the issues and re-run. Only proceed once validation passes. Pre-existing lint warnings in files you did NOT modify are acceptable — do not attempt to fix them.
 
 ### 8. Commit Implementation
 
