@@ -336,25 +336,25 @@ export default function Home() {
                 <ReactMarkdown
                   allowedElements={["h1", "h2", "h3", "strong", "em", "ul", "ol", "li", "p", "br"]}
                   components={{
-                    h1: ({ node, ...props }) => (
+                    h1: (props) => (
                       <h1 className="text-xl font-bold text-ink mt-6 mb-4" {...props} />
                     ),
-                    h2: ({ node, ...props }) => (
+                    h2: (props) => (
                       <h2 className="text-lg font-bold text-ink mt-5 mb-3" {...props} />
                     ),
-                    h3: ({ node, ...props }) => (
+                    h3: (props) => (
                       <h3 className="text-base font-bold text-ink mt-4 mb-2" {...props} />
                     ),
-                    p: ({ node, ...props }) => (
+                    p: (props) => (
                       <p className="mb-4 text-ink leading-relaxed" {...props} />
                     ),
-                    ul: ({ node, ...props }) => (
+                    ul: (props) => (
                       <ul className="list-disc list-inside mb-4 text-ink" {...props} />
                     ),
-                    ol: ({ node, ...props }) => (
+                    ol: (props) => (
                       <ol className="list-decimal list-inside mb-4 text-ink" {...props} />
                     ),
-                    li: ({ node, ...props }) => (
+                    li: (props) => (
                       <li className="mb-1" {...props} />
                     ),
                   }}
