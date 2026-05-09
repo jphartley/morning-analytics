@@ -75,11 +75,7 @@ export function HistorySidebar({
           </div>
         )}
 
-        {error && (
-          <div className="p-4 text-center text-red-600 text-sm">
-            {error}
-          </div>
-        )}
+        {error && <div className="p-4 text-center text-error text-sm">{error}</div>}
 
         {!isLoading && !error && entries.length === 0 && (
           <div className="p-4 text-center text-ink-muted text-sm">
