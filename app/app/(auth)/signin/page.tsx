@@ -1,13 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 
 export default function SigninPage() {
-  const router = useRouter();
   const supabase = getBrowserSupabase();
 
   const [email, setEmail] = useState('');
