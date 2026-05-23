@@ -6,9 +6,9 @@ interface ErrorStateProps {
 export function ErrorState({ message, onRetry }: ErrorStateProps) {
   return (
     <div className="w-full flex flex-col items-center justify-center py-16 space-y-4">
-      <div className="w-16 h-16 flex items-center justify-center rounded-full bg-red-100">
+      <div className="w-16 h-16 flex items-center justify-center rounded-full bg-error-surface-strong">
         <svg
-          className="w-8 h-8 text-red-600"
+          className="w-8 h-8 text-error"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
