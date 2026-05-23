@@ -26,7 +26,7 @@ This document tracks technical decisions deferred from MVP and features planned 
 
 ## Deployment & Infrastructure
 
-- [ ] **Next.js standalone output mode**: Currently using default Next.js output. For leaner Railway deployments, switch to `output: "standalone"` in `next.config.ts`. This produces a self-contained `.next/standalone/` directory with only the files needed to run. Requires ensuring non-code assets (e.g., prompt files in `/app/prompts/`) are copied into the standalone output via `outputFileTracingIncludes`. Deferred during Railway prep to keep initial deployment simple.
+**Resolved:** Next.js standalone output mode — `app/next.config.ts` now enables `output: "standalone"` and traces the runtime prompt and mock image assets into the standalone bundle.
 
 ## Analytics & Monitoring
 
