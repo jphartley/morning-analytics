@@ -1,23 +1,21 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { getBrowserSupabase } from '@/lib/supabase';
-import Link from 'next/link';
-import Image from 'next/image';
+import { useState } from "react";
+import { getBrowserSupabase } from "@/lib/supabase";
+import Link from "next/link";
+import Image from "next/image";
 
 export default function SigninPage() {
-  const router = useRouter();
   const supabase = getBrowserSupabase();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
     // Client-side validation
@@ -34,24 +32,26 @@ export default function SigninPage() {
     }
 
     try {
-      const { data, error: signinError } = await supabase.auth.signInWithPassword({
+      const { data, error: signinError } = await supabase.auth.signInWithPassword(
+        {
         email,
         password,
-      });
+        }
+      );
 
       if (signinError) {
         // Generic error for security (don't reveal if email exists)
-        setError('Invalid email or password');
-        console.error('Signin error:', signinError.message);
+        setError("Invalid email or password");
+        console.error("Signin error:", signinError.message);
       } else if (data?.session) {
         // Signin successful - auth state listener will handle redirect to /
         // Don't redirect here; let the onAuthStateChange listener handle it
-        setEmail('');
-        setPassword('');
+        setEmail("");
+        setPassword("");
       }
     } catch (err) {
-      setError('An unexpected error occurred');
-      console.error('Signin error:', err);
+      setError("An unexpected error occurred");
+      console.error("Signin error:", err);
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export default function SigninPage() {
         <p className="text-center text-ink-muted mb-6">Welcome back to Morning Analytics</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 rounded border border-error-border bg-error-soft p-3 text-sm text-error">
             {error}
           </div>
         )}
@@ -115,12 +115,12 @@ export default function SigninPage() {
             disabled={loading}
             className="w-full py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded transition"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
 
         <div className="mt-4 text-center text-ink-muted text-sm">
-          Don&apos;t have an account?{' '}
+          Don&apos;t have an account?{" "}
           <Link href="/signup" className="text-accent hover:text-accent-hover">
             Sign Up
           </Link>
