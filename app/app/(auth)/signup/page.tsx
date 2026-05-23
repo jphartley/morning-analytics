@@ -1,13 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { getBrowserSupabase } from '@/lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
 
 export default function SignupPage() {
-  const router = useRouter();
   const supabase = getBrowserSupabase();
 
   const [email, setEmail] = useState('');
@@ -98,7 +96,7 @@ export default function SignupPage() {
         <p className="text-center text-ink-muted mb-6">Join Morning Analytics</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 rounded border border-error-border bg-error-subtle p-3 text-sm text-error-muted">
             {error}
           </div>
         )}
