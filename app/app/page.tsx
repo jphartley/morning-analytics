@@ -15,6 +15,7 @@ import { ModelPicker } from "@/components/ModelPicker";
 import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { AppHeader } from "@/components/AppHeader";
+import { WelcomeEmptyState } from "@/components/WelcomeEmptyState";
 import { useAuth } from "@/lib/useAuth";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { omitMarkdownNode } from "@/lib/markdown-props";
@@ -50,6 +51,7 @@ export default function Home() {
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [historyViewData, setHistoryViewData] = useState<HistoryViewData | null>(null);
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+  const [historyEntryCount, setHistoryEntryCount] = useState<number | null>(null);
 
   // Regeneration state
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -70,6 +72,10 @@ export default function Home() {
 
   const handlePersonaChange = useCallback((persona: string) => {
     setSelectedPersona(persona);
+  }, []);
+
+  const handleHistoryLoaded = useCallback((entryCount: number) => {
+    setHistoryEntryCount(entryCount);
   }, []);
 
   const handleAnalyze = () => {
@@ -230,6 +236,8 @@ export default function Home() {
     setIsRegenerating(false);
   };
 
+  const shouldShowWelcomeEmptyState = state === "idle" && historyEntryCount === 0;
+
   return (
     <>
       <AppHeader />
@@ -240,6 +248,7 @@ export default function Home() {
         onSelect={handleHistorySelect}
         onNewAnalysis={handleNewAnalysis}
         refreshTrigger={historyRefreshTrigger}
+        onHistoryLoaded={handleHistoryLoaded}
       />
 
       {/* Main Content */}
@@ -269,12 +278,15 @@ export default function Home() {
           </header>
 
           {state === "idle" && (
-            <JournalInput
-              value={journalText}
-              onChange={setJournalText}
-              onAnalyze={handleAnalyze}
-              disabled={isPending}
-            />
+            <div className="space-y-4">
+              <JournalInput
+                value={journalText}
+                onChange={setJournalText}
+                onAnalyze={handleAnalyze}
+                disabled={isPending}
+              />
+              {shouldShowWelcomeEmptyState && <WelcomeEmptyState />}
+            </div>
           )}
 
           {state === "analyzing" && <LoadingState messages={ANALYSIS_MESSAGES} durationHint="Usually takes ~15 seconds" />}
