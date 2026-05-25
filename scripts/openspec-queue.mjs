@@ -229,6 +229,7 @@ function telemetryEnv() {
   return {
     ...process.env,
     DO_NOT_TRACK: "1",
+    OPENSPEC_TELEMETRY: "0",
     OPENSPEC_TELEMETRY_DISABLED: "1",
     POSTHOG_DISABLED: "1"
   };
