@@ -7,6 +7,7 @@ import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { JournalInput } from "@/components/JournalInput";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { ImageGrid } from "@/components/ImageGrid";
+import { ImagePromptDisclosure } from "@/components/ImagePromptDisclosure";
 import { RegenerateButton } from "@/components/RegenerateButton";
 import { LoadingState, ANALYSIS_MESSAGES, IMAGE_MESSAGES } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
@@ -316,6 +317,9 @@ export default function Home() {
               {state === "complete" && (
                 <>
                   <ImageGrid imageUrls={imageUrls} onImageClick={handleImageClick} />
+                  {currentImagePrompt && imageUrls.length > 0 && (
+                    <ImagePromptDisclosure imagePrompt={currentImagePrompt} />
+                  )}
                   {currentImagePrompt && currentAnalysisId && (
                     <RegenerateButton
                       onClick={handleRegenerate}
@@ -381,7 +385,12 @@ export default function Home() {
               <AnalysisPanel analysisText={historyViewData.analysisText} />
 
               {historyViewData.imageUrls.length > 0 && (
-                <ImageGrid imageUrls={historyViewData.imageUrls} onImageClick={handleImageClick} />
+                <>
+                  <ImageGrid imageUrls={historyViewData.imageUrls} onImageClick={handleImageClick} />
+                  {historyViewData.imagePrompt && (
+                    <ImagePromptDisclosure imagePrompt={historyViewData.imagePrompt} />
+                  )}
+                </>
               )}
               {historyViewData.imagePrompt && (
                 <RegenerateButton
