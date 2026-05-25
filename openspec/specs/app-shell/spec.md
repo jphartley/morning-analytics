@@ -1,3 +1,9 @@
+## Purpose
+
+Define the main Morning Analytics app shell behavior, including journal input, analysis triggering, loading feedback, result display, image grid behavior, error handling, palette picker dismissal, and authenticated header layout.
+
+## Requirements
+
 ### Requirement: Provide text input for journal entry
 
 The system SHALL display a large text area where users can paste or write their morning pages. The text area SHALL use design token Tailwind classes (`bg-surface` background, `text-ink` text color, `border-outline` border, `ring-accent` focus ring).
