@@ -1,5 +1,36 @@
 ## ADDED Requirements
 
+### Requirement: OPSX Start Harness
+The system SHALL provide `/opsx:start` as the primary user workflow for moving from an idea, detailed request, or existing OpenSpec change to a Gate 2 manual testing handoff.
+
+#### Scenario: Fuzzy input routes to explore
+- **WHEN** the user invokes `/opsx:start` with fuzzy, speculative, very short, or explicitly exploratory input
+- **THEN** the system invokes `/opsx:explore` before transitioning into `/opsx:propose`
+
+#### Scenario: Detailed input routes to propose
+- **WHEN** the user invokes `/opsx:start` with a detailed request, bug report, issue, reproduction steps, or acceptance criteria
+- **THEN** the system invokes `/opsx:propose`
+
+#### Scenario: Existing incomplete change routes to continue
+- **WHEN** the user invokes `/opsx:start` for an existing active OpenSpec change that is missing required artifacts
+- **THEN** the system invokes `/opsx:continue` until the change has proposal, specs, design, and tasks ready for implementation review
+
+#### Scenario: Existing apply-ready change uses artifacts directly
+- **WHEN** the user invokes `/opsx:start` for an existing active OpenSpec change that already has apply-ready artifacts
+- **THEN** the system reads the existing artifacts directly and creates the Design Gate Brief
+
+#### Scenario: Start always targets the design gate
+- **WHEN** `/opsx:start` runs successfully before implementation
+- **THEN** it presents a Design Gate Brief and creates no queue runtime state before Gate 1 approval
+
+#### Scenario: Start continues automatically after Gate 1 approval
+- **WHEN** the user strictly approves Gate 1 inside a `/opsx:start` workflow
+- **THEN** the system enqueues the change, starts the eligible candidate worktree, invokes the Builder, runs verification, starts the dev server when capacity permits, and presents the Gate 2 manual testing handoff without requiring another user command
+
+#### Scenario: Start is portable across coding agents
+- **WHEN** `/opsx:start` is implemented for multiple coding agents
+- **THEN** the canonical workflow lives in `.agents/skills/openspec-start/SKILL.md` and tool-specific adapters preserve the same routing rules, gate rules, script calls, and safety boundaries
+
 ### Requirement: Design Gate Brief
 The system SHALL generate a compact Design Gate Brief for an OpenSpec change before queueing implementation.
 
@@ -10,6 +41,14 @@ The system SHALL generate a compact Design Gate Brief for an OpenSpec change bef
 #### Scenario: User approval is required
 - **WHEN** the system recommends that a change is ready to build
 - **THEN** the change is not queued until the user explicitly approves the Design Gate Brief
+
+#### Scenario: Gate 1 approval is interpreted strictly
+- **WHEN** the user responds to the Design Gate Brief
+- **THEN** only clear approval language such as `approve gate 1`, `approved`, `approved, build it`, `looks good, start building`, `queue it`, or `start the build` approves implementation
+
+#### Scenario: Ambiguous Gate 1 responses do not approve
+- **WHEN** the user responds with casual acknowledgement or ambiguous language such as `nice`, `ok`, `sounds good`, `interesting`, `continue`, or `maybe`
+- **THEN** the system does not enqueue or start implementation
 
 #### Scenario: Fuzzy intent loops back
 - **WHEN** the brief identifies unclear product behavior, missing UX behavior, unbounded scope, important edge cases, or significant unreviewed technical escalation
@@ -119,6 +158,10 @@ The system SHALL hand off completed candidates with a running dev server when pr
 - **WHEN** the system reports that a candidate is ready for manual testing
 - **THEN** it includes the change name, branch, worktree path, local URL, changed behavior summary, manual test focus, verification result, known risks, and Gate 2 approval or rejection instructions
 
+#### Scenario: Start waits with server running
+- **WHEN** `/opsx:start` presents a candidate for manual testing and server capacity permits
+- **THEN** the candidate dev server remains running while the system waits for strict Gate 2 approval or rejection
+
 #### Scenario: Dev server capacity is limited
 - **WHEN** more candidates are ready than the configured number of running dev servers
 - **THEN** the system keeps excess candidates ready but stopped and provides the command or action needed to start them
@@ -130,9 +173,25 @@ The system SHALL wait for user approval after manual testing before finalizing a
 - **WHEN** the user approves the manual test gate for a candidate
 - **THEN** the system uses a clean landing worktree to update main from origin, rebases the candidate branch onto current main if conflict-free, reruns required verification, archives the OpenSpec change, squash merges the result into main, pushes main, and cleans up the candidate worktree
 
+#### Scenario: Gate 2 approval is interpreted strictly
+- **WHEN** the user responds to the manual test handoff
+- **THEN** only clear approval language such as `approve gate 2`, `tested and approved`, `manual test passed`, `finalize it`, `push it`, or `deploy it` approves finalization
+
+#### Scenario: Ambiguous Gate 2 responses do not approve
+- **WHEN** the user responds with casual acknowledgement or ambiguous language such as `looks ok`, `nice`, `seems fine`, or `continue`
+- **THEN** the system does not finalize the candidate
+
 #### Scenario: Failed manual test loops back
 - **WHEN** the user rejects the manual test gate or reports a defect
 - **THEN** the system keeps the existing OpenSpec change active, updates the relevant artifacts or tasks when needed, fixes the same worktree, and prepares a new candidate for retesting
+
+#### Scenario: Gate 2 rejection is interpreted strictly
+- **WHEN** the user responds with clear rejection language such as `reject gate 2`, `manual test failed`, `this is wrong`, `fix this`, `the behavior is not correct`, or `not approved`
+- **THEN** the system records the rejection and loops the candidate back for correction
+
+#### Scenario: Rejection updates artifacts when behavior changes
+- **WHEN** Gate 2 rejection changes the intended behavior rather than reporting an implementation defect
+- **THEN** the system updates the OpenSpec artifacts before fixing the candidate worktree and presenting Gate 2 again
 
 #### Scenario: Main has moved
 - **WHEN** main has changed before finalization

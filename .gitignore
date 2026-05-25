@@ -11,5 +11,8 @@ node_modules/
 # Local reports
 gitleaks-report.json
 
+# OpenSpec delivery queue runtime state
+.openspec-queue/state.local.json
+
 # OS
 .DS_Store

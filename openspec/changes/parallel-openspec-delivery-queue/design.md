@@ -1,12 +1,14 @@
 ## Context
 
-The current OpenSpec workflow is strong for shaping intent, but delivery still requires the user to serially shepherd a change through implementation, verification, manual testing, archive, commit, and push. The desired workflow is to spend focused attention on the design and intent, then let approved changes move through background implementation in isolated worktrees until they are ready for manual testing.
+The current OpenSpec workflow is strong for shaping intent, but delivery still requires the user to serially shepherd a change from rough idea to proposal, design approval, implementation, verification, manual testing, archive, commit, and push. The desired workflow is to spend focused attention on the design and intent, then let approved changes move automatically through background implementation in isolated worktrees until they are ready for manual testing.
 
 This is a local productivity system for a solo project. Railway deploys production when `main` is pushed, so finalization should land approved changes on `main` rather than requiring a PR workflow.
 
 ## Goals / Non-Goals
 
 **Goals:**
+- Provide `/opsx:start` as the primary user command for moving from idea or existing OpenSpec change to a testable candidate.
+- Use explicit OpenSpec commands under the hood: `/opsx:explore`, `/opsx:propose`, and `/opsx:continue`.
 - Add two explicit human gates: Design Gate and Manual Test Gate.
 - Keep OpenSpec as the source of truth for intent until manual testing passes.
 - Keep the user's planning checkout available for the next OpenSpec change while approved work is implemented and finalized elsewhere.
@@ -17,6 +19,7 @@ This is a local productivity system for a solo project. Railway deploys producti
 
 **Non-Goals:**
 - Replace OpenSpec with a separate planning system.
+- Hide the OpenSpec commands being invoked by the workflow.
 - Require PRs for this solo-project workflow.
 - Deploy through a new production mechanism; Railway continues to observe `main`.
 - Archive OpenSpec before manual testing passes.
@@ -36,29 +39,39 @@ The agents exist to orchestrate and scale that model:
 - prepare manual testing handoffs
 - finalize approved candidates consistently
 
-In other words, OpenSpec defines what the change means and what must be true. The agents coordinate when, where, and how approved OpenSpec changes move through local delivery.
+In other words, OpenSpec defines what the change means and what must be true. The agents coordinate when, where, and how approved OpenSpec changes move through local delivery. `/opsx:start` is the harness that makes this feel like one workflow to the user while still invoking the explicit OpenSpec commands at the right moments.
 
 ```mermaid
 flowchart TD
-    User["User"] -->|describes intent| OpenSpec["OpenSpec workflow"]
-    OpenSpec --> CreateArtifacts["OpenSpec invoked: create / continue artifacts"]
-    CreateArtifacts --> Artifacts["Proposal / Specs / Design / Tasks"]
+    User["User"] --> Start["/opsx:start"]
+
+    Start --> Route{"Route input"}
+    Route -->|fuzzy, short, exploratory| Explore["OpenSpec invoked: /opsx:explore"]
+    Explore --> Propose["OpenSpec invoked: /opsx:propose"]
+    Route -->|detailed request, bug, issue, ACs| Propose
+    Route -->|existing change missing artifacts| Continue["OpenSpec invoked: /opsx:continue"]
+    Continue --> Artifacts["Proposal / Specs / Design / Tasks"]
+    Propose --> Artifacts
+    Route -->|existing apply-ready change| Artifacts
+
     Artifacts --> DGR["Intent Reviewer"]
     DGR --> Brief["Design Gate Brief"]
-    Brief -->|Gate 1 approval| Orchestrator["Queue Manager"]
-    Brief -->|fuzzy intent| CreateArtifacts
+    Brief -->|fuzzy intent or not ready| Continue
+    Brief -->|strict Gate 1 approval| Orchestrator["Queue Manager"]
 
     Orchestrator --> Queue["FIFO Queue State"]
     Orchestrator --> Conflict["Conflict Guard"]
-    Conflict -->|low-risk or clear| Worktree["Builder<br/>invokes OpenSpec apply/context"]
+    Conflict -->|low-risk or clear| Builder["Builder<br/>OpenSpec invoked: apply/context"]
     Conflict -->|high-risk conflict| User
 
-    Worktree --> Candidate["Draft Commit Candidate"]
+    Builder --> Candidate["Draft Commit Candidate"]
     Candidate --> Validate["OpenSpec invoked: validate / status"]
-    Validate --> Verify["Test Preparer"]
-    Verify --> Server["Dev Server + Test URL"]
-    Server -->|Gate 2 manual approval| Finalizer["Finalizer"]
-    Server -->|manual test failed| CreateArtifacts
+    Validate --> TestPrep["Test Preparer"]
+    TestPrep --> Server["Dev Server + Test URL"]
+    Server -->|strict Gate 2 rejection| Rework{"Defect or behavior change?"}
+    Rework -->|implementation defect| Builder
+    Rework -->|intent changed| Continue
+    Server -->|strict Gate 2 approval| Finalizer["Finalizer"]
 
     Finalizer --> Archive["OpenSpec invoked: sync specs / archive change"]
     Finalizer --> Main["Squash Merge + Push Main"]
@@ -70,12 +83,41 @@ Responsibility split:
 
 | Area | OpenSpec owns | Agents own |
 | --- | --- | --- |
+| Intake | `/opsx:explore`, `/opsx:propose`, `/opsx:continue` | `/opsx:start` routing and workflow continuity |
 | Intent | Proposal, specs, design, tasks | Design Gate Brief summary and risk surfacing |
 | Readiness | Artifact status and validation | Human gate enforcement and queue eligibility |
 | Implementation | Task contract and context files | Worktree execution and draft commits |
 | Parallelism | No direct responsibility | FIFO scheduling, worktree isolation, conflict detection |
 | Testing handoff | Manual test focus from artifacts | Dev server, port allocation, compact handoff |
 | Completion | Archive semantics and spec sync | Gate 2 finalization, squash merge, push, cleanup |
+
+### Use `/opsx:start` as the primary workflow entrypoint
+
+The normal user path should be one assisted command:
+
+```text
+/opsx:start <idea, bug report, issue, or existing change>
+```
+
+`/opsx:start` is a harness, not a replacement for OpenSpec. It keeps the workflow moving by routing to explicit OpenSpec commands and then coordinating the delivery queue after the user approves the design.
+
+Routing rules:
+- If the input is fuzzy, speculative, very short, or explicitly asks to brainstorm or explore, invoke `/opsx:explore` first, then transition to `/opsx:propose` once the intent is clear enough.
+- If the input is detailed, includes acceptance criteria, describes a concrete bug, links or names an issue, or is otherwise implementation-ready, invoke `/opsx:propose`.
+- If the user points at an existing active OpenSpec change that is missing required artifacts, invoke `/opsx:continue` until proposal, specs, design, and tasks are apply-ready.
+- If the user points at an existing active OpenSpec change that is already apply-ready, read the artifacts directly and create the Design Gate Brief.
+
+The destination is always a Design Gate Brief unless exploration reaches a dead end or the user redirects the work. No queue state should be created before Gate 1 approval.
+
+After strict Gate 1 approval, `/opsx:start` should automatically:
+1. Record approval and enqueue the change.
+2. Start the next eligible FIFO candidate.
+3. Invoke the Builder in the candidate worktree.
+4. Run verification and prepare the manual testing handoff.
+5. Start the candidate dev server when capacity permits.
+6. Present Gate 2 with the server left running and wait for the user's strict approval or rejection.
+
+Parallelism comes from running `/opsx:start` in multiple conversation threads, one change per thread. The lower-level queue commands remain available for recovery, status checks, and advanced operation, but they are not the primary happy path.
 
 ### Use a Design Gate Brief as the approval artifact
 
@@ -92,6 +134,8 @@ The brief should fit on roughly one screen and include:
 - Ready to build: yes/no, with reason
 
 The system may recommend `Ready to build: yes`, but queue execution requires explicit user approval. This keeps the automation from approving its own understanding.
+
+Gate 1 approval uses strict natural-language interpretation. Clear approvals include phrases such as `approve gate 1`, `approved`, `approved, build it`, `looks good, start building`, `queue it`, and `start the build`. Casual acknowledgements such as `nice`, `ok`, `sounds good`, `interesting`, `continue`, or `maybe` do not approve the gate. Tiny changes still require Gate 1 approval, although the brief can be very short.
 
 ### Use explicit agent roles with bounded authority
 
@@ -164,6 +208,22 @@ Initial implementation should prefer these roles as deterministic workflow bound
 
 Queue behavior should be implemented first as repo-local scripts so the workflow is usable from Codex, Claude Code, Cursor, or a terminal. Tool-specific skills or commands should be thin orchestration wrappers around those scripts.
 
+The canonical `/opsx:start` workflow should live in a portable skill:
+
+```text
+.agents/skills/openspec-start/SKILL.md
+```
+
+Tool-specific adapters should stay thin and point back to the canonical workflow:
+
+```text
+.claude/commands/opsx/start.md
+.claude/skills/openspec-start/SKILL.md
+.codex/skills/openspec-start/SKILL.md
+```
+
+This avoids having different agents invent different delivery semantics. The adapters may translate the trigger syntax for Codex, Claude Code, Cursor, or another assistant, but they should preserve the same gates, routing rules, script calls, and safety boundaries.
+
 Scripts own deterministic operations: queue state transitions, config validation, worktree setup, artifact snapshotting, port/server management, verification commands, finalization, and cleanup. Scripts must not decide whether intent is good enough, approve either human gate, or perform AI implementation. Those judgment-heavy responsibilities stay with the user and the assistant role wrappers.
 
 The portable script entrypoint should expose a stable command surface, for example `node scripts/openspec-queue.mjs <command>`:
@@ -230,7 +290,7 @@ Each queued change gets a branch such as `codex/<change-name>` and a worktree ou
 
 Implementation happens inside the worktree. The branch contains both the OpenSpec change artifacts and code changes so the candidate is self-contained.
 
-After Gate 1 approval, the Queue Manager creates a candidate branch/worktree and snapshots the approved OpenSpec artifacts into that branch before the Builder starts. The Builder invokes OpenSpec apply/context from inside the candidate worktree so implementation is based on the same artifact version that was approved.
+After Gate 1 approval, `/opsx:start` hands off to the Queue Manager, which creates a candidate branch/worktree and snapshots the approved OpenSpec artifacts into that branch before the Builder starts. The Builder invokes OpenSpec apply/context from inside the candidate worktree so implementation is based on the same artifact version that was approved.
 
 ### Use separate planning, implementation, and landing workspaces
 
@@ -296,6 +356,10 @@ Candidates beyond the running-server limit remain ready but stopped until the us
 
 ### Gate 2 finalization lands on main
 
+At Gate 2, `/opsx:start` leaves the candidate dev server running and waits for strict user approval or rejection. Clear approvals include phrases such as `approve gate 2`, `tested and approved`, `manual test passed`, `finalize it`, `push it`, and `deploy it`. Casual acknowledgements such as `looks ok`, `nice`, `seems fine`, or `continue` do not approve finalization. Clear rejections include phrases such as `reject gate 2`, `manual test failed`, `this is wrong`, `fix this`, `the behavior is not correct`, and `not approved`.
+
+If Gate 2 is rejected because implementation is defective, the system fixes the same worktree, updates tasks as needed, reruns verification, and presents Gate 2 again. If rejection changes intended behavior, the system updates the OpenSpec artifacts first, then fixes the same worktree, reruns verification, and presents Gate 2 again.
+
 After manual test approval, the system:
 1. Stops the candidate dev server.
 2. Creates or reuses the dedicated landing worktree for `main`.
@@ -323,10 +387,10 @@ If the landing worktree has uncommitted changes, the system pauses before updati
 
 ## Migration Plan
 
-1. Implement the workflow locally behind explicit user commands or Codex skills.
-2. Start with one queued worktree to prove the lifecycle.
+1. Implement the workflow locally behind `/opsx:start` plus explicit lower-level queue commands for recovery and advanced operation.
+2. Start with one `/opsx:start` thread and one queued worktree to prove the lifecycle from idea to Gate 2.
 3. Enable two active implementation jobs after the single-change path is reliable.
 4. Enable multiple running dev servers only after port allocation and cleanup are stable.
-5. Keep existing manual OpenSpec commands available as fallback.
+5. Keep existing manual OpenSpec commands and queue commands available as fallback.
 
 Rollback is operational: stop using the queue commands, keep or remove existing worktrees manually after checking their status, and continue with the standard OpenSpec workflow.

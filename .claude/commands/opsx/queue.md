@@ -1,0 +1,38 @@
+---
+name: "OPSX: Queue"
+description: Inspect and operate the parallel OpenSpec delivery queue
+category: Workflow
+tags: [workflow, openspec, queue, worktrees]
+---
+
+Use this command as a readable wrapper around the portable queue script:
+
+```bash
+node scripts/openspec-queue.mjs <command>
+```
+
+## What This Command Does
+
+This command does not implement queue logic itself. It calls repo-local scripts so Codex, Claude Code, Cursor, and terminal usage share the same behavior.
+
+## Common Subcommands
+
+- `status [<change>]`: show queue state.
+- `doctor`: check config, git/worktree state, ports, and recoverability.
+- `approve <change>`: record explicit Gate 1 approval.
+- `start [<change>|--next]`: create/reuse candidate worktree and snapshot approved OpenSpec artifacts.
+- `prepare-test <change>`: verify, allocate port, start dev server when capacity permits, and emit manual testing handoff.
+- `serve <change>`: start or restart the dev server.
+- `stop <change>`: stop the dev server.
+- `reject <change>`: record Gate 2 rejection and preserve worktree.
+- `finalize <change> --confirm-gate2`: finalize only after explicit Gate 2 approval.
+- `cleanup <change>`: remove finalized resources only when safe.
+- `recover [<change>]`: print safe recovery actions.
+
+## Safety Boundaries
+
+- Do not call `approve` unless the user explicitly approves the Design Gate Brief.
+- Do not call `finalize` unless the user explicitly approves Gate 2 after manual testing.
+- Do not delete dirty worktrees.
+- Use `--json` when another tool needs machine-readable state.
+- Use `--dry-run` before risky mutating commands when previewing behavior.

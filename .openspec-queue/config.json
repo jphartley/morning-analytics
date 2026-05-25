@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "worktreeRoot": "../morning-openspec-worktrees",
+  "landingWorktree": "../morning-openspec-worktrees/_landing-main",
+  "maxActiveImplementations": 2,
+  "maxRunningDevServers": 2,
+  "portStart": 3001,
+  "branchPrefix": "codex/"
+}

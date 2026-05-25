@@ -1,11 +1,14 @@
 ## Why
 
-OpenSpec already gives this project a strong specification workflow, but moving from an approved design through implementation, verification, manual testing, archive, commit, and push still requires too much serial attention. This change introduces a gated background delivery queue so the user can spend more time defining intent while approved changes move toward testable branches safely.
+OpenSpec already gives this project a strong specification workflow, but moving from a rough idea to an approved design and then through implementation, verification, manual testing, archive, commit, and push still requires too much serial attention. This change introduces `/opsx:start` as the primary assisted delivery command: it routes the user through the right OpenSpec command, creates a Design Gate Brief, and after approval automatically drives the queued worktree flow to a candidate that is ready for manual testing.
 
 ## What Changes
 
+- Add `/opsx:start` as the front-door command for taking a rough idea, detailed request, or existing OpenSpec change toward a Design Gate Brief.
+- Route `/opsx:start` through explicit OpenSpec commands: `/opsx:explore`, `/opsx:propose`, and `/opsx:continue`.
 - Add a design approval gate based on a short Design Gate Brief before implementation begins.
 - Add a FIFO queue for approved OpenSpec changes.
+- Automatically enqueue and start approved changes after Gate 1 approval.
 - Run queued changes in isolated Git worktrees with per-change branches.
 - Support multiple queued worktrees with high-risk conflict detection.
 - Produce local draft commits for implemented candidates.
@@ -22,7 +25,8 @@ OpenSpec already gives this project a strong specification workflow, but moving 
 
 ## Impact
 
-- Adds local workflow/tooling around OpenSpec, Git worktrees, branch management, dev server management, and queue state.
+- Adds local workflow/tooling around OpenSpec command orchestration, Git worktrees, branch management, dev server management, and queue state.
 - Adds repo-local queue scripts as the portable source of truth, plus readable Codex/Claude/Cursor command or skill wrappers for orchestration.
+- Adds a portable `openspec-start` skill and thin tool-specific adapters so Codex, Claude Code, Cursor, and terminal-oriented workflows can share the same delivery model.
 - Does not change the user-facing application behavior directly.
 - Does not introduce production infrastructure changes; Railway deployment continues to be triggered by pushes to `main`.
