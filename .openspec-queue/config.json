@@ -10,5 +10,6 @@
   "logRoot": ".openspec-queue/logs",
   "readinessTimeoutMs": 30000,
   "readinessIntervalMs": 500,
-  "allowPlanningCheckoutLanding": false
+  "allowPlanningCheckoutLanding": false,
+  "requiredNodeMajor": 22
 }

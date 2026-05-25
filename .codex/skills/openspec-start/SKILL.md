@@ -21,9 +21,9 @@ The adapter must preserve the same behavior:
 - route fuzzy input through `/opsx:explore`, detailed input through `/opsx:propose`, incomplete existing changes through `/opsx:continue`, and apply-ready existing changes through direct artifact review
 - create the Design Gate Brief from apply-ready OpenSpec artifacts
 - require strict Gate 1 approval before queue state is created
-- after Gate 1 approval, automatically call `node scripts/openspec-queue.mjs approve <change>`, `start <change> --json`, run `builder-preflight <change>` from the candidate worktree, implement there, then call `prepare-test <change>`
+- after Gate 1 approval, automatically call `node scripts/openspec-queue.mjs approve <change>`, `start <change> --json`, run `builder-preflight <change>` from the candidate worktree immediately before implementation edits, implement only under the absolute candidate path, then call `prepare-test <change>`
 - keep the candidate dev server running at Gate 2 only when queue readiness succeeds and capacity permits
-- require strict Gate 2 approval before `finalize <change> --confirm-gate2` and `cleanup <change>`
+- require strict Gate 2 approval before `finalize <change> --confirm-gate2` and `cleanup <change>`; archive failure blocks merge and push
 - call `reject <change>` and loop through fixes or artifact updates when Gate 2 is rejected
 - use `recover <change>` and `recover-finalize <change> --confirm-recovery` only after normal finalization fails and the user explicitly approves the listed recovery sub-steps
 

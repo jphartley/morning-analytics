@@ -97,19 +97,19 @@ Scripts:
 - `builder-preflight <change>` verifies the current repo root, absolute worktree path, branch, and queue item before implementation begins.
 - Inside the candidate worktree, invoke OpenSpec apply/context before coding.
 
-Safety boundary: run `builder-preflight` from the candidate worktree before editing. Edit only the assigned candidate worktree. Do not archive, merge, push, finalize, or clean up.
+Safety boundary: run `builder-preflight` from the candidate worktree immediately before implementation edits. Every implementation patch path must be under the absolute candidate worktree path reported by `start`. Do not archive, merge, push, finalize, or clean up.
 
 ### Test Preparer
 
 Purpose: verify and prepare manual testing.
 
 Scripts:
-- `setup <change>` prepares candidate dependencies and ignored env files without printing secret values.
-- `prepare-test <change>` runs setup, default verification, planning-checkout contamination checks, landing preflight, dev-server readiness checks, creates a draft commit when verification passes, and emits the handoff.
+- `setup <change>` prepares candidate dependencies, validates the repo-pinned Node runtime, and prepares ignored env files without printing secret values.
+- `prepare-test <change>` runs setup, enforces recent Builder preflight, runs default verification, planning-checkout contamination checks, landing preflight, dev-server readiness checks, creates a draft commit when verification passes, and emits the handoff.
 - `serve <change>` runs setup, starts or restarts the dev server, captures logs, and probes readiness.
 - `stop <change>` stops the dev server.
 
-Safety boundary: do not approve Gate 2 or finalize. Do not present a URL as ready unless the queue reports readiness.
+Safety boundary: do not approve Gate 2 or finalize. Do not run raw `npm run lint`, `npm run build`, or dev-server commands for a candidate outside queue-managed setup. Do not present a URL as ready unless the queue reports readiness.
 
 Verification scope policy: full `npm run lint` and `npm run build` remain expected candidate checks. If a failure is caused by the candidate, fix it in the candidate worktree. If a failure is unrelated baseline debt that predates the candidate, stop, report it separately, and continue only after explicit user approval to include that cleanup or after a dedicated hygiene change fixes the baseline.
 
@@ -118,12 +118,12 @@ Verification scope policy: full `npm run lint` and `npm run build` remain expect
 Purpose: after user approval, land the candidate on `main`.
 
 Scripts:
-- `finalize <change> --confirm-gate2`: stop server, use the detached landing worktree, rebase when conflict-free, rerun setup and verification, archive OpenSpec, squash merge into `main`, push, and mark finalized.
-- `cleanup <change>` removes finalized local resources only when safe.
+- `finalize <change> --confirm-gate2`: stop server, use the detached landing worktree, rebase when conflict-free, rerun setup and verification, preflight and archive OpenSpec, squash merge into `main`, push, reconcile the planning checkout, and mark finalized.
+- `cleanup <change>` removes finalized local resources and finalized candidate branches only when patch-equivalence and queue ownership checks pass.
 - `recover [<change>]` prints safe recovery actions, finalization state, remaining steps, and risks.
 - `recover-finalize <change> --confirm-recovery` runs the bounded recovery finalization plan only after explicit recovery approval.
 
-Safety boundary: only call `finalize` after explicit Gate 2 approval. Only call `recover-finalize` after explicit recovery approval that lists the planned sub-steps. Never delete dirty worktrees.
+Safety boundary: only call `finalize` after explicit Gate 2 approval. Archive failure stops merge and push. Only call `recover-finalize` after explicit recovery approval that lists the planned sub-steps. Never delete dirty worktrees or branches that are not patch-equivalent to `main`.
 
 ## Common Flows
 
@@ -139,6 +139,7 @@ node scripts/openspec-queue.mjs approve <change>
 node scripts/openspec-queue.mjs start <change>
 cd <absolute-candidate-worktree>
 node scripts/openspec-queue.mjs builder-preflight <change>
+# Apply implementation patches only under <absolute-candidate-worktree>
 ```
 
 Prepare manual testing:
@@ -157,6 +158,8 @@ Manual test passed:
 node scripts/openspec-queue.mjs finalize <change> --confirm-gate2
 node scripts/openspec-queue.mjs cleanup <change>
 ```
+
+`finalize` reports archive, merge, push, planning-sync, and duplicate-artifact cleanup separately. `cleanup` reports worktree and branch cleanup separately.
 
 Recovery finalization:
 ```bash

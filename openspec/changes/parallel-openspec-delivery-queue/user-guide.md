@@ -66,7 +66,7 @@ The queue uses three workspace roles:
 - Implementation worktree: one per approved change, used to build and serve the candidate.
 - Landing worktree: a clean `main` worktree used only for final squash merge and push.
 
-The Builder works in the candidate worktree after `builder-preflight` verifies the absolute worktree path and branch. The Test Preparer sets up dependencies and env, verifies the candidate, checks finalization readiness, and starts a dev server on an allocated port when readiness succeeds and capacity permits.
+The Builder works in the candidate worktree after `builder-preflight` verifies the absolute worktree path and branch immediately before implementation edits. The Test Preparer sets up dependencies and env, validates the repo-pinned Node runtime, verifies the candidate, checks finalization readiness, and starts a dev server on an allocated port when readiness succeeds and capacity permits.
 
 #### Gate 2: Manual Test Approval
 
@@ -132,13 +132,13 @@ It allows low-risk overlap and pauses or sequences high-risk conflicts.
 
 Implements the approved change inside the assigned candidate worktree. It runs `builder-preflight` before editing, invokes OpenSpec apply/context from inside that worktree, updates tasks as work completes, and creates draft commits.
 
-It does not edit the planning checkout, archive OpenSpec, merge to `main`, push, or clean up the worktree.
+It does not edit the planning checkout, archive OpenSpec, merge to `main`, push, or clean up the worktree. Every implementation patch after queue start must target an absolute file path under the candidate worktree.
 
 #### Test Preparer
 
-Runs candidate setup, verification, planning-checkout contamination checks, landing preflight, and any change-specific automated checks from OpenSpec artifacts. It allocates a port, starts the dev server when capacity permits, probes `127.0.0.1` readiness through the queue script, captures logs, and prepares the manual test handoff.
+Runs candidate setup, Node runtime validation, verification, planning-checkout contamination checks, landing preflight, and any change-specific automated checks from OpenSpec artifacts. It allocates a port, starts the dev server when capacity permits, probes `127.0.0.1` readiness through the queue script, captures logs, and prepares the manual test handoff.
 
-Default verification from `app/`:
+Default verification is queue-managed from `app/`; do not run raw candidate lint/build outside `setup` or `prepare-test`:
 
 - `npm run lint`
 - `npm run build`
@@ -146,9 +146,9 @@ Default verification from `app/`:
 
 #### Finalizer
 
-Runs only after Gate 2 approval. It stops the candidate dev server, uses the detached landing worktree, updates from `origin/main`, rebases the candidate branch when conflict-free, reruns setup and verification, archives OpenSpec, creates the final squash commit, pushes `HEAD:main`, and cleans up finalized local resources.
+Runs only after Gate 2 approval. It stops the candidate dev server, uses the detached landing worktree, updates from `origin/main`, rebases the candidate branch when conflict-free, reruns setup and verification, preflights and archives OpenSpec, creates the final squash commit, pushes `HEAD:main`, reconciles the planning checkout when safe, and cleans up finalized local resources.
 
-It pauses if the landing worktree is dirty, rebase conflicts appear, verification fails after rebase, archive fails, or push fails. If normal finalization cannot continue, `recover <change>` reports the bounded recovery plan and `recover-finalize <change> --confirm-recovery` runs it only after explicit recovery approval.
+It pauses if the landing worktree is dirty, rebase conflicts appear, verification fails after rebase, archive preflight or archive execution fails, or push fails. Archive failure stops before merge and push. If normal finalization cannot continue, `recover <change>` reports the bounded recovery plan and `recover-finalize <change> --confirm-recovery` runs it only after explicit recovery approval. Intentional merge/push without archive success must be labelled partial.
 
 ### OpenSpec Versus Agents
 
@@ -213,7 +213,7 @@ Expected commands:
 - `recover [<change>]`
 - `recover-finalize <change> --confirm-recovery`
 
-These queue commands are primarily for the `/opsx:start` harness, recovery, status checks, and advanced operation. Scripts own deterministic operations such as state transitions, worktree setup, artifact snapshotting, dependency/env setup, port/server management, readiness probing, verification, finalization, archive, and cleanup. Scripts do not decide whether intent is good enough, approve human gates, or perform AI implementation.
+These queue commands are primarily for the `/opsx:start` harness, recovery, status checks, and advanced operation. Scripts own deterministic operations such as state transitions, worktree setup, artifact snapshotting, dependency/env setup, Node runtime validation, port/server management, readiness probing, verification, finalization, archive, planning checkout reconciliation, finalized branch cleanup, and cleanup. Scripts do not decide whether intent is good enough, approve human gates, or perform AI implementation.
 
 Skills and commands should clearly explain which script they call, why they call it, what safety boundary it enforces, and what output or state transition to expect.
 
@@ -232,7 +232,9 @@ The default worktree and log roots are repo-local and gitignored:
 .openspec-queue/logs/
 ```
 
-Candidate setup copies configured ignored env files such as `app/.env.local` without printing values. If no local env is available, setup records placeholder mode; Gate 2 handoff must not claim auth or backend testing is ready while placeholder Supabase values are active.
+Candidate setup copies configured ignored env files such as `app/.env.local` without printing values. If no local env is available, setup records placeholder mode; Gate 2 handoff must not claim auth or backend testing is ready while placeholder Supabase values are active. Queue-managed npm commands must run under the app's pinned Node major from `app/.nvmrc`.
+
+This repair pass intentionally does not reopen non-recurring issues from the second validation run: repo-local writable-root noise, dev-server readiness reporting, the original `main` landing-worktree conflict, or manual queue-state JSON recovery.
 
 Machine-local runtime state is gitignored:
 

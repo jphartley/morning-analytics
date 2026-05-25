@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync, spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync, copyFileSync, openSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync, copyFileSync, openSync, readdirSync, statSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import process from "node:process";
@@ -54,13 +54,15 @@ function loadConfig() {
     logRoot: ".openspec-queue/logs",
     readinessTimeoutMs: 30000,
     readinessIntervalMs: 500,
-    allowPlanningCheckoutLanding: false
+    allowPlanningCheckoutLanding: false,
+    requiredNodeMajor: 22
   });
   config.envFiles ||= ["app/.env.local", ".env.local"];
   config.logRoot ||= ".openspec-queue/logs";
   config.readinessTimeoutMs ||= 30000;
   config.readinessIntervalMs ||= 500;
   config.allowPlanningCheckoutLanding ??= false;
+  config.requiredNodeMajor ||= 22;
   return config;
 }
 
@@ -143,7 +145,7 @@ function run(cmd, cmdArgs, options = {}) {
     cwd: options.cwd || repoRoot,
     encoding: "utf8",
     stdio: options.capture ? "pipe" : "inherit",
-    env: process.env
+    env: options.env || process.env
   });
   if (result.error) throw result.error;
   if (result.status !== 0 && options.check !== false) {
@@ -151,6 +153,48 @@ function run(cmd, cmdArgs, options = {}) {
     throw new Error(output || `${cmd} ${cmdArgs.join(" ")} failed with status ${result.status}`);
   }
   return result;
+}
+
+function telemetryEnv() {
+  return {
+    ...process.env,
+    DO_NOT_TRACK: "1",
+    OPENSPEC_TELEMETRY_DISABLED: "1",
+    POSTHOG_DISABLED: "1"
+  };
+}
+
+function classifyTelemetry(output) {
+  const lines = output.split("\n").filter(Boolean);
+  const telemetry = [];
+  const other = [];
+  for (const line of lines) {
+    if (/posthog|edge\.openspec\.dev|telemetry/i.test(line)) telemetry.push(line);
+    else other.push(line);
+  }
+  return { telemetry, other };
+}
+
+function runOpenSpec(cmdArgs, options = {}) {
+  const result = run("openspec", cmdArgs, {
+    cwd: options.cwd || repoRoot,
+    capture: true,
+    check: false,
+    env: telemetryEnv()
+  });
+  const stdout = result.stdout.trim();
+  const stderr = result.stderr.trim();
+  const warnings = classifyTelemetry([stdout, stderr].filter(Boolean).join("\n"));
+  return {
+    command: `openspec ${cmdArgs.join(" ")}`,
+    cwd: path.relative(repoRoot, options.cwd || repoRoot) || ".",
+    status: result.status === 0 ? "passed" : "failed",
+    exitCode: result.status,
+    stdout,
+    stderr,
+    telemetryWarnings: warnings.telemetry,
+    nonTelemetryOutput: warnings.other
+  };
 }
 
 function capture(cmd, cmdArgs, cwd = repoRoot, check = true) {
@@ -192,6 +236,9 @@ Commands:
   cleanup <change>                Remove finalized local resources when safe
   recover [change]                Print safe recovery actions
   recover-finalize <change> --confirm-recovery  Run approved finalization recovery
+
+Recovery flags:
+  --allow-partial-finalization --confirm-recovery  Allow explicitly approved merge/push without successful archive
 `);
 }
 
@@ -336,8 +383,33 @@ function readStatusEntries(worktreePath) {
     .map((line) => ({ code: line.slice(0, 2), path: line.slice(3) }));
 }
 
+function trackedStatusEntries(worktreePath) {
+  return readStatusEntries(worktreePath).filter((entry) => entry.code !== "??");
+}
+
+function untrackedStatusEntries(worktreePath) {
+  return readStatusEntries(worktreePath).filter((entry) => entry.code === "??");
+}
+
 function currentBranch(worktreePath) {
   return capture("git", ["branch", "--show-current"], worktreePath, false);
+}
+
+function listFilesRecursive(root) {
+  if (!existsSync(root)) return [];
+  const files = [];
+  for (const entry of readdirSync(root)) {
+    const fullPath = path.join(root, entry);
+    const stat = statSync(fullPath);
+    if (stat.isDirectory()) files.push(...listFilesRecursive(fullPath));
+    else files.push(fullPath);
+  }
+  return files;
+}
+
+function recordPreGateArtifacts(change) {
+  const root = changeDir(change);
+  return listFilesRecursive(root).map((file) => path.relative(repoRoot, file)).sort();
 }
 
 function preflightBuilder(item, config, cwd = initialCwd) {
@@ -380,8 +452,20 @@ function preflightBuilder(item, config, cwd = initialCwd) {
   return {
     status: checks.every((check) => check.status === "passed") ? "passed" : "failed",
     checks,
-    expected
+    expected,
+    recovery: `cd ${expected.worktreePath} && node scripts/openspec-queue.mjs builder-preflight ${item.change}`
   };
+}
+
+function builderPreflightFresh(item) {
+  const preflight = item.lastBuilderPreflight;
+  const maxAgeMs = 10 * 60 * 1000;
+  if (!preflight) return { status: "failed", reason: "missing-builder-preflight" };
+  if (preflight.status !== "passed") return { status: "failed", reason: "builder-preflight-not-passed" };
+  if (preflight.worktreePath !== item.worktreePath) return { status: "failed", reason: "builder-preflight-worktree-mismatch" };
+  if (preflight.branch !== item.branch) return { status: "failed", reason: "builder-preflight-branch-mismatch" };
+  if (Date.now() - Date.parse(preflight.at) > maxAgeMs) return { status: "failed", reason: "builder-preflight-stale" };
+  return { status: "passed", at: preflight.at };
 }
 
 function planningContamination(item) {
@@ -393,8 +477,11 @@ function planningContamination(item) {
     return file.startsWith("app/")
       || file.startsWith("scripts/")
       || file.startsWith("validation/")
+      || file.startsWith("supabase/")
+      || file.startsWith(".openspec-queue/")
       || file === `openspec/changes/${item.change}/tasks.md`
-      || file.startsWith(`openspec/changes/${item.change}/specs/`);
+      || file.startsWith(`openspec/changes/${item.change}/`)
+      || file.startsWith(`openspec/specs/`);
   });
   return {
     status: suspicious.length === 0 ? "passed" : "failed",
@@ -446,6 +533,37 @@ function envModeFromFiles(files) {
   return "real-local";
 }
 
+function requiredNodeMajor(config) {
+  const nvmrc = path.join(repoRoot, "app", ".nvmrc");
+  if (existsSync(nvmrc)) {
+    const value = readFileSync(nvmrc, "utf8").trim().match(/\d+/)?.[0];
+    if (value) return Number(value);
+  }
+  return Number(config.requiredNodeMajor || 22);
+}
+
+function nodeRuntime(config) {
+  const version = process.versions.node;
+  const major = Number(version.split(".")[0]);
+  const required = requiredNodeMajor(config);
+  return {
+    status: major === required ? "passed" : "failed",
+    version: `v${version}`,
+    major,
+    requiredMajor: required,
+    executable: process.execPath,
+    instruction: `Run queue commands with Node ${required}. For this repo, use the Node version from app/.nvmrc before running npm ci, lint, build, or dev server commands.`
+  };
+}
+
+function assertNodeRuntime(config, action) {
+  const runtime = nodeRuntime(config);
+  if (runtime.status !== "passed") {
+    throw new Error(`${action} requires Node ${runtime.requiredMajor}. Current runtime is ${runtime.version} at ${runtime.executable}. ${runtime.instruction}`);
+  }
+  return runtime;
+}
+
 function writePlaceholderEnv(worktreePath) {
   const target = path.join(worktreePath, "app", ".env.local");
   const content = [
@@ -490,6 +608,7 @@ function needsNpmCi(worktreePath) {
 
 function setupCandidate(item, config) {
   if (!item.worktreePath) fail(`${item.change} has no worktree. Run start first.`);
+  const runtime = assertNodeRuntime(config, "Candidate setup");
   const env = prepareCandidateEnv(item, config);
   const appDir = path.join(item.worktreePath, "app");
   const installNeeded = needsNpmCi(item.worktreePath);
@@ -512,9 +631,19 @@ function setupCandidate(item, config) {
       throw new Error(`Candidate setup failed for ${item.change}: npm ci failed.`);
     }
   }
-  const setup = { at: now(), env, install };
+  const setup = { at: now(), env, install, node: runtime, worktreePath: item.worktreePath, branch: item.branch };
   item.lastSetup = setup;
   return setup;
+}
+
+function setupFresh(item) {
+  const setup = item.lastSetup;
+  if (!setup) return { status: "failed", reason: "missing-setup" };
+  if (setup.worktreePath !== item.worktreePath) return { status: "failed", reason: "setup-worktree-mismatch" };
+  if (setup.branch !== item.branch) return { status: "failed", reason: "setup-branch-mismatch" };
+  if (setup.install?.status === "failed") return { status: "failed", reason: "setup-install-failed" };
+  if (setup.node?.status !== "passed") return { status: "failed", reason: "setup-node-runtime-failed" };
+  return { status: "passed" };
 }
 
 function changeNeedsBackendTesting(item) {
@@ -528,6 +657,8 @@ function changeNeedsBackendTesting(item) {
 }
 
 function runVerification(worktreePath) {
+  const config = loadConfig();
+  assertNodeRuntime(config, "Candidate verification");
   const commands = [
     { id: "lint", cmd: "npm", args: ["run", "lint"], cwd: path.join(worktreePath, "app") },
     { id: "build", cmd: "npm", args: ["run", "build"], cwd: path.join(worktreePath, "app") }
@@ -560,6 +691,17 @@ function runVerification(worktreePath) {
     commands: results,
     changedFiles
   };
+}
+
+function assertReadyForVerification(item) {
+  const preflight = builderPreflightFresh(item);
+  if (preflight.status !== "passed") {
+    throw new Error(`Builder preflight required before verification: ${preflight.reason}. Run builder-preflight from ${item.worktreePath}.`);
+  }
+  const setup = setupFresh(item);
+  if (setup.status !== "passed") {
+    throw new Error(`Candidate setup required before verification: ${setup.reason}. Run setup ${item.change} or prepare-test ${item.change}.`);
+  }
 }
 
 function readinessProbe(port) {
@@ -707,16 +849,43 @@ function archivePreflight(item) {
   const candidatePath = changeDir(item.change, item.worktreePath);
   const archiveRoot = path.join(item.worktreePath, "openspec", "changes", "archive");
   const specPath = path.join(candidatePath, "specs");
+  const specChecks = validateArchiveSpecs(item);
+  const failedSpecs = specChecks.filter((check) => check.status === "failed");
   return {
-    status: existsSync(candidatePath) ? "passed" : "failed",
+    status: existsSync(candidatePath) && failedSpecs.length === 0 ? "passed" : "failed",
     candidatePath,
     specPath,
     archiveRoot,
+    specChecks,
     nonInteractive: true,
-    message: existsSync(candidatePath)
-      ? "archive can run from the candidate worktree"
-      : `candidate change path is missing: ${candidatePath}`
+    message: !existsSync(candidatePath)
+      ? `candidate change path is missing: ${candidatePath}`
+      : failedSpecs.length
+        ? `archive preflight found invalid main specs: ${failedSpecs.map((check) => check.capability).join(", ")}`
+        : "archive can run from the candidate worktree"
   };
+}
+
+function validateArchiveSpecs(item) {
+  const specsDir = path.join(changeDir(item.change, item.worktreePath), "specs");
+  if (!existsSync(specsDir)) return [];
+  return readdirSync(specsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const capability = entry.name;
+      const mainSpec = path.join(item.worktreePath, "openspec", "specs", capability, "spec.md");
+      if (!existsSync(mainSpec)) return { capability, status: "passed", reason: "main-spec-will-be-created" };
+      const text = readFileSync(mainSpec, "utf8");
+      const requirementsIndex = text.indexOf("## Requirements");
+      const firstRequirementIndex = text.indexOf("### Requirement:");
+      if (requirementsIndex === -1) {
+        return { capability, status: "failed", path: mainSpec, reason: "missing ## Requirements section" };
+      }
+      if (firstRequirementIndex !== -1 && firstRequirementIndex < requirementsIndex) {
+        return { capability, status: "failed", path: mainSpec, reason: "requirement appears before ## Requirements section" };
+      }
+      return { capability, status: "passed", path: mainSpec, reason: "main-spec-structure-valid" };
+    });
 }
 
 function finalizationPlan(item, config) {
@@ -744,6 +913,132 @@ function finalizationPlan(item, config) {
       archive.status !== "passed" ? archive.message : null
     ].filter(Boolean)
   };
+}
+
+function step(status, detail = {}) {
+  return { status, at: now(), ...detail };
+}
+
+function planningCheckoutReconciliation(item) {
+  const result = {
+    branch: currentBranch(repoRoot),
+    trackedDirty: trackedStatusEntries(repoRoot).map((entry) => `${entry.code} ${entry.path}`),
+    untrackedPreserved: untrackedStatusEntries(repoRoot).map((entry) => entry.path),
+    status: "skipped",
+    reason: null
+  };
+  if (result.branch !== "main") {
+    result.reason = "planning-checkout-not-on-main";
+    return result;
+  }
+  if (result.trackedDirty.length > 0) {
+    result.reason = "planning-checkout-has-tracked-changes";
+    return result;
+  }
+  if (dryRun) {
+    result.status = "dry-run";
+    result.reason = "would-fetch-and-fast-forward";
+    return result;
+  }
+  run("git", ["fetch", "origin"], { cwd: repoRoot });
+  const counts = capture("git", ["rev-list", "--left-right", "--count", "HEAD...origin/main"], repoRoot, false).split(/\s+/);
+  result.ahead = Number(counts[0] || 0);
+  result.behind = Number(counts[1] || 0);
+  if (result.behind === 0) {
+    result.status = "passed";
+    result.reason = "already-up-to-date";
+    return result;
+  }
+  const pull = run("git", ["pull", "--ff-only", "origin", "main"], { cwd: repoRoot, capture: true, check: false });
+  result.status = pull.status === 0 ? "passed" : "failed";
+  result.reason = pull.status === 0 ? "fast-forwarded" : "fast-forward-failed";
+  result.stdout = pull.stdout.trim();
+  result.stderr = pull.stderr.trim();
+  return result;
+}
+
+function isTracked(relativePath) {
+  return run("git", ["ls-files", "--error-unmatch", relativePath], { cwd: repoRoot, capture: true, check: false }).status === 0;
+}
+
+function cleanupDuplicateArtifacts(item) {
+  const removed = [];
+  const preserved = [];
+  const paths = item.preGateArtifactPaths || [];
+  for (const relativePath of paths) {
+    if (!relativePath.startsWith(`openspec/changes/${item.change}/`)) {
+      preserved.push({ path: relativePath, reason: "outside-change-dir" });
+      continue;
+    }
+    const absolutePath = path.join(repoRoot, relativePath);
+    if (!existsSync(absolutePath)) continue;
+    if (isTracked(relativePath)) {
+      preserved.push({ path: relativePath, reason: "tracked-file" });
+      continue;
+    }
+    if (!dryRun) rmSync(absolutePath, { force: true });
+    removed.push(relativePath);
+  }
+  if (!dryRun) {
+    const dirs = [
+      path.join(repoRoot, "openspec", "changes", item.change, "specs"),
+      path.join(repoRoot, "openspec", "changes", item.change)
+    ];
+    for (const dir of dirs) {
+      try {
+        rmSync(dir, { recursive: false });
+      } catch {
+        // Directory is not empty or does not exist; preserve it.
+      }
+    }
+  }
+  return { status: "passed", removed, preserved };
+}
+
+function branchPatchEquivalent(branch, base = "main") {
+  if (!branchExists(branch)) return { status: "skipped", reason: "local-branch-missing" };
+  const diff = run("git", ["diff", "--quiet", base, branch], { cwd: repoRoot, capture: true, check: false });
+  if (diff.status === 0) return { status: "passed", method: "empty-tree-diff" };
+  const cherry = capture("git", ["cherry", "-v", base, branch], repoRoot, false);
+  const commits = cherry.split("\n").filter(Boolean);
+  if (commits.length > 0 && commits.every((line) => line.startsWith("-"))) {
+    return { status: "passed", method: "git-cherry-patch-equivalent", cherry };
+  }
+  return { status: "failed", reason: "branch-not-patch-equivalent", cherry };
+}
+
+function cleanupCandidateBranch(item) {
+  const result = {
+    local: { status: "skipped" },
+    remote: { status: "skipped" }
+  };
+  if (!item.branch || !item.branch.startsWith("codex/")) {
+    result.local = { status: "skipped", reason: "branch-not-owned-by-queue", branch: item.branch };
+    return result;
+  }
+  if (item.status !== "finalized") {
+    result.local = { status: "skipped", reason: "item-not-finalized", branch: item.branch };
+    return result;
+  }
+  if (item.worktreePath && existsSync(item.worktreePath)) {
+    result.local = { status: "skipped", reason: "candidate-worktree-still-exists", branch: item.branch };
+    return result;
+  }
+  const equivalence = branchPatchEquivalent(item.branch);
+  if (equivalence.status !== "passed") {
+    result.local = { status: "skipped", branch: item.branch, ...equivalence };
+    return result;
+  }
+  if (!dryRun) run("git", ["branch", "-D", item.branch], { cwd: repoRoot });
+  result.local = { status: dryRun ? "dry-run" : "passed", branch: item.branch, equivalence };
+  const remoteExists = run("git", ["ls-remote", "--exit-code", "--heads", "origin", item.branch], { cwd: repoRoot, capture: true, check: false }).status === 0;
+  if (remoteExists) {
+    if (!dryRun) run("git", ["push", "origin", "--delete", item.branch], { cwd: repoRoot });
+    result.remote = { status: dryRun ? "dry-run" : "passed", branch: item.branch };
+  } else {
+    result.remote = { status: "skipped", reason: "remote-branch-missing", branch: item.branch };
+  }
+  return result;
 }
 
 function doStatus(change) {
@@ -799,6 +1094,7 @@ function doApprove(change) {
     worktreePath: worktreeFor(change, config),
     landingWorktreePath: landingWorktree(config),
     expectedTouchAreas: deriveExpectedTouchAreas(change),
+    preGateArtifactPaths: recordPreGateArtifacts(change),
     event: "gate1-approved"
   });
   saveState(state);
@@ -837,6 +1133,7 @@ function doStart(changeArg) {
     landingWorktreePath: landingWorktree(config),
     startedAt: item.startedAt || now(),
     planningBaselineStatus: readStatusEntries(repoRoot).map((entry) => `${entry.code} ${entry.path}`),
+    preGateArtifactPaths: item.preGateArtifactPaths || recordPreGateArtifacts(item.change),
     lastSnapshot: { at: now(), source: snapshot.source, target: snapshot.target }
   });
   saveState(state);
@@ -882,11 +1179,24 @@ function doBuilderPreflight(change) {
   const state = loadState();
   const item = requireItem(state, change);
   const result = preflightBuilder(item, config, initialCwd);
+  if (result.status === "passed") {
+    item.lastBuilderPreflight = {
+      at: now(),
+      status: "passed",
+      worktreePath: result.expected.worktreePath,
+      branch: result.expected.branch,
+      cwd: initialCwd
+    };
+    item.updatedAt = now();
+    saveState(state);
+    copyQueueStateToWorktree(item);
+  }
   const text = [
     `Builder preflight for ${change}: ${result.status}`,
     `Expected worktree: ${result.expected.worktreePath}`,
     `Expected branch: ${result.expected.branch}`,
-    ...result.checks.map((check) => `  ${check.name}: ${check.status} (expected ${check.expected}, actual ${check.actual})`)
+    ...result.checks.map((check) => `  ${check.name}: ${check.status} (expected ${check.expected}, actual ${check.actual})`),
+    result.status === "passed" ? `Edit boundary: every implementation patch path must be under ${result.expected.worktreePath}` : `Recovery: ${result.recovery}`
   ].join("\n");
   emit({ ok: result.status === "passed", result }, text);
   if (result.status !== "passed") process.exit(1);
@@ -925,6 +1235,14 @@ async function doPrepareTest(change) {
   try {
     setupCandidate(item, config);
   } catch (error) {
+    saveState(state);
+    fail(error.message || String(error), { item });
+  }
+  try {
+    assertReadyForVerification(item);
+  } catch (error) {
+    item.status = "blocked";
+    item.blockedReason = "pre-verification-gate-failed";
     saveState(state);
     fail(error.message || String(error), { item });
   }
@@ -1027,18 +1345,24 @@ function doReject(change) {
 function doFinalize(change) {
   if (!change) fail("Usage: finalize <change> --confirm-gate2");
   if (!flags.has("--confirm-gate2")) fail("Finalization requires explicit --confirm-gate2.");
+  const allowPartial = flags.has("--allow-partial-finalization") && flags.has("--confirm-recovery");
   const config = loadConfig();
   const state = loadState();
   const item = requireItem(state, change);
   if (!["ready-for-test", "blocked"].includes(item.status)) fail(`${change} is not ready for finalization.`);
+  item.finalizationSteps = item.finalizationSteps || {};
   stopServer(item);
   const plan = finalizationPlan(item, config);
   item.lastFinalizationPlan = { at: now(), ...plan };
+  item.finalizationSteps.archivePreflight = step(plan.status === "ready" ? "passed" : "failed", plan.archive);
   if (plan.status !== "ready") {
-    item.status = "blocked";
-    item.blockedReason = "finalization-preflight-failed";
-    saveState(state);
-    fail(`Finalization preflight failed for ${change}.`, { item, plan });
+    if (!allowPartial) {
+      item.status = "blocked";
+      item.blockedReason = "archive-preflight-failed";
+      saveState(state);
+      fail(`Archive preflight failed for ${change}; finalization stopped before merge and push.`, { item, plan });
+    }
+    item.finalizationSteps.archivePreflight.partialOverride = true;
   }
   const landing = ensureLandingWorktree(config);
   if (worktreeDirty(landing.landingPath)) fail(`Landing worktree is dirty: ${landing.landingPath}`);
@@ -1050,6 +1374,8 @@ function doFinalize(change) {
   }
   try {
     setupCandidate(item, config);
+    const setup = setupFresh(item);
+    if (setup.status !== "passed") throw new Error(`Candidate setup required before finalization verification: ${setup.reason}.`);
   } catch (error) {
     saveState(state);
     fail(error.message || String(error), { item });
@@ -1063,18 +1389,52 @@ function doFinalize(change) {
     fail(`Verification failed after rebase for ${change}.`, { item });
   }
   if (!dryRun) {
-    run("openspec", ["archive", change, "--yes"], { cwd: item.worktreePath });
+    if (plan.status === "ready") {
+      const archive = runOpenSpec(["archive", change, "--yes"], { cwd: item.worktreePath });
+      const archiveOutput = `${archive.stdout}\n${archive.stderr}`;
+      const archiveAborted = /aborted|no files were changed/i.test(archiveOutput) && !/archived as/i.test(archiveOutput);
+      item.finalizationSteps.archive = step(archive.status === "passed" && !archiveAborted ? "passed" : "failed", archive);
+      if (archive.status !== "passed" || archiveAborted) {
+        item.status = "blocked";
+        item.blockedReason = "archive-failed";
+        saveState(state);
+        fail(`Archive failed for ${change}; finalization stopped before merge and push.`, { item, archive });
+      }
+    } else {
+      item.finalizationSteps.archive = step("partial-skipped", { reason: "partial-finalization-approved" });
+    }
     run("git", ["add", "-A"], { cwd: item.worktreePath });
     run("git", ["commit", "-m", `Archive ${change}`], { cwd: item.worktreePath, check: false });
     run("git", ["merge", "--squash", item.branch], { cwd: landing.landingPath });
+    item.finalizationSteps.merge = step("passed", { branch: item.branch, landingPath: landing.landingPath });
     run("git", ["commit", "-m", finalCommitMessage(change, item.worktreePath)], { cwd: landing.landingPath });
     run("git", ["push", "origin", "HEAD:main"], { cwd: landing.landingPath });
+    item.finalizationSteps.push = step("passed", { remote: "origin", ref: "HEAD:main" });
+    const planningSync = planningCheckoutReconciliation(item);
+    item.finalizationSteps.planningSync = step(planningSync.status, planningSync);
+    const duplicateCleanup = cleanupDuplicateArtifacts(item);
+    item.finalizationSteps.duplicateArtifactCleanup = step(duplicateCleanup.status, duplicateCleanup);
+  } else {
+    item.finalizationSteps.archive = step(plan.status === "ready" ? "dry-run" : "partial-dry-run");
+    item.finalizationSteps.merge = step("dry-run");
+    item.finalizationSteps.push = step("dry-run");
+    item.finalizationSteps.planningSync = step("dry-run");
+    item.finalizationSteps.duplicateArtifactCleanup = step("dry-run");
   }
-  item.status = "finalized";
+  item.status = allowPartial && plan.status !== "ready" ? "partial-finalized" : "finalized";
   item.finalizedAt = now();
   item.devServerPid = undefined;
   saveState(state);
-  emit({ ok: true, item }, `Finalized ${change}. Main pushed; Railway will deploy from main.`);
+  const summary = [
+    `${item.status === "finalized" ? "Finalized" : "Partially finalized"} ${change}.`,
+    `Archive: ${item.finalizationSteps.archive?.status || item.finalizationSteps.archivePreflight?.status}`,
+    `Merge: ${item.finalizationSteps.merge?.status}`,
+    `Push: ${item.finalizationSteps.push?.status}`,
+    `Planning sync: ${item.finalizationSteps.planningSync?.status}`,
+    `Duplicate artifact cleanup: ${item.finalizationSteps.duplicateArtifactCleanup?.status}`,
+    `Branch cleanup: pending cleanup command`
+  ].join("\n");
+  emit({ ok: item.status === "finalized", item }, summary);
 }
 
 function doCleanup(change) {
@@ -1088,9 +1448,18 @@ function doCleanup(change) {
   if (!dryRun && item.worktreePath && existsSync(item.worktreePath)) {
     run("git", ["worktree", "remove", item.worktreePath]);
   }
+  item.finalizationSteps = item.finalizationSteps || {};
+  item.finalizationSteps.worktreeCleanup = step(item.worktreePath && existsSync(item.worktreePath) ? "skipped" : "passed", { worktreePath: item.worktreePath });
+  const branchCleanup = cleanupCandidateBranch(item);
+  item.finalizationSteps.branchCleanup = step(branchCleanup.local.status === "passed" || branchCleanup.local.status === "skipped" || branchCleanup.local.status === "dry-run" ? "passed" : "failed", branchCleanup);
   state.items = state.items.filter((entry) => entry.change !== change);
   saveState(state);
-  emit({ ok: true, item }, `Cleaned up ${change}.`);
+  emit({ ok: true, item, branchCleanup }, [
+    `Cleaned up ${change}.`,
+    `Worktree cleanup: ${item.finalizationSteps.worktreeCleanup.status}`,
+    `Local branch cleanup: ${branchCleanup.local.status}`,
+    `Remote branch cleanup: ${branchCleanup.remote.status}`
+  ].join("\n"));
 }
 
 function doRecover(change) {
@@ -1102,6 +1471,7 @@ function doRecover(change) {
     status: item.status,
     worktreePath: item.worktreePath,
     branch: item.branch,
+    finalizationSteps: item.finalizationSteps || null,
     finalizationPlan: item.worktreePath ? finalizationPlan(item, config) : null,
     suggestedActions: recoveryActions(item)
   }));

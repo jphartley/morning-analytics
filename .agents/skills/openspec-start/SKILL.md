@@ -197,7 +197,8 @@ Read the returned `contextFiles`, implement pending tasks, and mark each complet
 
 Builder safety boundaries:
 - edit only inside the assigned candidate worktree
-- do not start editing until `builder-preflight` passes
+- do not start editing until `builder-preflight` passes immediately before the first implementation edit
+- use absolute file paths under the assigned candidate worktree for implementation patches
 - keep changes focused on the approved artifacts
 - interrupt if implementation reveals design ambiguity
 - do not archive, merge, push, finalize, or clean up
@@ -212,9 +213,9 @@ After implementation reaches a candidate state, call:
 node scripts/openspec-queue.mjs prepare-test <change>
 ```
 
-Why: runs default verification, derives change-specific checks from OpenSpec artifacts, creates a draft commit when verification reaches a candidate state, allocates or reuses a port, starts the dev server when capacity permits, and emits the manual-testing handoff.
+Why: runs queue-owned setup, validates the repo-pinned Node runtime, derives change-specific checks from OpenSpec artifacts, creates a draft commit when verification reaches a candidate state, allocates or reuses a port, starts the dev server when capacity permits, and emits the manual-testing handoff.
 
-Safety boundary: this prepares the handoff only. It does not approve Gate 2 or finalize. It must report setup/env mode, planning-checkout contamination, finalization landing readiness, and dev-server readiness.
+Safety boundary: this prepares the handoff only. It does not approve Gate 2 or finalize. It must report dependency state, Node version, setup/env mode, planning-checkout contamination, finalization landing readiness, and dev-server readiness. Do not run raw candidate `npm run lint`, `npm run build`, or dev-server commands outside queue-managed setup.
 
 Expected result: a compact handoff with change name, branch, worktree, reachable local URL or explicit stopped/failed server state, verification result, known risks, and Gate 2 instructions. Leave the dev server running when readiness succeeds and capacity permits.
 
@@ -273,9 +274,9 @@ node scripts/openspec-queue.mjs finalize <change> --confirm-gate2
 node scripts/openspec-queue.mjs cleanup <change>
 ```
 
-Why: finalization stops the server, uses the landing worktree, updates `main`, rebases when conflict-free, reruns verification, archives OpenSpec, generates the squash commit message from the OpenSpec change, squash merges to `main`, pushes `main`, and marks the item finalized. Cleanup removes finalized resources only when safe.
+Why: finalization stops the server, uses the landing worktree, updates `main`, rebases when conflict-free, reruns setup and verification, preflights and archives OpenSpec, generates the squash commit message from the OpenSpec change, squash merges to `main`, pushes `main`, reconciles the planning checkout when safe, and marks the item finalized. Cleanup removes finalized resources and finalized candidate branches only when safe.
 
-Safety boundary: never finalize without explicit Gate 2 approval. Never delete dirty worktrees or unfinalized branches.
+Safety boundary: never finalize without explicit Gate 2 approval. Archive failure stops merge and push. Never delete dirty worktrees, unrelated untracked files, or branches that are not patch-equivalent to `main`.
 
 Expected result: `main` is pushed, Railway deploys from the pushed commit, and local queue resources are cleaned up when safe.
 
@@ -290,6 +291,8 @@ Present the recovery plan and risks. Only after explicit recovery approval that 
 ```bash
 node scripts/openspec-queue.mjs recover-finalize <change> --confirm-recovery
 ```
+
+Intentional merge/push without successful archive requires explicit partial-finalization recovery approval and must be labelled partial.
 
 ## Output Shape
 
