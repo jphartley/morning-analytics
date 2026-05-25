@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { GEMINI_MODELS, DEFAULT_MODEL_ID, GeminiModel } from "@/lib/models";
+import { GEMINI_MODELS, DEFAULT_MODEL_ID } from "@/lib/models";
 
 const STORAGE_KEY = "gemini-model";
 
@@ -34,19 +34,16 @@ function setStoredModel(modelId: string): void {
 }
 
 export function ModelPicker({ onModelChange }: ModelPickerProps) {
-  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
+  const [selectedModel, setSelectedModel] = useState<string>(getStoredModel);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    const stored = getStoredModel();
-    setSelectedModel(stored);
-    onModelChange(stored);
-  }, [onModelChange]);
+    onModelChange(selectedModel);
+  }, [onModelChange, selectedModel]);
 
   const handleSelect = (modelId: string) => {
     setSelectedModel(modelId);
     setStoredModel(modelId);
-    onModelChange(modelId);
     setIsOpen(false);
   };
 

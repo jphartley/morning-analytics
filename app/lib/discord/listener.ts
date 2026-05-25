@@ -87,8 +87,6 @@ function extractImageUrls(message: Message): string[] {
 function isCompletedGrid(message: Message): boolean {
   // Midjourney's completed grid has 4 images and includes action buttons
   // The message typically contains "Image #" indicators or has specific components
-  const content = message.content || "";
-
   // Check if this is a final grid (has U1-U4 and V1-V4 buttons, or contains the grid)
   const hasComponents = message.components && message.components.length > 0;
   const imageUrls = extractImageUrls(message);
