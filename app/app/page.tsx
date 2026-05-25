@@ -15,6 +15,7 @@ import { ModelPicker } from "@/components/ModelPicker";
 import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { AppHeader } from "@/components/AppHeader";
+import { WelcomeEmptyState } from "@/components/WelcomeEmptyState";
 import { useAuth } from "@/lib/useAuth";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { omitMarkdownNode } from "@/lib/markdown-props";
@@ -50,6 +51,7 @@ export default function Home() {
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [historyViewData, setHistoryViewData] = useState<HistoryViewData | null>(null);
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+  const [isHistoryEmpty, setIsHistoryEmpty] = useState<boolean | null>(null);
 
   // Regeneration state
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -70,6 +72,10 @@ export default function Home() {
 
   const handlePersonaChange = useCallback((persona: string) => {
     setSelectedPersona(persona);
+  }, []);
+
+  const handleHistoryEmptyChange = useCallback((isEmpty: boolean) => {
+    setIsHistoryEmpty(isEmpty);
   }, []);
 
   const handleAnalyze = () => {
@@ -230,6 +236,8 @@ export default function Home() {
     setIsRegenerating(false);
   };
 
+  const showWelcomeEmptyState = state === "idle" && isHistoryEmpty === true;
+
   return (
     <>
       <AppHeader />
@@ -240,6 +248,7 @@ export default function Home() {
         onSelect={handleHistorySelect}
         onNewAnalysis={handleNewAnalysis}
         refreshTrigger={historyRefreshTrigger}
+        onHistoryEmptyChange={handleHistoryEmptyChange}
       />
 
       {/* Main Content */}
@@ -250,7 +259,7 @@ export default function Home() {
               Mock mode active — using local images for faster testing.
             </div>
           )}
-          <header className="mb-12">
+          <header className={showWelcomeEmptyState ? "mb-6" : "mb-12"}>
             <div className="flex justify-between items-start mb-4">
               <div />
               <div className="flex gap-3">
@@ -266,6 +275,11 @@ export default function Home() {
                 Insights From Your Morning Pages
               </p>
             </div>
+            {showWelcomeEmptyState && (
+              <div className="mt-6 text-left">
+                <WelcomeEmptyState />
+              </div>
+            )}
           </header>
 
           {state === "idle" && (

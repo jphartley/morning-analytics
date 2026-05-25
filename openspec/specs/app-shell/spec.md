@@ -1,9 +1,7 @@
 ## Purpose
 
 Define the main Morning Analytics app shell behavior, including journal input, analysis triggering, loading feedback, result display, image grid behavior, error handling, palette picker dismissal, and authenticated header layout.
-
 ## Requirements
-
 ### Requirement: Provide text input for journal entry
 
 The system SHALL display a large text area where users can paste or write their morning pages. The text area SHALL use design token Tailwind classes (`bg-surface` background, `text-ink` text color, `border-outline` border, `ring-accent` focus ring).
@@ -112,3 +110,40 @@ The app header SHALL use increased vertical padding (`py-5`) to accommodate the 
 - **THEN** the header SHALL have `py-5` padding (increased from `py-3`)
 - **THEN** the left side SHALL show the logo image followed by the "Morning Analytics" text
 - **THEN** the right side SHALL show user email and sign-out button
+
+### Requirement: First-run welcome empty state
+
+The authenticated app shell SHALL display a lightweight welcome guide when the current user is idle and has no saved analysis history.
+
+#### Scenario: New user sees welcome guide near top
+
+- **WHEN** an authenticated user loads the app
+- **AND** the app is idle
+- **AND** the user's analysis history has zero entries
+- **THEN** the system SHALL display a welcome guide in the main content area below the navigation/header
+- **AND** the guide SHALL appear above the journal input so it is visible near the top of the screen
+
+#### Scenario: Welcome guide explains app flow
+
+- **WHEN** the welcome guide is displayed
+- **THEN** the guide SHALL briefly explain that the user can write or paste morning pages
+- **AND** the guide SHALL briefly explain that the app produces an AI-powered analysis
+- **AND** the guide SHALL briefly explain that the app generates four artistic images inspired by the writing
+
+#### Scenario: Returning user does not see welcome guide
+
+- **WHEN** an authenticated user loads the app
+- **AND** the user's analysis history has one or more entries
+- **THEN** the system SHALL NOT display the welcome guide
+
+#### Scenario: Welcome guide hides outside idle state
+
+- **WHEN** the app is analyzing, showing completed results, showing an error, or viewing history
+- **THEN** the system SHALL NOT display the welcome guide
+
+#### Scenario: Welcome guide uses lightweight styling
+
+- **WHEN** the welcome guide is displayed
+- **THEN** the guide SHALL use existing design-token colors
+- **AND** the guide SHALL NOT visually overwhelm the journal input area
+

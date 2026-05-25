@@ -14,6 +14,7 @@ interface HistorySidebarProps {
   onSelect: (id: string) => void;
   onNewAnalysis: () => void;
   refreshTrigger?: number;
+  onHistoryEmptyChange?: (isEmpty: boolean) => void;
 }
 
 function formatDateTime(isoString: string): string {
@@ -32,6 +33,7 @@ export function HistorySidebar({
   onSelect,
   onNewAnalysis,
   refreshTrigger = 0,
+  onHistoryEmptyChange,
 }: HistorySidebarProps) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,15 +48,17 @@ export function HistorySidebar({
 
       if (result.success && result.data) {
         setEntries(result.data);
+        onHistoryEmptyChange?.(result.data.length === 0);
       } else {
         setError(result.error || "Failed to load history");
+        onHistoryEmptyChange?.(false);
       }
 
       setIsLoading(false);
     }
 
     fetchHistory();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, onHistoryEmptyChange]);
 
   return (
     <aside className="hidden md:flex w-64 bg-surface border-r border-outline flex-col h-full">
