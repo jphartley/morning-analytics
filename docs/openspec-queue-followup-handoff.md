@@ -133,3 +133,27 @@ Desired outcome:
 - Offer or perform a safe fast-forward of the planning checkout when it is clean enough and when unrelated user files can be preserved.
 - Track pre-Gate artifacts created by the workflow so duplicate cleanup is precise and does not depend on manual memory.
 - Never delete unrelated untracked files; report them separately as preserved local state.
+
+### Finalized Candidate Branches Are Left Behind
+
+This is another finalization cleanup gap from the latest run.
+
+What happened in this run:
+
+- The `codex/add-welcome-empty-state` candidate branch remained after finalization.
+- Its content was already present on `main` as the squash commit `efa6bad Add Welcome Empty State`.
+- Git still listed `codex/add-welcome-empty-state` as unmerged because squash finalization does not preserve branch ancestry.
+- `git diff efa6bad..codex/add-welcome-empty-state` was empty, and `git cherry -v efa6bad codex/add-welcome-empty-state` marked the branch commit as patch-equivalent.
+
+Why it matters:
+
+- Successful queue runs can accumulate stale `codex/*` candidate branches even though their content is already on `main`.
+- Branch lists become noisy and misleading, especially because squash-merged branches still appear unmerged by normal Git ancestry checks.
+- Operators should not have to remember manual branch cleanup after every finalized queue item.
+
+Desired outcome:
+
+- After successful finalize, push, and safe cleanup, delete the finalized local candidate branch.
+- If a remote candidate branch exists, delete it only after confirming the branch content is patch-equivalent to `main` or recorded as finalized in queue state.
+- Use safety checks before branch deletion: candidate worktree is gone or clean, `main` push succeeded, and the branch tip is either patch-equivalent to `main` or explicitly tied to the finalized queue item.
+- Report branch cleanup status separately from worktree cleanup.
