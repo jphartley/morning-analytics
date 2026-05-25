@@ -17,6 +17,7 @@ import { HistorySidebar } from "@/components/HistorySidebar";
 import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/lib/useAuth";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { omitMarkdownNode } from "@/lib/markdown-props";
 
 type AppState = "idle" | "analyzing" | "text-ready" | "complete" | "error" | "viewing-history";
 
@@ -31,12 +32,6 @@ interface HistoryViewData {
 
 const MAX_IMAGES = 20;
 const isMockMode = process.env.NEXT_PUBLIC_IMAGE_PROVIDER === "mock";
-
-function omitMarkdownNode<T extends { node?: unknown }>(props: T): Omit<T, "node"> {
-  const propsWithoutNode = { ...props };
-  delete propsWithoutNode.node;
-  return propsWithoutNode;
-}
 
 export default function Home() {
   const { user } = useAuth();

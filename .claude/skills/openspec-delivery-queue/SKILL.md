@@ -111,6 +111,8 @@ Scripts:
 
 Safety boundary: do not approve Gate 2 or finalize. Do not present a URL as ready unless the queue reports readiness.
 
+Verification scope policy: full `npm run lint` and `npm run build` remain expected candidate checks. If a failure is caused by the candidate, fix it in the candidate worktree. If a failure is unrelated baseline debt that predates the candidate, stop, report it separately, and continue only after explicit user approval to include that cleanup or after a dedicated hygiene change fixes the baseline.
+
 ### Finalizer
 
 Purpose: after user approval, land the candidate on `main`.

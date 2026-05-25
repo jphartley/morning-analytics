@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "check:auth-env": "node scripts/check-auth-env.mjs",
     "check:lockfile-registry": "node scripts/check-lockfile-registry.mjs",
     "fix:lockfile-registry": "node scripts/fix-lockfile-registry.mjs"
   },

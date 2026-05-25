@@ -21,7 +21,8 @@ Supabase for later review.
 
 ## Requirements
 
-- Node.js 20+ recommended (18+ should work).
+- Node.js 22.x. The app runtime pin is declared in `app/.nvmrc`,
+  `app/package.json`, and `app/package-lock.json`.
 - npm (or your preferred package manager).
 - Gemini, Discord, and Supabase credentials for real integrations.
 
@@ -29,7 +30,7 @@ Supabase for later review.
 
 ```bash
 cd app
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
@@ -42,6 +43,24 @@ All env vars live in `app/.env.local`. Variables prefixed with
 `NEXT_PUBLIC_*` are exposed to the browser. Server-required Supabase values are
 validated at startup; missing values will stop the app from booting. The repo
 root `.env` is not used by the Next.js app.
+
+`app/.env.example` contains safe placeholders for build-only and mock-mode
+checks. Those placeholders are not manual-test-ready for signin, signup,
+history loading, storage uploads, or any flow that needs a real Supabase
+backend.
+
+### Env usage by workflow
+
+| Workflow | Required values |
+| --- | --- |
+| Static build with placeholders | `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` may use safe placeholders from `app/.env.example` |
+| Local dev shell boot | Same as build; use mock values only when avoiding backend manual tests |
+| Mock AI/image testing | `USE_AI_MOCKS=true`, `NEXT_PUBLIC_IMAGE_PROVIDER=mock`, Supabase values still needed for auth/history code paths |
+| Supabase auth manual testing | Real `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+| History persistence and storage uploads | Real `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; anon read policies for history images |
+| Real Gemini analysis | `GEMINI_API_KEY`; optional `GEMINI_MODEL` |
+| Real Midjourney image generation | Discord/Midjourney values listed below and `NEXT_PUBLIC_IMAGE_PROVIDER=midjourney` |
+| Admin cleanup script | `SUPABASE_SERVICE_ROLE_KEY` and either `NEXT_PUBLIC_SUPABASE_URL` or `SUPABASE_URL` |
 
 ### Gemini (text analysis)
 
@@ -72,12 +91,51 @@ Supabase setup assumptions:
 Troubleshooting notes for image uploads live in
 `docs/research/image-upload-troubleshooting.md`.
 
+### Auth manual-test readiness
+
+Before handing off signin or signup testing, make sure `app/.env.local`
+contains real local Supabase values rather than placeholders:
+
+```bash
+cd app
+npm run check:auth-env
+```
+
+This check reports only which keys are missing or placeholder-like; it does not
+print secret values. Passing this check does not prove credentials are valid,
+but failing it means auth manual testing is not ready.
+
 ### Mocking and local testing
 
 - `USE_AI_MOCKS=true` bypasses Gemini + Discord/Midjourney APIs.
 - `NEXT_PUBLIC_IMAGE_PROVIDER=mock` uses local images from
   `app/public/mock-images` (PNG or JPEG).
 - Set `NEXT_PUBLIC_IMAGE_PROVIDER=midjourney` for real image generation.
+
+Mock and placeholder values can support build/static checks, but do not use
+them for signin, signup, history, storage, or other Supabase-backed manual
+tests.
+
+## Clean Worktree Setup
+
+Fresh Git worktrees do not share dependencies. For a clean candidate worktree:
+
+```bash
+cd app
+npm ci
+npm run lint
+npm run build
+npm run check:lockfile-registry
+```
+
+Use the Node 22.x runtime declared in `app/.nvmrc`, `app/package.json`, and
+`app/package-lock.json`. If a change modifies `app/package-lock.json`, run
+`npm run check:lockfile-registry` before committing; if it fails, run
+`npm run fix:lockfile-registry` and re-check.
+
+Do not rely on symlinking `node_modules` from another checkout for Turbopack or
+Next.js candidates unless that shortcut has been separately validated as safe.
+The predictable path is `npm ci` inside the candidate's `app/` directory.
 
 ## Running Common Tasks
 
@@ -87,7 +145,17 @@ npm run dev
 npm run build
 npm run start
 npm run lint
+npm run check:auth-env
+npm run check:lockfile-registry
 ```
+
+## Queue Verification Policy
+
+Queued candidates still need full app verification with `npm run lint` and
+`npm run build`. If a verification failure is caused by the candidate, fix it
+inside the candidate. If the failure is unrelated baseline debt that predates
+the candidate, stop and report it separately; include unrelated cleanup only
+after explicit approval or in a dedicated hygiene change.
 
 ## Manual Smoke Test
 

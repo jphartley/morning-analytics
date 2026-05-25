@@ -1,4 +1,5 @@
 import ReactMarkdown from "react-markdown";
+import { omitMarkdownNode } from "@/lib/markdown-props";
 
 interface AnalysisPanelProps {
   analysisText: string;
@@ -32,12 +33,6 @@ function getAnalysisReadingMetadata(analysisText: string) {
     minutes: Math.max(1, Math.ceil(wordCount / 200)),
     wordCount,
   };
-}
-
-function omitMarkdownNode<T extends { node?: unknown }>(props: T): Omit<T, "node"> {
-  const propsWithoutNode = { ...props };
-  delete propsWithoutNode.node;
-  return propsWithoutNode;
 }
 
 export function AnalysisPanel({ analysisText }: AnalysisPanelProps) {
