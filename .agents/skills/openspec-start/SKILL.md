@@ -177,7 +177,7 @@ Why: creates or reuses the candidate branch/worktree, snapshots approved OpenSpe
 
 Safety boundary: high-risk conflicts block or sequence work; implementation must happen only in the assigned candidate worktree.
 
-Expected result: the item is active and has branch/worktree metadata.
+Expected result: the item is active and has branch/worktree metadata, absolute candidate path, and the `builder-preflight` command to run before editing.
 
 If `start` reports a high-risk conflict, interrupt the user. Otherwise continue.
 
@@ -188,6 +188,7 @@ Run the Builder inside the candidate worktree reported by `start`.
 In the candidate worktree:
 
 ```bash
+node scripts/openspec-queue.mjs builder-preflight <change>
 openspec status --change "<change>" --json
 openspec instructions apply --change "<change>" --json
 ```
@@ -196,6 +197,7 @@ Read the returned `contextFiles`, implement pending tasks, and mark each complet
 
 Builder safety boundaries:
 - edit only inside the assigned candidate worktree
+- do not start editing until `builder-preflight` passes
 - keep changes focused on the approved artifacts
 - interrupt if implementation reveals design ambiguity
 - do not archive, merge, push, finalize, or clean up
@@ -212,9 +214,9 @@ node scripts/openspec-queue.mjs prepare-test <change>
 
 Why: runs default verification, derives change-specific checks from OpenSpec artifacts, creates a draft commit when verification reaches a candidate state, allocates or reuses a port, starts the dev server when capacity permits, and emits the manual-testing handoff.
 
-Safety boundary: this prepares the handoff only. It does not approve Gate 2 or finalize.
+Safety boundary: this prepares the handoff only. It does not approve Gate 2 or finalize. It must report setup/env mode, planning-checkout contamination, finalization landing readiness, and dev-server readiness.
 
-Expected result: a compact handoff with change name, branch, worktree, local URL, verification result, known risks, and Gate 2 instructions. Leave the dev server running when capacity permits.
+Expected result: a compact handoff with change name, branch, worktree, reachable local URL or explicit stopped/failed server state, verification result, known risks, and Gate 2 instructions. Leave the dev server running when readiness succeeds and capacity permits.
 
 If the server could not start because capacity is full, present the stopped-ready state and the command needed to serve it:
 
@@ -276,6 +278,18 @@ Why: finalization stops the server, uses the landing worktree, updates `main`, r
 Safety boundary: never finalize without explicit Gate 2 approval. Never delete dirty worktrees or unfinalized branches.
 
 Expected result: `main` is pushed, Railway deploys from the pushed commit, and local queue resources are cleaned up when safe.
+
+If normal finalization fails after Gate 2 approval, call:
+
+```bash
+node scripts/openspec-queue.mjs recover <change>
+```
+
+Present the recovery plan and risks. Only after explicit recovery approval that lists the planned sub-steps, call:
+
+```bash
+node scripts/openspec-queue.mjs recover-finalize <change> --confirm-recovery
+```
 
 ## Output Shape
 

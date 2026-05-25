@@ -66,16 +66,18 @@ The queue uses three workspace roles:
 - Implementation worktree: one per approved change, used to build and serve the candidate.
 - Landing worktree: a clean `main` worktree used only for final squash merge and push.
 
-The Builder works in the candidate worktree. The Test Preparer verifies the candidate and starts a dev server on an allocated port when capacity permits.
+The Builder works in the candidate worktree after `builder-preflight` verifies the absolute worktree path and branch. The Test Preparer sets up dependencies and env, verifies the candidate, checks finalization readiness, and starts a dev server on an allocated port when readiness succeeds and capacity permits.
 
 #### Gate 2: Manual Test Approval
 
-When a candidate is ready, `/opsx:start` keeps the dev server running when capacity permits and presents a compact handoff:
+When a candidate is ready, `/opsx:start` keeps the dev server running when readiness succeeds and capacity permits and presents a compact handoff:
 
 - change name
 - branch
 - worktree path
 - local URL
+- env mode
+- server readiness state and log path when startup fails
 - changed behavior summary
 - manual test focus
 - verification result
@@ -128,13 +130,13 @@ It allows low-risk overlap and pauses or sequences high-risk conflicts.
 
 #### Builder
 
-Implements the approved change inside the assigned candidate worktree. It invokes OpenSpec apply/context from inside that worktree, updates tasks as work completes, and creates draft commits.
+Implements the approved change inside the assigned candidate worktree. It runs `builder-preflight` before editing, invokes OpenSpec apply/context from inside that worktree, updates tasks as work completes, and creates draft commits.
 
 It does not edit the planning checkout, archive OpenSpec, merge to `main`, push, or clean up the worktree.
 
 #### Test Preparer
 
-Runs verification, derives any change-specific automated checks from OpenSpec artifacts, allocates a port, starts the dev server when capacity permits, and prepares the manual test handoff.
+Runs candidate setup, verification, planning-checkout contamination checks, landing preflight, and any change-specific automated checks from OpenSpec artifacts. It allocates a port, starts the dev server when capacity permits, probes `127.0.0.1` readiness through the queue script, captures logs, and prepares the manual test handoff.
 
 Default verification from `app/`:
 
@@ -144,9 +146,9 @@ Default verification from `app/`:
 
 #### Finalizer
 
-Runs only after Gate 2 approval. It stops the candidate dev server, uses the landing worktree, updates `main`, rebases the candidate branch when conflict-free, archives OpenSpec, creates the final squash commit, pushes `main`, and cleans up finalized local resources.
+Runs only after Gate 2 approval. It stops the candidate dev server, uses the detached landing worktree, updates from `origin/main`, rebases the candidate branch when conflict-free, reruns setup and verification, archives OpenSpec, creates the final squash commit, pushes `HEAD:main`, and cleans up finalized local resources.
 
-It pauses if the landing worktree is dirty, rebase conflicts appear, verification fails after rebase, or push fails.
+It pauses if the landing worktree is dirty, rebase conflicts appear, verification fails after rebase, archive fails, or push fails. If normal finalization cannot continue, `recover <change>` reports the bounded recovery plan and `recover-finalize <change> --confirm-recovery` runs it only after explicit recovery approval.
 
 ### OpenSpec Versus Agents
 
@@ -200,6 +202,8 @@ Expected commands:
 - `doctor`
 - `approve <change>`
 - `start [<change>|--next]`
+- `builder-preflight <change>`
+- `setup <change>`
 - `prepare-test <change>`
 - `serve <change>`
 - `stop <change>`
@@ -207,8 +211,9 @@ Expected commands:
 - `finalize <change> --confirm-gate2`
 - `cleanup <change>`
 - `recover [<change>]`
+- `recover-finalize <change> --confirm-recovery`
 
-These queue commands are primarily for the `/opsx:start` harness, recovery, status checks, and advanced operation. Scripts own deterministic operations such as state transitions, worktree setup, artifact snapshotting, port/server management, verification, finalization, and cleanup. Scripts do not decide whether intent is good enough, approve human gates, or perform AI implementation.
+These queue commands are primarily for the `/opsx:start` harness, recovery, status checks, and advanced operation. Scripts own deterministic operations such as state transitions, worktree setup, artifact snapshotting, dependency/env setup, port/server management, readiness probing, verification, finalization, archive, and cleanup. Scripts do not decide whether intent is good enough, approve human gates, or perform AI implementation.
 
 Skills and commands should clearly explain which script they call, why they call it, what safety boundary it enforces, and what output or state transition to expect.
 
@@ -219,6 +224,15 @@ Shared queue configuration is committed:
 ```text
 .openspec-queue/config.json
 ```
+
+The default worktree and log roots are repo-local and gitignored:
+
+```text
+.openspec-queue/worktrees/
+.openspec-queue/logs/
+```
+
+Candidate setup copies configured ignored env files such as `app/.env.local` without printing values. If no local env is available, setup records placeholder mode; Gate 2 handoff must not claim auth or backend testing is ready while placeholder Supabase values are active.
 
 Machine-local runtime state is gitignored:
 

@@ -13,6 +13,9 @@ gitleaks-report.json
 
 # OpenSpec delivery queue runtime state
 .openspec-queue/state.local.json
+.openspec-queue/worktrees/
+.openspec-queue/logs/
+.openspec-queue/runtime/
 
 # OS
 .DS_Store

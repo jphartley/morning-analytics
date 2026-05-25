@@ -1,9 +1,14 @@
 {
   "version": 1,
-  "worktreeRoot": "../morning-openspec-worktrees",
-  "landingWorktree": "../morning-openspec-worktrees/_landing-main",
+  "worktreeRoot": ".openspec-queue/worktrees",
+  "landingWorktree": ".openspec-queue/worktrees/_landing-main",
   "maxActiveImplementations": 2,
   "maxRunningDevServers": 2,
   "portStart": 3001,
-  "branchPrefix": "codex/"
+  "branchPrefix": "codex/",
+  "envFiles": ["app/.env.local", ".env.local"],
+  "logRoot": ".openspec-queue/logs",
+  "readinessTimeoutMs": 30000,
+  "readinessIntervalMs": 500,
+  "allowPlanningCheckoutLanding": false
 }

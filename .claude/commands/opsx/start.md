@@ -31,12 +31,15 @@ Routes:
 
 - `node scripts/openspec-queue.mjs approve <change>` records explicit Gate 1 approval and enqueues the change.
 - `node scripts/openspec-queue.mjs start <change> --json` creates or reuses the candidate branch/worktree and snapshots approved artifacts.
-- `node scripts/openspec-queue.mjs prepare-test <change>` runs verification, creates the candidate handoff, allocates a port, and starts the dev server when capacity permits.
+- `node scripts/openspec-queue.mjs builder-preflight <change>` must pass from the candidate worktree before editing.
+- `node scripts/openspec-queue.mjs prepare-test <change>` runs setup, verification, planning-checkout contamination checks, landing preflight, server readiness, creates the candidate handoff, allocates a port, and starts the dev server when capacity permits.
 
 ## Gate 2 Scripts
 
 - `node scripts/openspec-queue.mjs reject <change>` records a strict Gate 2 rejection and preserves the worktree for fixes.
 - `node scripts/openspec-queue.mjs finalize <change> --confirm-gate2` finalizes only after strict Gate 2 approval.
+- `node scripts/openspec-queue.mjs recover <change>` reports recovery state if normal finalization fails.
+- `node scripts/openspec-queue.mjs recover-finalize <change> --confirm-recovery` runs recovery only after explicit recovery approval.
 - `node scripts/openspec-queue.mjs cleanup <change>` removes finalized resources only when safe.
 
 ## Safety Boundaries
@@ -45,5 +48,8 @@ Routes:
 - Do not treat casual acknowledgement as approval.
 - Do not approve Gate 1 or Gate 2 for the user.
 - Do not edit the planning checkout from the Builder role.
+- Do not start Builder edits until `builder-preflight` passes.
+- Do not present Gate 2 as ready unless the queue reports verification, landing preflight, and server readiness.
 - Do not finalize without strict Gate 2 approval after manual testing.
+- Do not run recovery finalization without explicit recovery approval for the listed sub-steps.
 - Do not delete dirty worktrees.

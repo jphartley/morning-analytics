@@ -94,31 +94,34 @@ Purpose: implement the approved change in the assigned candidate worktree.
 
 Scripts:
 - `start <change>` prepares the worktree and snapshots artifacts.
+- `builder-preflight <change>` verifies the current repo root, absolute worktree path, branch, and queue item before implementation begins.
 - Inside the candidate worktree, invoke OpenSpec apply/context before coding.
 
-Safety boundary: edit only the assigned candidate worktree. Do not archive, merge, push, finalize, or clean up.
+Safety boundary: run `builder-preflight` from the candidate worktree before editing. Edit only the assigned candidate worktree. Do not archive, merge, push, finalize, or clean up.
 
 ### Test Preparer
 
 Purpose: verify and prepare manual testing.
 
 Scripts:
-- `prepare-test <change>` runs default verification, allocates/reuses a port, starts the dev server when capacity permits, creates a draft commit when verification passes, and emits the handoff.
-- `serve <change>` starts or restarts the dev server.
+- `setup <change>` prepares candidate dependencies and ignored env files without printing secret values.
+- `prepare-test <change>` runs setup, default verification, planning-checkout contamination checks, landing preflight, dev-server readiness checks, creates a draft commit when verification passes, and emits the handoff.
+- `serve <change>` runs setup, starts or restarts the dev server, captures logs, and probes readiness.
 - `stop <change>` stops the dev server.
 
-Safety boundary: do not approve Gate 2 or finalize.
+Safety boundary: do not approve Gate 2 or finalize. Do not present a URL as ready unless the queue reports readiness.
 
 ### Finalizer
 
 Purpose: after user approval, land the candidate on `main`.
 
 Scripts:
-- `finalize <change> --confirm-gate2`: stop server, use landing worktree, rebase when conflict-free, rerun verification, archive OpenSpec, squash merge into `main`, push, and mark finalized.
+- `finalize <change> --confirm-gate2`: stop server, use the detached landing worktree, rebase when conflict-free, rerun setup and verification, archive OpenSpec, squash merge into `main`, push, and mark finalized.
 - `cleanup <change>` removes finalized local resources only when safe.
-- `recover [<change>]` prints safe recovery actions.
+- `recover [<change>]` prints safe recovery actions, finalization state, remaining steps, and risks.
+- `recover-finalize <change> --confirm-recovery` runs the bounded recovery finalization plan only after explicit recovery approval.
 
-Safety boundary: only call `finalize` after explicit Gate 2 approval. Never delete dirty worktrees.
+Safety boundary: only call `finalize` after explicit Gate 2 approval. Only call `recover-finalize` after explicit recovery approval that lists the planned sub-steps. Never delete dirty worktrees.
 
 ## Common Flows
 
@@ -132,10 +135,13 @@ Gate 1 approved:
 ```bash
 node scripts/openspec-queue.mjs approve <change>
 node scripts/openspec-queue.mjs start <change>
+cd <absolute-candidate-worktree>
+node scripts/openspec-queue.mjs builder-preflight <change>
 ```
 
 Prepare manual testing:
 ```bash
+node scripts/openspec-queue.mjs setup <change>
 node scripts/openspec-queue.mjs prepare-test <change>
 ```
 
@@ -148,4 +154,10 @@ Manual test passed:
 ```bash
 node scripts/openspec-queue.mjs finalize <change> --confirm-gate2
 node scripts/openspec-queue.mjs cleanup <change>
+```
+
+Recovery finalization:
+```bash
+node scripts/openspec-queue.mjs recover <change>
+node scripts/openspec-queue.mjs recover-finalize <change> --confirm-recovery
 ```

@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 import { spawnSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync, copyFileSync, openSync } from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import process from "node:process";
 
-const repoRoot = process.cwd();
+const initialCwd = process.cwd();
+const repoRoot = discoverRepoRoot(initialCwd);
 const queueDir = path.join(repoRoot, ".openspec-queue");
 const configPath = path.join(queueDir, "config.json");
 const statePath = path.join(queueDir, "state.local.json");
@@ -16,6 +18,15 @@ const flags = new Set(args.filter((arg) => arg.startsWith("--")));
 const positional = args.slice(1).filter((arg) => !arg.startsWith("--"));
 const jsonOutput = flags.has("--json");
 const dryRun = flags.has("--dry-run");
+
+function discoverRepoRoot(cwd) {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd,
+    encoding: "utf8",
+    stdio: "pipe"
+  });
+  return result.status === 0 ? result.stdout.trim() : cwd;
+}
 
 function readJson(filePath, fallback) {
   if (!existsSync(filePath)) return fallback;
@@ -31,15 +42,26 @@ function writeJson(filePath, value) {
 }
 
 function loadConfig() {
-  return readJson(configPath, {
+  const config = readJson(configPath, {
     version: 1,
-    worktreeRoot: "../morning-openspec-worktrees",
-    landingWorktree: "../morning-openspec-worktrees/_landing-main",
+    worktreeRoot: ".openspec-queue/worktrees",
+    landingWorktree: ".openspec-queue/worktrees/_landing-main",
     maxActiveImplementations: 2,
     maxRunningDevServers: 2,
     portStart: 3001,
-    branchPrefix: "codex/"
+    branchPrefix: "codex/",
+    envFiles: ["app/.env.local", ".env.local"],
+    logRoot: ".openspec-queue/logs",
+    readinessTimeoutMs: 30000,
+    readinessIntervalMs: 500,
+    allowPlanningCheckoutLanding: false
   });
+  config.envFiles ||= ["app/.env.local", ".env.local"];
+  config.logRoot ||= ".openspec-queue/logs";
+  config.readinessTimeoutMs ||= 30000;
+  config.readinessIntervalMs ||= 500;
+  config.allowPlanningCheckoutLanding ??= false;
+  return config;
 }
 
 function emptyState() {
@@ -59,6 +81,14 @@ function saveState(state) {
   writeJson(statePath, state);
 }
 
+function copyQueueStateToWorktree(item) {
+  if (!item.worktreePath || !existsSync(statePath)) return;
+  const target = path.join(item.worktreePath, ".openspec-queue", "state.local.json");
+  if (dryRun) return;
+  mkdirSync(path.dirname(target), { recursive: true });
+  copyFileSync(statePath, target);
+}
+
 function resolveRepoPath(value) {
   return path.resolve(repoRoot, value);
 }
@@ -73,6 +103,35 @@ function worktreeFor(change, config) {
 
 function landingWorktree(config) {
   return resolveRepoPath(config.landingWorktree);
+}
+
+function logRoot(config) {
+  return resolveRepoPath(config.logRoot);
+}
+
+function safeRelative(base, target) {
+  const relative = path.relative(base, target);
+  return relative && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function repoPaths(config) {
+  return {
+    planningRoot: repoRoot,
+    worktreeRoot: resolveRepoPath(config.worktreeRoot),
+    landingPath: landingWorktree(config),
+    logRoot: logRoot(config)
+  };
+}
+
+function queuePaths(change, config) {
+  return {
+    ...repoPaths(config),
+    change,
+    branch: branchFor(change, config),
+    worktreePath: worktreeFor(change, config),
+    changeDir: changeDir(change),
+    candidateChangeDir: changeDir(change, worktreeFor(change, config))
+  };
 }
 
 function now() {
@@ -123,6 +182,8 @@ Commands:
   doctor                          Check config, git, worktrees, and runtime state
   approve <change>                Record explicit Gate 1 approval and enqueue
   start [change|--next]           Create/reuse candidate worktree and snapshot artifacts
+  builder-preflight <change>      Verify Builder is in the assigned candidate worktree
+  setup <change>                  Prepare candidate dependencies and env
   prepare-test <change>           Run verification, allocate port, start server when possible
   serve <change>                  Start/restart candidate dev server
   stop <change>                   Stop candidate dev server
@@ -130,6 +191,7 @@ Commands:
   finalize <change> --confirm-gate2  Archive, squash merge to landing main, push
   cleanup <change>                Remove finalized local resources when safe
   recover [change]                Print safe recovery actions
+  recover-finalize <change> --confirm-recovery  Run approved finalization recovery
 `);
 }
 
@@ -267,6 +329,81 @@ function readChangedFiles(worktreePath) {
   return [...new Set([...committed, ...working, ...staged])].sort();
 }
 
+function readStatusEntries(worktreePath) {
+  return capture("git", ["status", "--porcelain"], worktreePath, false)
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => ({ code: line.slice(0, 2), path: line.slice(3) }));
+}
+
+function currentBranch(worktreePath) {
+  return capture("git", ["branch", "--show-current"], worktreePath, false);
+}
+
+function preflightBuilder(item, config, cwd = initialCwd) {
+  const expected = {
+    ...repoPaths(config),
+    change: item.change,
+    branch: item.branch,
+    worktreePath: item.worktreePath,
+    changeDir: changeDir(item.change),
+    candidateChangeDir: changeDir(item.change, item.worktreePath)
+  };
+  const actualRoot = discoverRepoRoot(cwd);
+  const actualBranch = currentBranch(expected.worktreePath);
+  const checks = [
+    {
+      name: "repo-root",
+      status: path.resolve(actualRoot) === path.resolve(expected.worktreePath) ? "passed" : "failed",
+      expected: expected.worktreePath,
+      actual: actualRoot
+    },
+    {
+      name: "cwd-inside-worktree",
+      status: safeRelative(expected.worktreePath, cwd) || path.resolve(cwd) === path.resolve(expected.worktreePath) ? "passed" : "failed",
+      expected: expected.worktreePath,
+      actual: cwd
+    },
+    {
+      name: "branch",
+      status: actualBranch === item.branch ? "passed" : "failed",
+      expected: item.branch,
+      actual: actualBranch || "(detached or unknown)"
+    },
+    {
+      name: "queue-worktree",
+      status: path.resolve(item.worktreePath || "") === path.resolve(expected.worktreePath) ? "passed" : "failed",
+      expected: expected.worktreePath,
+      actual: item.worktreePath || "(missing)"
+    }
+  ];
+  return {
+    status: checks.every((check) => check.status === "passed") ? "passed" : "failed",
+    checks,
+    expected
+  };
+}
+
+function planningContamination(item) {
+  const baseline = new Set(item.planningBaselineStatus || []);
+  const current = readStatusEntries(repoRoot).map((entry) => `${entry.code} ${entry.path}`);
+  const newEntries = current.filter((entry) => !baseline.has(entry));
+  const suspicious = newEntries.filter((entry) => {
+    const file = entry.slice(3);
+    return file.startsWith("app/")
+      || file.startsWith("scripts/")
+      || file.startsWith("validation/")
+      || file === `openspec/changes/${item.change}/tasks.md`
+      || file.startsWith(`openspec/changes/${item.change}/specs/`);
+  });
+  return {
+    status: suspicious.length === 0 ? "passed" : "failed",
+    baseline: [...baseline],
+    current,
+    suspicious
+  };
+}
+
 function choosePort(state, config, item) {
   if (item.port) return item.port;
   const used = new Set(state.items.map((entry) => entry.port).filter(Boolean));
@@ -294,6 +431,100 @@ function stopServer(item) {
   if (dryRun) return true;
   process.kill(item.devServerPid, "SIGTERM");
   return true;
+}
+
+function fileContainsAny(filePath, values) {
+  if (!existsSync(filePath)) return false;
+  const text = readFileSync(filePath, "utf8");
+  return values.some((value) => text.includes(value));
+}
+
+function envModeFromFiles(files) {
+  if (files.length === 0) return "placeholder";
+  if (files.some((file) => fileContainsAny(file, ["USE_AI_MOCKS=true", "NEXT_PUBLIC_IMAGE_PROVIDER=mock"]))) return "mock";
+  if (files.some((file) => fileContainsAny(file, ["example.supabase.co", "placeholder", "mock-service-role-key"]))) return "placeholder";
+  return "real-local";
+}
+
+function writePlaceholderEnv(worktreePath) {
+  const target = path.join(worktreePath, "app", ".env.local");
+  const content = [
+    "USE_AI_MOCKS=true",
+    "NEXT_PUBLIC_IMAGE_PROVIDER=mock",
+    "NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder",
+    "SUPABASE_SERVICE_ROLE_KEY=mock-service-role-key"
+  ].join("\n");
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, `${content}\n`, { mode: 0o600 });
+  return target;
+}
+
+function prepareCandidateEnv(item, config) {
+  const copied = [];
+  for (const relativeFile of config.envFiles || []) {
+    const source = path.join(repoRoot, relativeFile);
+    const target = path.join(item.worktreePath, relativeFile);
+    if (!existsSync(source)) continue;
+    if (dryRun) {
+      copied.push({ source: relativeFile, target: relativeFile, dryRun: true });
+      continue;
+    }
+    mkdirSync(path.dirname(target), { recursive: true });
+    copyFileSync(source, target);
+    copied.push({ source: relativeFile, target: relativeFile });
+  }
+  const targetFiles = copied.map((entry) => path.join(dryRun ? repoRoot : item.worktreePath, dryRun ? entry.source : entry.target));
+  const placeholderCreated = copied.length === 0 && !dryRun ? writePlaceholderEnv(item.worktreePath) : null;
+  if (placeholderCreated) targetFiles.push(placeholderCreated);
+  return {
+    copied,
+    placeholderCreated: placeholderCreated ? path.relative(item.worktreePath, placeholderCreated) : null,
+    mode: envModeFromFiles(targetFiles)
+  };
+}
+
+function needsNpmCi(worktreePath) {
+  return !existsSync(path.join(worktreePath, "app", "node_modules"));
+}
+
+function setupCandidate(item, config) {
+  if (!item.worktreePath) fail(`${item.change} has no worktree. Run start first.`);
+  const env = prepareCandidateEnv(item, config);
+  const appDir = path.join(item.worktreePath, "app");
+  const installNeeded = needsNpmCi(item.worktreePath);
+  let install = { status: "skipped", reason: "node_modules-present", command: "npm ci" };
+  if (dryRun) {
+    install = { status: installNeeded ? "dry-run" : "skipped", reason: installNeeded ? "would-run" : "node_modules-present", command: "npm ci" };
+  } else if (installNeeded) {
+    const result = run("npm", ["ci"], { cwd: appDir, capture: true, check: false });
+    install = {
+      status: result.status === 0 ? "passed" : "failed",
+      command: "npm ci",
+      cwd: path.relative(repoRoot, appDir),
+      stdout: result.stdout.trim(),
+      stderr: result.stderr.trim()
+    };
+    if (result.status !== 0) {
+      item.status = "blocked";
+      item.blockedReason = "candidate-setup-failed";
+      item.lastSetup = { at: now(), env, install };
+      throw new Error(`Candidate setup failed for ${item.change}: npm ci failed.`);
+    }
+  }
+  const setup = { at: now(), env, install };
+  item.lastSetup = setup;
+  return setup;
+}
+
+function changeNeedsBackendTesting(item) {
+  const areas = (item.expectedTouchAreas || []).join("\n").toLowerCase();
+  const changeText = [
+    path.join(changeDir(item.change), "proposal.md"),
+    path.join(changeDir(item.change), "design.md"),
+    path.join(changeDir(item.change), "tasks.md")
+  ].filter(existsSync).map((file) => readFileSync(file, "utf8").toLowerCase()).join("\n");
+  return /auth|backend|supabase|rls|session/.test(`${areas}\n${changeText}`);
 }
 
 function runVerification(worktreePath) {
@@ -331,27 +562,74 @@ function runVerification(worktreePath) {
   };
 }
 
-function startServer(item, state, config) {
-  if (item.devServerPid && isProcessRunning(item.devServerPid)) return { alreadyRunning: true, pid: item.devServerPid };
-  if (runningServerItems(state).length >= config.maxRunningDevServers) {
-    return { skipped: true, reason: "running-server-limit" };
+function readinessProbe(port) {
+  return new Promise((resolve) => {
+    const request = http.get({
+      hostname: "127.0.0.1",
+      port,
+      path: "/",
+      timeout: 1000
+    }, (response) => {
+      response.resume();
+      resolve({ ok: response.statusCode >= 200 && response.statusCode < 500, statusCode: response.statusCode });
+    });
+    request.on("timeout", () => {
+      request.destroy();
+      resolve({ ok: false, error: "timeout" });
+    });
+    request.on("error", (error) => resolve({ ok: false, error: error.code || error.message }));
+  });
+}
+
+async function waitForReadiness(item, config) {
+  const deadline = Date.now() + config.readinessTimeoutMs;
+  let lastProbe = { ok: false, error: "not-started" };
+  while (Date.now() <= deadline) {
+    lastProbe = await readinessProbe(item.port);
+    if (lastProbe.ok) {
+      return { status: "reachable", url: `http://localhost:${item.port}`, probe: lastProbe };
+    }
+    if (item.devServerPid && !isProcessRunning(item.devServerPid)) {
+      return { status: "failed", reason: "process-exited", probe: lastProbe };
+    }
+    await new Promise((resolve) => setTimeout(resolve, config.readinessIntervalMs));
   }
-  if (dryRun) return { dryRun: true };
+  return { status: "failed", reason: "readiness-timeout", probe: lastProbe };
+}
+
+async function startServer(item, state, config) {
+  const logsDir = path.join(logRoot(config), item.change);
+  const logPath = path.join(logsDir, "dev-server.log");
+  if (item.devServerPid && isProcessRunning(item.devServerPid)) {
+    const readiness = await waitForReadiness(item, config);
+    return { alreadyRunning: true, pid: item.devServerPid, logPath, readiness };
+  }
+  if (runningServerItems(state).length >= config.maxRunningDevServers) {
+    return { skipped: true, reason: "running-server-limit", readiness: { status: "stopped" } };
+  }
+  if (dryRun) return { dryRun: true, readiness: { status: "dry-run" } };
+  mkdirSync(logsDir, { recursive: true });
+  const out = openSync(logPath, "a");
+  const err = openSync(logPath, "a");
   const child = spawn("npm", ["run", "dev", "--", "--port", String(item.port)], {
     cwd: path.join(item.worktreePath, "app"),
     detached: true,
-    stdio: "ignore",
+    stdio: ["ignore", out, err],
     env: process.env
   });
   child.unref();
-  return { pid: child.pid };
+  closeSync(out);
+  closeSync(err);
+  item.devServerPid = child.pid;
+  const readiness = await waitForReadiness(item, config);
+  return { pid: child.pid, logPath, readiness };
 }
 
 function ensureLandingWorktree(config) {
   const landingPath = landingWorktree(config);
   mkdirSync(path.dirname(landingPath), { recursive: true });
   if (worktreeExists(landingPath)) return { landingPath, created: false };
-  const args = ["worktree", "add", landingPath, "main"];
+  const args = ["worktree", "add", "--detach", landingPath, "main"];
   if (dryRun) return { landingPath, created: false, dryRun: true, command: `git ${args.join(" ")}` };
   run("git", args);
   return { landingPath, created: true };
@@ -359,6 +637,46 @@ function ensureLandingWorktree(config) {
 
 function worktreeDirty(worktreePath) {
   return capture("git", ["status", "--porcelain"], worktreePath, false).length > 0;
+}
+
+function checkIgnored(relativePath) {
+  return run("git", ["check-ignore", "-q", relativePath], { cwd: repoRoot, capture: true, check: false }).status === 0
+    || run("git", ["check-ignore", "-q", `${relativePath}/`], { cwd: repoRoot, capture: true, check: false }).status === 0;
+}
+
+function worktreeRootPreflight(config) {
+  const paths = repoPaths(config);
+  const relative = path.relative(repoRoot, paths.worktreeRoot) || ".";
+  const insideRepo = safeRelative(repoRoot, paths.worktreeRoot);
+  const ignored = insideRepo && checkIgnored(relative);
+  return {
+    status: insideRepo && ignored ? "passed" : "warning",
+    path: paths.worktreeRoot,
+    insideRepo,
+    ignored,
+    message: insideRepo && ignored
+      ? "candidate worktree root is repo-local, writable, and ignored"
+      : "candidate worktree root is outside the repo-local ignored workspace or is not gitignored; configure a writable root before normal queue writes"
+  };
+}
+
+function landingPreflight(config) {
+  const landingPath = landingWorktree(config);
+  const parent = path.dirname(landingPath);
+  const exists = worktreeExists(landingPath);
+  const dirty = exists && worktreeDirty(landingPath);
+  const insideRepo = safeRelative(repoRoot, landingPath);
+  return {
+    status: dirty ? "failed" : "passed",
+    landingPath,
+    parent,
+    exists,
+    dirty,
+    strategy: insideRepo ? "repo-local-detached-worktree" : "external-detached-worktree",
+    message: dirty
+      ? `landing worktree is dirty: ${landingPath}`
+      : "landing worktree can use a detached main checkout for finalization"
+  };
 }
 
 function makeDraftCommit(item) {
@@ -385,6 +703,49 @@ function finalCommitMessage(change, worktreePath) {
   return `${title}\n\n${summary}\n\nOpenSpec change: ${change}`;
 }
 
+function archivePreflight(item) {
+  const candidatePath = changeDir(item.change, item.worktreePath);
+  const archiveRoot = path.join(item.worktreePath, "openspec", "changes", "archive");
+  const specPath = path.join(candidatePath, "specs");
+  return {
+    status: existsSync(candidatePath) ? "passed" : "failed",
+    candidatePath,
+    specPath,
+    archiveRoot,
+    nonInteractive: true,
+    message: existsSync(candidatePath)
+      ? "archive can run from the candidate worktree"
+      : `candidate change path is missing: ${candidatePath}`
+  };
+}
+
+function finalizationPlan(item, config) {
+  const landing = landingPreflight(config);
+  const archive = archivePreflight(item);
+  const steps = [
+    "stop candidate dev server",
+    "ensure detached landing worktree at main",
+    "fetch origin and reset detached landing to origin/main",
+    "checkout candidate branch and rebase on origin/main",
+    "rerun verification in candidate worktree",
+    "archive OpenSpec from candidate worktree",
+    "squash merge candidate branch into landing",
+    "commit final change",
+    "push landing HEAD to origin/main",
+    "mark queue item finalized"
+  ];
+  return {
+    status: landing.status === "passed" && archive.status === "passed" ? "ready" : "blocked",
+    landing,
+    archive,
+    steps,
+    risks: [
+      landing.status !== "passed" ? landing.message : null,
+      archive.status !== "passed" ? archive.message : null
+    ].filter(Boolean)
+  };
+}
+
 function doStatus(change) {
   const state = loadState();
   const config = loadConfig();
@@ -406,16 +767,23 @@ function formatItem(item) {
 function doDoctor() {
   const config = loadConfig();
   const state = loadState();
+  const rootPreflight = worktreeRootPreflight(config);
+  const landing = landingPreflight(config);
   const checks = [];
   checks.push({ name: "config", status: existsSync(configPath) ? "passed" : "failed", path: configPath });
   checks.push({ name: "git", status: run("git", ["rev-parse", "--show-toplevel"], { capture: true, check: false }).status === 0 ? "passed" : "failed" });
-  checks.push({ name: "worktreeRoot", status: "info", path: resolveRepoPath(config.worktreeRoot) });
-  checks.push({ name: "landingWorktree", status: existsSync(landingWorktree(config)) ? "passed" : "not-created", path: landingWorktree(config) });
+  checks.push({ name: "planningRoot", status: "passed", path: repoRoot });
+  checks.push({ name: "worktreeRoot", status: rootPreflight.status, path: rootPreflight.path, message: rootPreflight.message });
+  checks.push({ name: "landingWorktree", status: landing.status, path: landing.landingPath, message: landing.message });
+  checks.push({ name: "logRoot", status: "passed", path: logRoot(config) });
   for (const item of state.items) {
     checks.push({ name: `item:${item.change}`, status: item.worktreePath && existsSync(item.worktreePath) ? "passed" : "not-created", statusValue: item.status });
   }
   const ok = checks.every((check) => check.status !== "failed");
-  emit({ ok, checks }, checks.map((check) => `${check.name}: ${check.status}${check.path ? ` (${check.path})` : ""}`).join("\n"));
+  emit({ ok, checks }, checks.map((check) => {
+    const detail = [check.path ? `(${check.path})` : null, check.message].filter(Boolean).join(" ");
+    return `${check.name}: ${check.status}${detail ? ` ${detail}` : ""}`;
+  }).join("\n"));
   if (!ok) process.exit(1);
 }
 
@@ -440,11 +808,15 @@ function doApprove(change) {
 function doStart(changeArg) {
   const config = loadConfig();
   const state = loadState();
+  const rootPreflight = worktreeRootPreflight(config);
   const item = changeArg && changeArg !== "--next" ? requireItem(state, changeArg) : nextQueued(state);
   if (!item) fail("No queued item is ready to start.");
   const active = state.items.filter((entry) => entry.status === "active").length;
   if (item.status !== "active" && active >= config.maxActiveImplementations) {
     fail(`Active implementation limit reached (${config.maxActiveImplementations}).`);
+  }
+  if (rootPreflight.status === "warning") {
+    item.worktreeRootWarning = rootPreflight.message;
   }
   assertChangeExists(item.change);
   const conflict = detectConflict(item, state);
@@ -464,10 +836,18 @@ function doStart(changeArg) {
     worktreePath: worktree.worktreePath,
     landingWorktreePath: landingWorktree(config),
     startedAt: item.startedAt || now(),
+    planningBaselineStatus: readStatusEntries(repoRoot).map((entry) => `${entry.code} ${entry.path}`),
     lastSnapshot: { at: now(), source: snapshot.source, target: snapshot.target }
   });
   saveState(state);
-  emit({ ok: true, item, worktree, snapshot }, `Started ${item.change} in ${worktree.worktreePath}`);
+  copyQueueStateToWorktree(item);
+  emit({ ok: true, item, worktree, snapshot, rootPreflight }, [
+    `Started ${item.change} in ${worktree.worktreePath}`,
+    `Branch: ${worktree.branch}`,
+    "Builder preflight:",
+    `  cd ${worktree.worktreePath}`,
+    `  node scripts/openspec-queue.mjs builder-preflight ${item.change}`
+  ].join("\n"));
 }
 
 function detectConflict(item, state) {
@@ -496,53 +876,130 @@ function detectConflict(item, state) {
   return { highRisk: null, lowRisk };
 }
 
-function doPrepareTest(change) {
+function doBuilderPreflight(change) {
+  if (!change) fail("Usage: builder-preflight <change>");
+  const config = loadConfig();
+  const state = loadState();
+  const item = requireItem(state, change);
+  const result = preflightBuilder(item, config, initialCwd);
+  const text = [
+    `Builder preflight for ${change}: ${result.status}`,
+    `Expected worktree: ${result.expected.worktreePath}`,
+    `Expected branch: ${result.expected.branch}`,
+    ...result.checks.map((check) => `  ${check.name}: ${check.status} (expected ${check.expected}, actual ${check.actual})`)
+  ].join("\n");
+  emit({ ok: result.status === "passed", result }, text);
+  if (result.status !== "passed") process.exit(1);
+}
+
+function doSetup(change) {
+  if (!change) fail("Usage: setup <change>");
+  const config = loadConfig();
+  const state = loadState();
+  const item = requireItem(state, change);
+  let setup;
+  try {
+    setup = setupCandidate(item, config);
+  } catch (error) {
+    saveState(state);
+    fail(error.message || String(error), { item });
+  }
+  item.updatedAt = now();
+  saveState(state);
+  emit({ ok: setup.install.status !== "failed", item, setup }, [
+    `Candidate setup for ${change}: ${setup.install.status}`,
+    `Env mode: ${setup.env.mode}`,
+    `Env files prepared: ${setup.env.copied.length || (setup.env.placeholderCreated ? 1 : 0)}`,
+    setup.env.placeholderCreated ? `Placeholder env: ${setup.env.placeholderCreated}` : null,
+    `Dependency install: ${setup.install.status}`
+  ].filter(Boolean).join("\n"));
+}
+
+async function doPrepareTest(change) {
   if (!change) fail("Usage: prepare-test <change>");
   const config = loadConfig();
   const state = loadState();
   const item = requireItem(state, change);
   if (!item.worktreePath) fail(`${change} has no worktree. Run start first.`);
   item.port = choosePort(state, config, item);
+  try {
+    setupCandidate(item, config);
+  } catch (error) {
+    saveState(state);
+    fail(error.message || String(error), { item });
+  }
   const verification = runVerification(item.worktreePath);
   item.lastVerification = { at: now(), ...verification };
   if (verification.status === "passed") {
     const draft = makeDraftCommit(item);
     item.lastDraftCommit = { at: now(), ...draft };
   }
-  const server = startServer(item, state, config);
+  const contamination = planningContamination(item);
+  item.lastPlanningContaminationCheck = { at: now(), ...contamination };
+  const landing = landingPreflight(config);
+  item.lastLandingPreflight = { at: now(), ...landing };
+  const backendBlocked = item.lastSetup?.env?.mode === "placeholder" && changeNeedsBackendTesting(item);
+  const server = verification.status === "passed" && contamination.status === "passed" && landing.status === "passed" && !backendBlocked
+    ? await startServer(item, state, config)
+    : { skipped: true, reason: backendBlocked ? "placeholder-backend-env" : contamination.status !== "passed" ? "planning-checkout-contamination" : landing.status !== "passed" ? "landing-preflight-failed" : "verification-failed", readiness: { status: "stopped" } };
   if (server.pid) item.devServerPid = server.pid;
   item.url = `http://localhost:${item.port}`;
-  item.status = verification.status === "passed" ? "ready-for-test" : "blocked";
-  item.blockedReason = verification.status === "passed" ? undefined : "verification-failed";
+  const serverReady = server.readiness?.status === "reachable" || server.readiness?.status === "dry-run";
+  const serverDryRun = server.readiness?.status === "dry-run";
+  item.server = { at: now(), ...server };
+  item.status = verification.status === "passed" && contamination.status === "passed" && landing.status === "passed" && !backendBlocked && serverReady ? "ready-for-test" : "blocked";
+  item.blockedReason = item.status === "ready-for-test"
+    ? undefined
+    : backendBlocked ? "placeholder-backend-env" : contamination.status !== "passed" ? "planning-checkout-contamination" : landing.status !== "passed" ? "landing-preflight-failed" : verification.status !== "passed" ? "verification-failed" : "server-not-ready";
   item.updatedAt = now();
   saveState(state);
   const text = [
     `Ready status for ${change}: ${item.status}`,
     `Branch: ${item.branch}`,
     `Worktree: ${item.worktreePath}`,
-    `URL: ${item.url}`,
+    serverReady && !serverDryRun ? `URL: ${item.url}` : serverDryRun ? `URL: dry-run only (${item.url} not probed)` : `URL: not ready (${item.blockedReason})`,
     `Verification: ${verification.status}`,
-    server.skipped ? `Dev server: not started (${server.reason})` : `Dev server: ${server.pid ? `pid ${server.pid}` : "already running or dry-run"}`,
+    `Env mode: ${item.lastSetup?.env?.mode || "unknown"}`,
+    `Planning checkout check: ${contamination.status}`,
+    `Landing preflight: ${landing.status} (${landing.strategy})`,
+    server.skipped ? `Dev server: not started (${server.reason})` : `Dev server: ${serverDryRun ? "dry-run, not started" : serverReady ? `reachable at ${item.url}` : `failed (${server.readiness?.reason || server.readiness?.status || "unknown"})`}`,
+    server.logPath ? `Dev server log: ${server.logPath}` : null,
     "",
     "Gate 2:",
     `  approve: node scripts/openspec-queue.mjs finalize ${change} --confirm-gate2`,
     `  reject:  node scripts/openspec-queue.mjs reject ${change}`
-  ].join("\n");
-  emit({ ok: verification.status === "passed", item, server }, text);
-  if (verification.status !== "passed") process.exit(1);
+  ].filter(Boolean).join("\n");
+  emit({ ok: item.status === "ready-for-test", item, server, landing, contamination }, text);
+  if (item.status !== "ready-for-test") process.exit(1);
 }
 
-function doServe(change) {
+async function doServe(change) {
   if (!change) fail("Usage: serve <change>");
   const config = loadConfig();
   const state = loadState();
   const item = requireItem(state, change);
   item.port = choosePort(state, config, item);
-  const server = startServer(item, state, config);
+  try {
+    setupCandidate(item, config);
+  } catch (error) {
+    saveState(state);
+    fail(error.message || String(error), { item });
+  }
+  const server = await startServer(item, state, config);
   if (server.pid) item.devServerPid = server.pid;
   item.url = `http://localhost:${item.port}`;
+  item.server = { at: now(), ...server };
   saveState(state);
-  emit({ ok: !server.skipped, item, server }, server.skipped ? `Server not started: ${server.reason}` : `Serving ${change} at ${item.url}`);
+  const ready = server.readiness?.status === "reachable" || server.readiness?.status === "dry-run";
+  const serverDryRun = server.readiness?.status === "dry-run";
+  emit({ ok: ready, item, server }, server.skipped
+    ? `Server not started: ${server.reason}`
+    : serverDryRun
+      ? `Server dry-run for ${change}; ${item.url} was not started or probed.`
+      : ready
+      ? `Serving ${change} at ${item.url}`
+      : `Server failed readiness for ${change}. Log: ${server.logPath || "(none)"}`);
+  if (!ready) process.exit(1);
 }
 
 function doStop(change) {
@@ -575,14 +1032,27 @@ function doFinalize(change) {
   const item = requireItem(state, change);
   if (!["ready-for-test", "blocked"].includes(item.status)) fail(`${change} is not ready for finalization.`);
   stopServer(item);
+  const plan = finalizationPlan(item, config);
+  item.lastFinalizationPlan = { at: now(), ...plan };
+  if (plan.status !== "ready") {
+    item.status = "blocked";
+    item.blockedReason = "finalization-preflight-failed";
+    saveState(state);
+    fail(`Finalization preflight failed for ${change}.`, { item, plan });
+  }
   const landing = ensureLandingWorktree(config);
   if (worktreeDirty(landing.landingPath)) fail(`Landing worktree is dirty: ${landing.landingPath}`);
   if (!dryRun) {
     run("git", ["fetch", "origin"], { cwd: landing.landingPath });
-    run("git", ["checkout", "main"], { cwd: landing.landingPath });
-    run("git", ["pull", "--ff-only", "origin", "main"], { cwd: landing.landingPath });
+    run("git", ["checkout", "--detach", "origin/main"], { cwd: landing.landingPath });
     run("git", ["checkout", item.branch], { cwd: item.worktreePath });
-    run("git", ["rebase", "main"], { cwd: item.worktreePath });
+    run("git", ["rebase", "origin/main"], { cwd: item.worktreePath });
+  }
+  try {
+    setupCandidate(item, config);
+  } catch (error) {
+    saveState(state);
+    fail(error.message || String(error), { item });
   }
   const verification = runVerification(item.worktreePath);
   item.lastVerification = { at: now(), ...verification };
@@ -593,13 +1063,12 @@ function doFinalize(change) {
     fail(`Verification failed after rebase for ${change}.`, { item });
   }
   if (!dryRun) {
-    run("openspec", ["archive", change], { cwd: item.worktreePath });
+    run("openspec", ["archive", change, "--yes"], { cwd: item.worktreePath });
     run("git", ["add", "-A"], { cwd: item.worktreePath });
     run("git", ["commit", "-m", `Archive ${change}`], { cwd: item.worktreePath, check: false });
-    run("git", ["checkout", "main"], { cwd: landing.landingPath });
     run("git", ["merge", "--squash", item.branch], { cwd: landing.landingPath });
     run("git", ["commit", "-m", finalCommitMessage(change, item.worktreePath)], { cwd: landing.landingPath });
-    run("git", ["push", "origin", "main"], { cwd: landing.landingPath });
+    run("git", ["push", "origin", "HEAD:main"], { cwd: landing.landingPath });
   }
   item.status = "finalized";
   item.finalizedAt = now();
@@ -625,6 +1094,7 @@ function doCleanup(change) {
 }
 
 function doRecover(change) {
+  const config = loadConfig();
   const state = loadState();
   const items = change ? [requireItem(state, change)] : state.items;
   const recovery = items.map((item) => ({
@@ -632,9 +1102,15 @@ function doRecover(change) {
     status: item.status,
     worktreePath: item.worktreePath,
     branch: item.branch,
+    finalizationPlan: item.worktreePath ? finalizationPlan(item, config) : null,
     suggestedActions: recoveryActions(item)
   }));
-  emit({ ok: true, recovery }, recovery.map((entry) => `${entry.change}: ${entry.suggestedActions.join("; ")}`).join("\n") || "No queue items.");
+  emit({ ok: true, recovery }, recovery.map((entry) => [
+    `${entry.change}: ${entry.suggestedActions.join("; ")}`,
+    entry.finalizationPlan ? `  recovery approval: node scripts/openspec-queue.mjs recover-finalize ${entry.change} --confirm-recovery` : null,
+    entry.finalizationPlan ? `  remaining steps: ${entry.finalizationPlan.steps.join("; ")}` : null,
+    entry.finalizationPlan?.risks?.length ? `  risks: ${entry.finalizationPlan.risks.join("; ")}` : null
+  ].filter(Boolean).join("\n")).join("\n") || "No queue items.");
 }
 
 function recoveryActions(item) {
@@ -643,6 +1119,13 @@ function recoveryActions(item) {
   if (item.status === "finalized") return [`cleanup ${item.change}`];
   if (item.status === "queued") return [`start ${item.change}`];
   return ["inspect status"];
+}
+
+function doRecoverFinalize(change) {
+  if (!change) fail("Usage: recover-finalize <change> --confirm-recovery");
+  if (!flags.has("--confirm-recovery")) fail("Recovery finalization requires explicit --confirm-recovery after reviewing the recovery plan.");
+  flags.add("--confirm-gate2");
+  doFinalize(change);
 }
 
 try {
@@ -664,11 +1147,17 @@ try {
     case "start":
       doStart(positional[0] || (flags.has("--next") ? "--next" : undefined));
       break;
+    case "builder-preflight":
+      doBuilderPreflight(positional[0]);
+      break;
+    case "setup":
+      doSetup(positional[0]);
+      break;
     case "prepare-test":
-      doPrepareTest(positional[0]);
+      await doPrepareTest(positional[0]);
       break;
     case "serve":
-      doServe(positional[0]);
+      await doServe(positional[0]);
       break;
     case "stop":
       doStop(positional[0]);
@@ -684,6 +1173,9 @@ try {
       break;
     case "recover":
       doRecover(positional[0]);
+      break;
+    case "recover-finalize":
+      doRecoverFinalize(positional[0]);
       break;
     default:
       usage();
