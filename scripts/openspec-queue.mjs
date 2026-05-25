@@ -7,7 +7,8 @@ import path from "node:path";
 import process from "node:process";
 
 const initialCwd = process.cwd();
-const repoRoot = discoverRepoRoot(initialCwd);
+const currentWorktreeRoot = discoverRepoRoot(initialCwd);
+const repoRoot = discoverCanonicalPlanningRoot(initialCwd, currentWorktreeRoot);
 const queueDir = path.join(repoRoot, ".openspec-queue");
 const configPath = path.join(queueDir, "config.json");
 const statePath = path.join(queueDir, "state.local.json");
@@ -26,6 +27,17 @@ function discoverRepoRoot(cwd) {
     stdio: "pipe"
   });
   return result.status === 0 ? result.stdout.trim() : cwd;
+}
+
+function discoverCanonicalPlanningRoot(cwd, fallbackRoot) {
+  const result = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd,
+    encoding: "utf8",
+    stdio: "pipe"
+  });
+  if (result.status !== 0) return fallbackRoot;
+  const commonDir = result.stdout.trim();
+  return path.basename(commonDir) === ".git" ? path.dirname(commonDir) : fallbackRoot;
 }
 
 function readJson(filePath, fallback) {
@@ -83,12 +95,67 @@ function saveState(state) {
   writeJson(statePath, state);
 }
 
-function copyQueueStateToWorktree(item) {
-  if (!item.worktreePath || !existsSync(statePath)) return;
-  const target = path.join(item.worktreePath, ".openspec-queue", "state.local.json");
-  if (dryRun) return;
-  mkdirSync(path.dirname(target), { recursive: true });
-  copyFileSync(statePath, target);
+function readStateFile(filePath) {
+  try {
+    const state = readJson(filePath, null);
+    if (!state || !Array.isArray(state.items)) return null;
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function legacyStatePathForWorktree(worktreePath) {
+  return path.join(worktreePath, ".openspec-queue", "state.local.json");
+}
+
+function candidateLegacyStatePaths(state, change = null) {
+  const paths = new Set();
+  for (const item of state.items || []) {
+    if (change && item.change !== change) continue;
+    if (item.worktreePath) paths.add(legacyStatePathForWorktree(item.worktreePath));
+  }
+  if (path.resolve(currentWorktreeRoot) !== path.resolve(repoRoot)) {
+    paths.add(legacyStatePathForWorktree(currentWorktreeRoot));
+  }
+  paths.delete(statePath);
+  return [...paths];
+}
+
+function splitStateWarnings(state, change = null) {
+  const warnings = [];
+  for (const legacyPath of candidateLegacyStatePaths(state, change)) {
+    if (!existsSync(legacyPath)) continue;
+    const legacyState = readStateFile(legacyPath);
+    if (!legacyState) continue;
+    const legacyItems = change ? legacyState.items.filter((item) => item.change === change) : legacyState.items;
+    for (const legacyItem of legacyItems) {
+      const canonicalItem = getItem(state, legacyItem.change);
+      warnings.push({
+        change: legacyItem.change,
+        path: legacyPath,
+        candidateUpdatedAt: legacyItem.updatedAt || legacyItem.approvedAt || null,
+        canonicalUpdatedAt: canonicalItem?.updatedAt || canonicalItem?.approvedAt || null,
+        canonicalStatus: canonicalItem?.status || "missing",
+        candidateStatus: legacyItem.status || "unknown",
+        recoverable: !canonicalItem
+          || (canonicalItem.branch === legacyItem.branch
+            && canonicalItem.worktreePath === legacyItem.worktreePath
+            && Date.parse(legacyItem.updatedAt || legacyItem.approvedAt || 0) > Date.parse(canonicalItem.updatedAt || canonicalItem.approvedAt || 0))
+      });
+    }
+  }
+  return warnings;
+}
+
+function findLegacyStateItem(state, change) {
+  for (const legacyPath of candidateLegacyStatePaths(state, change)) {
+    if (!existsSync(legacyPath)) continue;
+    const legacyState = readStateFile(legacyPath);
+    const item = legacyState?.items?.find((entry) => entry.change === change);
+    if (item) return { item, legacyPath };
+  }
+  return null;
 }
 
 function resolveRepoPath(value) {
@@ -119,6 +186,9 @@ function safeRelative(base, target) {
 function repoPaths(config) {
   return {
     planningRoot: repoRoot,
+    currentWorktreeRoot,
+    statePath,
+    configPath,
     worktreeRoot: resolveRepoPath(config.worktreeRoot),
     landingPath: landingWorktree(config),
     logRoot: logRoot(config)
@@ -235,6 +305,7 @@ Commands:
   finalize <change> --confirm-gate2  Archive, squash merge to landing main, push
   cleanup <change>                Remove finalized local resources when safe
   recover [change]                Print safe recovery actions
+  recover-state <change> --confirm-recovery  Import bounded legacy candidate-local queue state
   recover-finalize <change> --confirm-recovery  Run approved finalization recovery
 
 Recovery flags:
@@ -298,12 +369,10 @@ function deriveExpectedTouchAreas(change, base = repoRoot) {
   const keywordAreas = [
     ["supabase", "supabase/"],
     ["rls", "supabase/"],
-    ["auth", "app/lib/supabase"],
-    ["session", "app/lib/supabase"],
     ["server action", "app/app/actions.ts"],
     ["actions.ts", "app/app/actions.ts"],
+    ["package.json", "app/package.json"],
     ["package-lock", "app/package-lock.json"],
-    ["dependency", "app/package.json"],
     ["image generation", "app/lib/"],
     ["ai output parsing", "app/app/actions.ts"],
     ["validation", "validation/"]
@@ -542,26 +611,93 @@ function requiredNodeMajor(config) {
   return Number(config.requiredNodeMajor || 22);
 }
 
-function nodeRuntime(config) {
-  const version = process.versions.node;
-  const major = Number(version.split(".")[0]);
+function nodeMajor(version) {
+  return Number(String(version).replace(/^v/, "").split(".")[0]);
+}
+
+function commandVersion(cmd, cmdArgs, cwd = repoRoot) {
+  let result;
+  try {
+    result = run(cmd, cmdArgs, { cwd, capture: true, check: false });
+  } catch {
+    return null;
+  }
+  if (result.status !== 0) return null;
+  return result.stdout.trim();
+}
+
+function resolveNodeToolchain(config) {
   const required = requiredNodeMajor(config);
-  return {
-    status: major === required ? "passed" : "failed",
-    version: `v${version}`,
-    major,
+  const queueVersion = `v${process.versions.node}`;
+  const pathNodeVersion = commandVersion("node", ["-v"]);
+  const pathNodeMajor = pathNodeVersion ? nodeMajor(pathNodeVersion) : null;
+  const queueMajor = nodeMajor(queueVersion);
+  const base = {
     requiredMajor: required,
+    queueNodeVersion: queueVersion,
+    queueNodeMajor: queueMajor,
+    pathNodeVersion,
+    pathNodeMajor,
     executable: process.execPath,
-    instruction: `Run queue commands with Node ${required}. For this repo, use the Node version from app/.nvmrc before running npm ci, lint, build, or dev server commands.`
+    instruction: `Run queue-managed app commands with Node ${required}. Known-good command shape: fnm exec --using ${required} npm ci`
+  };
+  if (queueMajor === required && pathNodeMajor === required) {
+    return {
+      ...base,
+      status: "passed",
+      mode: "direct",
+      commandPrefix: [],
+      version: pathNodeVersion,
+      major: pathNodeMajor,
+      runner: "direct"
+    };
+  }
+  const fnmVersion = commandVersion("fnm", ["exec", "--using", String(required), "node", "-v"]);
+  if (fnmVersion && nodeMajor(fnmVersion) === required) {
+    return {
+      ...base,
+      status: "passed",
+      mode: "fnm",
+      commandPrefix: ["fnm", "exec", "--using", String(required)],
+      version: fnmVersion,
+      major: required,
+      runner: `fnm exec --using ${required}`
+    };
+  }
+  return {
+    ...base,
+    status: "failed",
+    mode: "unavailable",
+    commandPrefix: null,
+    version: queueVersion,
+    major: queueMajor,
+    runner: null
   };
 }
 
 function assertNodeRuntime(config, action) {
-  const runtime = nodeRuntime(config);
+  const runtime = resolveNodeToolchain(config);
   if (runtime.status !== "passed") {
-    throw new Error(`${action} requires Node ${runtime.requiredMajor}. Current runtime is ${runtime.version} at ${runtime.executable}. ${runtime.instruction}`);
+    throw new Error(`${action} requires Node ${runtime.requiredMajor}. Queue runtime is ${runtime.queueNodeVersion} at ${runtime.executable}; PATH node is ${runtime.pathNodeVersion || "unavailable"}. ${runtime.instruction}`);
   }
   return runtime;
+}
+
+function commandForRuntime(runtime, cmd, cmdArgs) {
+  if (!runtime.commandPrefix?.length) return { cmd, args: cmdArgs, display: `${cmd} ${cmdArgs.join(" ")}`.trim() };
+  const args = [...runtime.commandPrefix.slice(1), cmd, ...cmdArgs];
+  return {
+    cmd: runtime.commandPrefix[0],
+    args,
+    display: [...runtime.commandPrefix, cmd, ...cmdArgs].join(" ")
+  };
+}
+
+function runWithRuntime(runtime, cmd, cmdArgs, options = {}) {
+  const command = commandForRuntime(runtime, cmd, cmdArgs);
+  const result = run(command.cmd, command.args, options);
+  result.displayCommand = command.display;
+  return result;
 }
 
 function writePlaceholderEnv(worktreePath) {
@@ -612,14 +748,15 @@ function setupCandidate(item, config) {
   const env = prepareCandidateEnv(item, config);
   const appDir = path.join(item.worktreePath, "app");
   const installNeeded = needsNpmCi(item.worktreePath);
-  let install = { status: "skipped", reason: "node_modules-present", command: "npm ci" };
+  let install = { status: "skipped", reason: "node_modules-present", command: commandForRuntime(runtime, "npm", ["ci"]).display, runner: runtime.runner };
   if (dryRun) {
-    install = { status: installNeeded ? "dry-run" : "skipped", reason: installNeeded ? "would-run" : "node_modules-present", command: "npm ci" };
+    install = { status: installNeeded ? "dry-run" : "skipped", reason: installNeeded ? "would-run" : "node_modules-present", command: commandForRuntime(runtime, "npm", ["ci"]).display, runner: runtime.runner };
   } else if (installNeeded) {
-    const result = run("npm", ["ci"], { cwd: appDir, capture: true, check: false });
+    const result = runWithRuntime(runtime, "npm", ["ci"], { cwd: appDir, capture: true, check: false });
     install = {
       status: result.status === 0 ? "passed" : "failed",
-      command: "npm ci",
+      command: result.displayCommand,
+      runner: runtime.runner,
       cwd: path.relative(repoRoot, appDir),
       stdout: result.stdout.trim(),
       stderr: result.stderr.trim()
@@ -658,7 +795,7 @@ function changeNeedsBackendTesting(item) {
 
 function runVerification(worktreePath) {
   const config = loadConfig();
-  assertNodeRuntime(config, "Candidate verification");
+  const runtime = assertNodeRuntime(config, "Candidate verification");
   const commands = [
     { id: "lint", cmd: "npm", args: ["run", "lint"], cwd: path.join(worktreePath, "app") },
     { id: "build", cmd: "npm", args: ["run", "build"], cwd: path.join(worktreePath, "app") }
@@ -673,13 +810,19 @@ function runVerification(worktreePath) {
   const results = [];
   for (const commandSpec of commands) {
     if (dryRun) {
-      results.push({ ...commandSpec, status: "dry-run" });
+      results.push({
+        ...commandSpec,
+        command: commandForRuntime(runtime, commandSpec.cmd, commandSpec.args).display,
+        runner: runtime.runner,
+        status: "dry-run"
+      });
       continue;
     }
-    const result = run(commandSpec.cmd, commandSpec.args, { cwd: commandSpec.cwd, capture: true, check: false });
+    const result = runWithRuntime(runtime, commandSpec.cmd, commandSpec.args, { cwd: commandSpec.cwd, capture: true, check: false });
     results.push({
       id: commandSpec.id,
-      command: `${commandSpec.cmd} ${commandSpec.args.join(" ")}`,
+      command: result.displayCommand,
+      runner: runtime.runner,
       cwd: path.relative(repoRoot, commandSpec.cwd),
       status: result.status === 0 ? "passed" : "failed",
       stdout: result.stdout.trim(),
@@ -689,6 +832,7 @@ function runVerification(worktreePath) {
   return {
     status: results.every((result) => result.status === "passed" || result.status === "dry-run") ? "passed" : "failed",
     commands: results,
+    node: runtime,
     changedFiles
   };
 }
@@ -750,10 +894,12 @@ async function startServer(item, state, config) {
     return { skipped: true, reason: "running-server-limit", readiness: { status: "stopped" } };
   }
   if (dryRun) return { dryRun: true, readiness: { status: "dry-run" } };
+  const runtime = assertNodeRuntime(config, "Candidate dev server");
+  const command = commandForRuntime(runtime, "npm", ["run", "dev", "--", "--port", String(item.port)]);
   mkdirSync(logsDir, { recursive: true });
   const out = openSync(logPath, "a");
   const err = openSync(logPath, "a");
-  const child = spawn("npm", ["run", "dev", "--", "--port", String(item.port)], {
+  const child = spawn(command.cmd, command.args, {
     cwd: path.join(item.worktreePath, "app"),
     detached: true,
     stdio: ["ignore", out, err],
@@ -764,7 +910,7 @@ async function startServer(item, state, config) {
   closeSync(err);
   item.devServerPid = child.pid;
   const readiness = await waitForReadiness(item, config);
-  return { pid: child.pid, logPath, readiness };
+  return { pid: child.pid, logPath, readiness, command: command.display, runner: runtime.runner, node: runtime };
 }
 
 function ensureLandingWorktree(config) {
@@ -826,8 +972,17 @@ function makeDraftCommit(item) {
   run("git", ["add", "-A"], { cwd: item.worktreePath });
   const status = capture("git", ["status", "--porcelain"], item.worktreePath, false);
   if (!status) return { created: false, reason: "nothing-to-commit" };
-  const result = run("git", ["commit", "-m", `Draft ${item.change}`], { cwd: item.worktreePath, capture: true, check: false });
-  return { created: result.status === 0, output: [result.stdout, result.stderr].filter(Boolean).join("\n").trim() };
+  const draftMessage = `Draft ${item.change}`;
+  const headSubject = capture("git", ["log", "-1", "--pretty=%s"], item.worktreePath, false);
+  const args = headSubject === draftMessage
+    ? ["commit", "--amend", "--no-edit"]
+    : ["commit", "-m", draftMessage];
+  const result = run("git", args, { cwd: item.worktreePath, capture: true, check: false });
+  return {
+    created: result.status === 0 && headSubject !== draftMessage,
+    amended: result.status === 0 && headSubject === draftMessage,
+    output: [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
+  };
 }
 
 function finalCommitMessage(change, worktreePath) {
@@ -1064,18 +1219,26 @@ function doDoctor() {
   const state = loadState();
   const rootPreflight = worktreeRootPreflight(config);
   const landing = landingPreflight(config);
+  const node = resolveNodeToolchain(config);
+  const splitWarnings = splitStateWarnings(state);
   const checks = [];
   checks.push({ name: "config", status: existsSync(configPath) ? "passed" : "failed", path: configPath });
   checks.push({ name: "git", status: run("git", ["rev-parse", "--show-toplevel"], { capture: true, check: false }).status === 0 ? "passed" : "failed" });
   checks.push({ name: "planningRoot", status: "passed", path: repoRoot });
+  checks.push({ name: "currentWorktreeRoot", status: "passed", path: currentWorktreeRoot });
+  checks.push({ name: "queueState", status: "passed", path: statePath });
   checks.push({ name: "worktreeRoot", status: rootPreflight.status, path: rootPreflight.path, message: rootPreflight.message });
   checks.push({ name: "landingWorktree", status: landing.status, path: landing.landingPath, message: landing.message });
   checks.push({ name: "logRoot", status: "passed", path: logRoot(config) });
+  checks.push({ name: "nodeToolchain", status: node.status, path: node.runner || "(unavailable)", message: `queue ${node.queueNodeVersion}, PATH ${node.pathNodeVersion || "unavailable"}, required ${node.requiredMajor}` });
+  for (const warning of splitWarnings) {
+    checks.push({ name: `splitState:${warning.change}`, status: "warning", path: warning.path, message: warning.recoverable ? "candidate-local queue state can be recovered explicitly" : "candidate-local queue state requires manual inspection" });
+  }
   for (const item of state.items) {
     checks.push({ name: `item:${item.change}`, status: item.worktreePath && existsSync(item.worktreePath) ? "passed" : "not-created", statusValue: item.status });
   }
   const ok = checks.every((check) => check.status !== "failed");
-  emit({ ok, checks }, checks.map((check) => {
+  emit({ ok, checks, paths: repoPaths(config), node, splitStateWarnings: splitWarnings }, checks.map((check) => {
     const detail = [check.path ? `(${check.path})` : null, check.message].filter(Boolean).join(" ");
     return `${check.name}: ${check.status}${detail ? ` ${detail}` : ""}`;
   }).join("\n"));
@@ -1137,7 +1300,6 @@ function doStart(changeArg) {
     lastSnapshot: { at: now(), source: snapshot.source, target: snapshot.target }
   });
   saveState(state);
-  copyQueueStateToWorktree(item);
   emit({ ok: true, item, worktree, snapshot, rootPreflight }, [
     `Started ${item.change} in ${worktree.worktreePath}`,
     `Branch: ${worktree.branch}`,
@@ -1189,7 +1351,6 @@ function doBuilderPreflight(change) {
     };
     item.updatedAt = now();
     saveState(state);
-    copyQueueStateToWorktree(item);
   }
   const text = [
     `Builder preflight for ${change}: ${result.status}`,
@@ -1221,6 +1382,7 @@ function doSetup(change) {
     `Env mode: ${setup.env.mode}`,
     `Env files prepared: ${setup.env.copied.length || (setup.env.placeholderCreated ? 1 : 0)}`,
     setup.env.placeholderCreated ? `Placeholder env: ${setup.env.placeholderCreated}` : null,
+    `Node runner: ${setup.node.runner} (${setup.node.version})`,
     `Dependency install: ${setup.install.status}`
   ].filter(Boolean).join("\n"));
 }
@@ -1465,7 +1627,12 @@ function doCleanup(change) {
 function doRecover(change) {
   const config = loadConfig();
   const state = loadState();
-  const items = change ? [requireItem(state, change)] : state.items;
+  const warnings = splitStateWarnings(state, change);
+  const item = change ? getItem(state, change) : null;
+  if (change && !item && warnings.length === 0) {
+    fail(`No queue item or split-state warning found for '${change}'.`);
+  }
+  const items = change ? (item ? [item] : []) : state.items;
   const recovery = items.map((item) => ({
     change: item.change,
     status: item.status,
@@ -1473,10 +1640,20 @@ function doRecover(change) {
     branch: item.branch,
     finalizationSteps: item.finalizationSteps || null,
     finalizationPlan: item.worktreePath ? finalizationPlan(item, config) : null,
+    splitStateWarnings: warnings.filter((warning) => warning.change === item.change),
     suggestedActions: recoveryActions(item)
   }));
-  emit({ ok: true, recovery }, recovery.map((entry) => [
+  const splitOnlyText = change && recovery.length === 0 && warnings.length
+    ? [
+      `No canonical queue item found for ${change}.`,
+      `  split state: ${warnings.map((warning) => warning.path).join(", ")}`,
+      warnings.some((warning) => warning.recoverable) ? `  state recovery: node scripts/openspec-queue.mjs recover-state ${change} --confirm-recovery` : null
+    ].filter(Boolean).join("\n")
+    : null;
+  emit({ ok: true, recovery, splitStateWarnings: warnings }, splitOnlyText || recovery.map((entry) => [
     `${entry.change}: ${entry.suggestedActions.join("; ")}`,
+    entry.splitStateWarnings.length ? `  split state: ${entry.splitStateWarnings.map((warning) => warning.path).join(", ")}` : null,
+    entry.splitStateWarnings.some((warning) => warning.recoverable) ? `  state recovery: node scripts/openspec-queue.mjs recover-state ${entry.change} --confirm-recovery` : null,
     entry.finalizationPlan ? `  recovery approval: node scripts/openspec-queue.mjs recover-finalize ${entry.change} --confirm-recovery` : null,
     entry.finalizationPlan ? `  remaining steps: ${entry.finalizationPlan.steps.join("; ")}` : null,
     entry.finalizationPlan?.risks?.length ? `  risks: ${entry.finalizationPlan.risks.join("; ")}` : null
@@ -1489,6 +1666,62 @@ function recoveryActions(item) {
   if (item.status === "finalized") return [`cleanup ${item.change}`];
   if (item.status === "queued") return [`start ${item.change}`];
   return ["inspect status"];
+}
+
+function doRecoverState(change) {
+  if (!change) fail("Usage: recover-state <change> --confirm-recovery");
+  if (!flags.has("--confirm-recovery")) fail("State recovery requires explicit --confirm-recovery after reviewing split-state warnings.");
+  const state = loadState();
+  const legacy = findLegacyStateItem(state, change);
+  if (!legacy) fail(`No legacy candidate-local queue state found for '${change}'.`);
+  const canonicalItem = getItem(state, change);
+  const legacyItem = legacy.item;
+  let action = null;
+  if (!canonicalItem) {
+    state.items.push({
+      ...legacyItem,
+      history: [
+        ...(legacyItem.history || []),
+        { at: now(), status: legacyItem.status, event: "recovered-split-state" }
+      ],
+      recoveredSplitState: {
+        at: now(),
+        sourcePath: legacy.legacyPath,
+        previousCanonicalUpdatedAt: null
+      },
+      updatedAt: now()
+    });
+    action = "imported-missing-canonical-item";
+  } else if (
+    canonicalItem.branch === legacyItem.branch
+    && canonicalItem.worktreePath === legacyItem.worktreePath
+    && Date.parse(legacyItem.updatedAt || legacyItem.approvedAt || 0) > Date.parse(canonicalItem.updatedAt || canonicalItem.approvedAt || 0)
+  ) {
+    const index = state.items.findIndex((item) => item.change === change);
+    state.items[index] = {
+      ...legacyItem,
+      history: [
+        ...(legacyItem.history || []),
+        { at: now(), status: legacyItem.status, event: "recovered-split-state" }
+      ],
+      recoveredSplitState: {
+        at: now(),
+        sourcePath: legacy.legacyPath,
+        previousCanonicalUpdatedAt: canonicalItem.updatedAt || canonicalItem.approvedAt || null
+      },
+      updatedAt: now()
+    };
+    action = "replaced-with-newer-matching-candidate-item";
+  } else {
+    fail(`Refusing to import split state for '${change}' because the canonical and candidate-local records do not match or candidate state is not newer.`, {
+      canonicalItem,
+      legacyItem,
+      legacyPath: legacy.legacyPath
+    });
+  }
+  saveState(state);
+  const item = requireItem(state, change);
+  emit({ ok: true, action, item, legacyPath: legacy.legacyPath }, `Recovered queue state for ${change}: ${action} from ${legacy.legacyPath}`);
 }
 
 function doRecoverFinalize(change) {
@@ -1543,6 +1776,9 @@ try {
       break;
     case "recover":
       doRecover(positional[0]);
+      break;
+    case "recover-state":
+      doRecoverState(positional[0]);
       break;
     case "recover-finalize":
       doRecoverFinalize(positional[0]);
