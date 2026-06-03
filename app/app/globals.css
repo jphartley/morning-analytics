@@ -14,6 +14,12 @@
   --accent-hover: #6d28d9;
   --accent-soft: #f5f3ff;
   --border: #e8e4df;
+  --error: #dc2626;
+  --error-strong: #991b1b;
+  --error-soft: #fee2e2;
+  --error-soft-subtle: #fef2f2;
+  --error-outline: #fca5a5;
+  --error-outline-subtle: #fecaca;
 }
 
 /* 2. Moss Garden (emerald) */
@@ -230,6 +236,12 @@
   --accent-hover: #8b5cf6;
   --accent-soft: #2d2b4a;
   --border: #33335a;
+  --error: #f87171;
+  --error-strong: #fecaca;
+  --error-soft: #4c1d1d;
+  --error-soft-subtle: #3f1d1d;
+  --error-outline: #b91c1c;
+  --error-outline-subtle: #991b1b;
 }
 
 /* 20. Sandstorm */
@@ -253,6 +265,12 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
   --color-outline: var(--border);
+  --color-error: var(--error);
+  --color-error-strong: var(--error-strong);
+  --color-error-soft: var(--error-soft);
+  --color-error-soft-subtle: var(--error-soft-subtle);
+  --color-error-outline: var(--error-outline);
+  --color-error-outline-subtle: var(--error-outline-subtle);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --animate-fade-in-up: fade-in-up 300ms ease-out both;
