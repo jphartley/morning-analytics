@@ -415,11 +415,11 @@ export default function Home() {
 
       {/* Save error toast */}
       {saveError && (
-        <div className="fixed bottom-4 right-4 bg-red-100 border border-red-300 text-red-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+        <div className="fixed bottom-4 right-4 bg-error-soft-strong border border-error-outline-strong text-error-emphasis px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
           <span className="text-sm">{saveError}</span>
           <button
             onClick={() => setSaveError(null)}
-            className="text-red-600 hover:text-red-800 font-bold"
+            className="text-error hover:text-error-emphasis font-bold"
           >
             ×
           </button>
