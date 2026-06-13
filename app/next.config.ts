@@ -3,8 +3,13 @@ import { dirname } from "path";
 import { fileURLToPath } from "url";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
+const tracedRuntimeAssets = ["./prompts/**/*", "./public/mock-images/**/*"];
 
 const nextConfig: NextConfig = {
+  output: "standalone",
+  outputFileTracingIncludes: {
+    "/": tracedRuntimeAssets,
+  },
   turbopack: {
     root: currentDir,
   },
