@@ -35,7 +35,7 @@ This document tracks technical decisions deferred from MVP and features planned 
 ## Design & Palette System (from design-palette-tokens)
 
 **Resolved:** Flash of default palette on page load — stored palette is applied before first paint; removed from open debt.
-**Resolved:** Error state colors tokenized — `ErrorState.tsx` and the save-error toast now use semantic error tokens instead of hardcoded red utility classes.
+**Resolved:** Error state colors tokenized — reusable error UI, auth-form errors, history errors, and the save-error toast now use semantic error tokens instead of hardcoded red utility classes.
 
 - [ ] **Palette preference not synced to database**: Palette selection is localStorage-only. Resets if user clears browser data or uses a different device. Consider syncing to user profile in Supabase if cross-device persistence is desired.
 - [ ] **No system-preference dark mode**: The Midnight palette provides one dark option, but there's no `prefers-color-scheme` media query integration. Full system-preference dark mode support can be added later.
