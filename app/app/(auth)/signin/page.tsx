@@ -72,7 +72,7 @@ export default function SigninPage() {
         <p className="text-center text-ink-muted mb-6">Welcome back to Morning Analytics</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-error-soft border border-error-border rounded text-error-ink text-sm">
             {error}
           </div>
         )}
