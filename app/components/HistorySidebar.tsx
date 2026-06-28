@@ -80,7 +80,7 @@ export function HistorySidebar({
         )}
 
         {error && (
-          <div className="p-4 text-center text-red-600 text-sm">
+          <div className="p-4 text-center text-error-text text-sm">
             {error}
           </div>
         )}
