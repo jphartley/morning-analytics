@@ -12,6 +12,7 @@ import { RegenerateButton } from "@/components/RegenerateButton";
 import { LoadingState, ANALYSIS_MESSAGES, IMAGE_MESSAGES } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
 import { Lightbox } from "@/components/Lightbox";
+import { ImageGenerationDiagnosticsDisclosure } from "@/components/ImageGenerationDiagnosticsDisclosure";
 import { ModelPicker } from "@/components/ModelPicker";
 import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar } from "@/components/HistorySidebar";
@@ -20,6 +21,7 @@ import { WelcomeEmptyState } from "@/components/WelcomeEmptyState";
 import { useAuth } from "@/lib/useAuth";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { omitMarkdownNode } from "@/lib/markdown-props";
+import { ImageGenerationDiagnostics } from "@/lib/image-generation-diagnostics";
 
 type AppState = "idle" | "analyzing" | "text-ready" | "complete" | "error" | "viewing-history";
 
@@ -59,6 +61,10 @@ export default function Home() {
   const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [imageGenerationStatus, setImageGenerationStatus] = useState<string | null>(null);
+  const [imageGenerationDiagnostics, setImageGenerationDiagnostics] = useState<ImageGenerationDiagnostics | null>(null);
+  const [imageGenerationStartedAt, setImageGenerationStartedAt] = useState<number | null>(null);
+  const [imageGenerationElapsedSeconds, setImageGenerationElapsedSeconds] = useState<number | null>(null);
 
   // Auto-dismiss success toast
   useEffect(() => {
@@ -66,6 +72,16 @@ export default function Home() {
     const timer = setTimeout(() => setSuccessToast(null), 3000);
     return () => clearTimeout(timer);
   }, [successToast]);
+
+  useEffect(() => {
+    if (state !== "text-ready" || !imageGenerationStartedAt) return;
+
+    const timer = setInterval(() => {
+      setImageGenerationElapsedSeconds(Math.max(0, Math.floor((Date.now() - imageGenerationStartedAt) / 1000)));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [imageGenerationStartedAt, state]);
 
   const handleModelChange = useCallback((modelId: string) => {
     setSelectedModel(modelId);
@@ -84,6 +100,11 @@ export default function Home() {
     setState("analyzing");
     setError(null);
     setSaveError(null);
+    setImageUrls([]);
+    setImageGenerationStatus(null);
+    setImageGenerationDiagnostics(null);
+    setImageGenerationStartedAt(null);
+    setImageGenerationElapsedSeconds(null);
     setSelectedHistoryId(null);
     setHistoryViewData(null);
 
@@ -108,19 +129,32 @@ export default function Home() {
       let imageGenerationErrorMessage: string | null = null;
       let analysisId: string | undefined;
       if (textResult.imagePrompt) {
+        setImageGenerationStatus("Image generation request is still running.");
+        setImageGenerationStartedAt(Date.now());
+        setImageGenerationElapsedSeconds(0);
         const imageResult = await generateImages(textResult.imagePrompt, user!.id);
+        setImageGenerationStartedAt(null);
+        setImageGenerationElapsedSeconds(null);
+        setImageGenerationDiagnostics(imageResult.diagnostics || null);
 
         if (imageResult.success && imageResult.imageUrls) {
           setImageUrls(imageResult.imageUrls);
           imagePaths = imageResult.imagePaths || [];
           analysisId = imageResult.analysisId;
+          setImageGenerationStatus(imageResult.uploadError
+            ? "Images generated, but storage upload needs attention."
+            : "Images generated successfully.");
           if (imageResult.uploadError) {
             uploadErrorMessage = imageResult.uploadError;
           }
         } else if (!imageResult.success) {
           imageGenerationErrorMessage = imageResult.error || "Failed to generate images";
           analysisId = imageResult.analysisId;
+          setImageGenerationStatus(imageGenerationErrorMessage);
         }
+      } else {
+        setImageGenerationStartedAt(null);
+        setImageGenerationElapsedSeconds(null);
       }
 
       setState("complete");
@@ -159,6 +193,10 @@ export default function Home() {
     setImageUrls([]);
     setError(null);
     setSaveError(null);
+    setImageGenerationStatus(null);
+    setImageGenerationDiagnostics(null);
+    setImageGenerationStartedAt(null);
+    setImageGenerationElapsedSeconds(null);
   };
 
   const handleNewAnalysis = () => {
@@ -168,6 +206,10 @@ export default function Home() {
     setImageUrls([]);
     setError(null);
     setSaveError(null);
+    setImageGenerationStatus(null);
+    setImageGenerationDiagnostics(null);
+    setImageGenerationStartedAt(null);
+    setImageGenerationElapsedSeconds(null);
     setSelectedHistoryId(null);
     setHistoryViewData(null);
     setCurrentAnalysisId(null);
@@ -178,6 +220,10 @@ export default function Home() {
     setSelectedHistoryId(id);
     setState("viewing-history");
     setError(null);
+    setImageGenerationStatus(null);
+    setImageGenerationDiagnostics(null);
+    setImageGenerationStartedAt(null);
+    setImageGenerationElapsedSeconds(null);
 
     const result = await getAnalysisById(id);
 
@@ -211,8 +257,15 @@ export default function Home() {
 
     setIsRegenerating(true);
     setSaveError(null);
+    setImageGenerationStatus("Requesting four more Midjourney images.");
+    setImageGenerationDiagnostics(null);
+    setImageGenerationStartedAt(Date.now());
+    setImageGenerationElapsedSeconds(0);
 
     const result = await regenerateImages(analysisId, user.id);
+    setImageGenerationStartedAt(null);
+    setImageGenerationElapsedSeconds(null);
+    setImageGenerationDiagnostics(result.diagnostics || null);
 
     if (result.success && result.imageUrls) {
       if (state === "viewing-history" && historyViewData) {
@@ -227,11 +280,15 @@ export default function Home() {
       }
       if (result.uploadError) {
         setSaveError(result.uploadError);
+        setImageGenerationStatus("Images regenerated, but storage update needs attention.");
       } else {
+        setImageGenerationStatus("Images regenerated successfully.");
         setSuccessToast("4 new images added");
       }
     } else {
-      setSaveError(result.error || "Failed to regenerate images");
+      const message = result.error || "Failed to regenerate images";
+      setImageGenerationStatus(message);
+      setSaveError(message);
     }
 
     setIsRegenerating(false);
@@ -309,7 +366,18 @@ export default function Home() {
                 <div className="w-full">
                   <h2 className="text-xl font-semibold text-ink mb-4">Generated Images</h2>
                   <div className="bg-surface border border-outline rounded-lg">
-                    <LoadingState messages={IMAGE_MESSAGES} durationHint="Usually takes about a minute" />
+                    <LoadingState
+                      messages={IMAGE_MESSAGES}
+                      durationHint="Usually takes about a minute"
+                    />
+                  </div>
+                  <div className="mt-2">
+                    <ImageGenerationDiagnosticsDisclosure
+                      diagnostics={null}
+                      statusMessage={imageGenerationStatus}
+                      pendingStartedAt={imageGenerationStartedAt}
+                      pendingElapsedSeconds={imageGenerationElapsedSeconds}
+                    />
                   </div>
                 </div>
               )}
@@ -317,6 +385,18 @@ export default function Home() {
               {state === "complete" && (
                 <>
                   <ImageGrid imageUrls={imageUrls} onImageClick={handleImageClick} />
+                  {imageGenerationStatus && imageUrls.length === 0 && (
+                    <div className="rounded-lg border border-outline bg-surface p-4">
+                      <h2 className="text-xl font-semibold text-ink mb-2">Generated Images</h2>
+                      <p className="text-sm text-ink-muted">{imageGenerationStatus}</p>
+                    </div>
+                  )}
+                  <ImageGenerationDiagnosticsDisclosure
+                    diagnostics={imageGenerationDiagnostics}
+                    statusMessage={imageGenerationStatus}
+                    pendingStartedAt={imageGenerationStartedAt}
+                    pendingElapsedSeconds={imageGenerationElapsedSeconds}
+                  />
                   {currentImagePrompt && imageUrls.length > 0 && (
                     <ImagePromptDisclosure imagePrompt={currentImagePrompt} />
                   )}
@@ -400,6 +480,12 @@ export default function Home() {
                   maxImages={MAX_IMAGES}
                 />
               )}
+              <ImageGenerationDiagnosticsDisclosure
+                diagnostics={imageGenerationDiagnostics}
+                statusMessage={imageGenerationStatus}
+                pendingStartedAt={imageGenerationStartedAt}
+                pendingElapsedSeconds={imageGenerationElapsedSeconds}
+              />
             </div>
           )}
         </main>

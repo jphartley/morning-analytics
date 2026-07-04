@@ -1,3 +1,9 @@
+## Purpose
+
+Define loading feedback behavior for analysis and image generation states.
+
+## Requirements
+
 ### Requirement: Display rotating status messages during loading
 
 The LoadingState component SHALL cycle through an array of status messages at a configurable interval (default 7 seconds). Messages SHALL transition with a fade effect.

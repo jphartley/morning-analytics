@@ -2,6 +2,7 @@ import {
   getServerSupabase,
   AnalysisInsert,
 } from "./supabase";
+import { ImageGenerationDiagnosticsRecorder } from "./image-generation-diagnostics";
 
 const BUCKET_NAME = "analysis-images";
 
@@ -36,11 +37,17 @@ export async function uploadImagesToStorage(
   analysisId: string,
   imageDataUrls: string[],
   userId: string,
-  startIndex: number = 0
+  startIndex: number = 0,
+  diagnostics?: ImageGenerationDiagnosticsRecorder
 ): Promise<{ paths: string[]; error?: string }> {
   const supabase = getServerSupabase();
   const paths: string[] = [];
   let hasFailures = false;
+
+  diagnostics?.add("upload", "info", "Uploading split images to Supabase Storage.", {
+    imageCount: imageDataUrls.length,
+    startIndex,
+  });
 
   for (let i = 0; i < imageDataUrls.length; i++) {
     const { buffer, contentType } = base64ToBuffer(imageDataUrls[i]);
@@ -60,27 +67,50 @@ export async function uploadImagesToStorage(
       if (!error) {
         paths.push(path);
         lastError = null;
+        diagnostics?.add("upload", "success", "Uploaded image to Supabase Storage.", {
+          index: startIndex + i,
+          attempt: attempt + 1,
+          contentType,
+          bytes: buffer.byteLength,
+        });
         break;
       }
 
       lastError = new Error(error.message);
       if (attempt === 0) {
         console.warn(`Image upload failed, retrying: ${error.message}`);
+        diagnostics?.add("upload", "warning", "Image upload failed; retrying once.", {
+          index: startIndex + i,
+          attempt: attempt + 1,
+          error: error.message,
+        });
       }
     }
 
     if (lastError) {
       console.error(`Failed to upload image ${i} after retry:`, lastError);
+      diagnostics?.add("upload", "error", "Image upload failed after retry.", {
+        index: startIndex + i,
+        error: lastError.message,
+      });
       hasFailures = true;
     }
   }
 
   if (hasFailures) {
+    diagnostics?.add("upload", "error", "One or more image uploads failed.", {
+      uploadedCount: paths.length,
+      expectedCount: imageDataUrls.length,
+    });
     return {
       paths: [],
       error: "Image upload failed; analysis will be saved without images.",
     };
   }
+
+  diagnostics?.add("upload", "success", "All split images uploaded to Supabase Storage.", {
+    uploadedCount: paths.length,
+  });
 
   return { paths };
 }

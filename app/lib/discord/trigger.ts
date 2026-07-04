@@ -1,3 +1,9 @@
+import {
+  describePrompt,
+  ImageGenerationDiagnosticsRecorder,
+  redactId,
+} from "@/lib/image-generation-diagnostics";
+
 export interface TriggerResult {
   success: boolean;
   nonce: string;
@@ -6,12 +12,19 @@ export interface TriggerResult {
 
 const MOCK_DELAY_MS = 500;
 
-export async function triggerImagine(imagePrompt: string): Promise<TriggerResult> {
+export async function triggerImagine(
+  imagePrompt: string,
+  diagnostics?: ImageGenerationDiagnosticsRecorder
+): Promise<TriggerResult> {
   const useMocks = process.env.USE_AI_MOCKS === "true";
   const nonce = Date.now().toString();
 
   if (useMocks) {
     await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
+    diagnostics?.add("trigger", "success", "Mock image trigger completed.", {
+      nonce: redactId(nonce),
+      ...describePrompt(imagePrompt),
+    });
     console.log("[MOCK] Discord /imagine triggered with prompt:", imagePrompt.slice(0, 50) + "...");
     return {
       success: true,
@@ -26,7 +39,22 @@ export async function triggerImagine(imagePrompt: string): Promise<TriggerResult
   const midjourneyAppId = process.env.MIDJOURNEY_APP_ID || "936929561302675456";
   const imagineCommandId = process.env.MIDJOURNEY_IMAGINE_COMMAND_ID || "938956540159881230";
 
+  diagnostics?.add("trigger", "info", "Preparing Discord /imagine interaction.", {
+    guildId: redactId(guildId),
+    channelId: redactId(channelId),
+    midjourneyAppId: redactId(midjourneyAppId),
+    imagineCommandId: redactId(imagineCommandId),
+    nonce: redactId(nonce),
+    ...describePrompt(imagePrompt),
+  });
+
   if (!userToken || !guildId || !channelId) {
+    diagnostics?.add("trigger", "error", "Discord trigger configuration is missing.", {
+      hasUserToken: Boolean(userToken),
+      hasGuildId: Boolean(guildId),
+      hasChannelId: Boolean(channelId),
+    });
+
     return {
       success: false,
       nonce,
@@ -87,6 +115,12 @@ export async function triggerImagine(imagePrompt: string): Promise<TriggerResult
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Discord API error:", response.status, errorText);
+      diagnostics?.add("trigger", "error", "Discord rejected the /imagine interaction.", {
+        status: response.status,
+        statusText: response.statusText,
+        responsePreview: errorText.slice(0, 120),
+      });
+
       return {
         success: false,
         nonce,
@@ -95,12 +129,21 @@ export async function triggerImagine(imagePrompt: string): Promise<TriggerResult
     }
 
     console.log("[REAL] Discord /imagine triggered with nonce:", nonce);
+    diagnostics?.add("trigger", "success", "Discord accepted the /imagine interaction.", {
+      status: response.status,
+      nonce: redactId(nonce),
+    });
+
     return {
       success: true,
       nonce,
     };
   } catch (error) {
     console.error("Discord trigger error:", error);
+    diagnostics?.add("trigger", "error", "Discord trigger request failed.", {
+      error: error instanceof Error ? error.message : "Unknown trigger error",
+    });
+
     return {
       success: false,
       nonce,
