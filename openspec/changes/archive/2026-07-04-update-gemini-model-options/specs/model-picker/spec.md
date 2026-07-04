@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Display model selection options
 
@@ -57,6 +57,8 @@ The system SHALL pass the selected model ID to the `analyzeText` server action w
 - **WHEN** user submits journal text for analysis
 - **THEN** system calls `analyzeText` with the currently selected model ID
 - **AND** the Gemini API call uses that model ID
+
+## ADDED Requirements
 
 ### Requirement: Configure extended thinking for supported models
 

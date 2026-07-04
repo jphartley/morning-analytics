@@ -15,7 +15,7 @@
     "fix:lockfile-registry": "node scripts/fix-lockfile-registry.mjs"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^2.10.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.95.3",
     "@tiptap/core": "^3.19.0",

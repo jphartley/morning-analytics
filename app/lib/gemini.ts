@@ -1,8 +1,12 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-import { DEFAULT_MODEL_ID } from "./models";
+import { DEFAULT_MODEL_ID, getSupportedGeminiModel } from "./models";
+
+type AppThinkingLevel = NonNullable<
+  ReturnType<typeof getSupportedGeminiModel>["thinking"]
+>["level"];
 
 export interface AnalysisResult {
   analysisText: string;
@@ -79,6 +83,21 @@ function getPromptForPersona(persona: string = "jungian"): string {
   return personas[persona];
 }
 
+function toGenAIThinkingLevel(level: AppThinkingLevel): ThinkingLevel {
+  switch (level) {
+    case "minimal":
+      return ThinkingLevel.MINIMAL;
+    case "low":
+      return ThinkingLevel.LOW;
+    case "medium":
+      return ThinkingLevel.MEDIUM;
+    case "high":
+      return ThinkingLevel.HIGH;
+    default:
+      return ThinkingLevel.THINKING_LEVEL_UNSPECIFIED;
+  }
+}
+
 export async function analyzeWithGemini(
   journalText: string,
   modelId?: string,
@@ -101,16 +120,34 @@ export async function analyzeWithGemini(
     throw new Error("GEMINI_API_KEY is not configured");
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const effectiveModelId = modelId || process.env.GEMINI_MODEL || DEFAULT_MODEL_ID;
+  const genAI = new GoogleGenAI({ apiKey });
+  const requestedModelId = modelId || process.env.GEMINI_MODEL || DEFAULT_MODEL_ID;
+  const effectiveModel = getSupportedGeminiModel(requestedModelId);
+
+  if (requestedModelId !== effectiveModel.id) {
+    console.warn(
+      `[GEMINI] Unsupported model "${requestedModelId}". Falling back to ${effectiveModel.id}.`
+    );
+  }
+
   const systemPrompt = getPromptForPersona(persona);
-  const model = genAI.getGenerativeModel({
-    model: effectiveModelId,
-    systemInstruction: systemPrompt,
+
+  const result = await genAI.models.generateContent({
+    model: effectiveModel.id,
+    contents: journalText,
+    config: {
+      systemInstruction: systemPrompt,
+      ...(effectiveModel.thinking?.supported && effectiveModel.thinking.level
+        ? {
+            thinkingConfig: {
+              thinkingLevel: toGenAIThinkingLevel(effectiveModel.thinking.level),
+            },
+          }
+        : {}),
+    },
   });
 
-  const result = await model.generateContent(journalText);
-  const response = result.response.text();
+  const response = result.text || "";
 
   return parseResponse(response);
 }

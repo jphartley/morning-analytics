@@ -13,6 +13,14 @@ export interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function isInvalidRefreshTokenError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /invalid refresh token|refresh token not found/i.test(error.message);
+}
+
 export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const supabase = getBrowserSupabase();
   const router = useRouter();
@@ -21,6 +29,9 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const publicPaths = ['/signin', '/signup'];
+    const isPublicPath = publicPaths.includes(pathname);
+
     const checkSession = async () => {
       try {
         const {
@@ -30,14 +41,22 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         setUser(session?.user || null);
 
         if (!session) {
-          const publicPaths = ['/signin', '/signup'];
-          const isPublicPath = publicPaths.includes(pathname);
-
           if (!isPublicPath) {
             router.push('/signin');
           }
         }
       } catch (error) {
+        if (isInvalidRefreshTokenError(error)) {
+          await supabase.auth.signOut({ scope: 'local' });
+          setUser(null);
+
+          if (!isPublicPath) {
+            router.push('/signin');
+          }
+
+          return;
+        }
+
         console.error('AuthSessionProvider: Error checking session:', error);
       } finally {
         setLoading(false);
