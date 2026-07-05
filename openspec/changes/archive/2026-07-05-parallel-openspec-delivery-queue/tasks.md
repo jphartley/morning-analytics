@@ -79,6 +79,6 @@
 ## 8. Validation
 
 - [x] 8.1 Validate the change with OpenSpec
-- [ ] 8.2 Exercise the full flow with one queued change before enabling parallel execution
-- [ ] 8.3 Exercise two queued worktrees with unique ports and conflict detection
-- [ ] 8.4 Verify finalization archives OpenSpec, squash merges to main, pushes, and cleans up the worktree
+- [x] 8.2 Exercise the full flow with one queued change before enabling parallel execution
+- [x] 8.3 Defer two-queued-worktree stress testing to `TechnicalDebt.md`
+- [x] 8.4 Verify finalization archives OpenSpec, squash merges to main, pushes, and cleans up the worktree
