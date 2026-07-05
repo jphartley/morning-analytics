@@ -1,8 +1,5 @@
-# image-prompt-disclosure Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change add-image-prompt-toggle. Update Purpose after archive.
-## Requirements
 ### Requirement: Reveal generated image prompt
 The system SHALL allow users to reveal and hide the image prompt associated with generated images in insight and test modes. The system SHALL hide image prompt disclosure in quiet mode.
 
@@ -44,4 +41,3 @@ The system SHALL provide a way to copy a revealed image prompt when browser clip
 - **THEN** a copy control is available with the prompt text
 - **WHEN** the user activates the copy control
 - **THEN** the system copies the image prompt text to the clipboard
-

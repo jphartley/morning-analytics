@@ -9,7 +9,7 @@ interface ModelPickerProps {
   onModelChange: (modelId: string) => void;
 }
 
-function getStoredModel(): string {
+export function getStoredModel(): string {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
       const stored = localStorage.getItem(STORAGE_KEY);

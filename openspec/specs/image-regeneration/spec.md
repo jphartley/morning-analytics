@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+Enable users to regenerate images for an existing analysis while preserving prior images and enforcing per-analysis limits.
+## Requirements
 ### Requirement: Regenerate images for an existing analysis
 
 The system SHALL allow users to regenerate images for any analysis that has a stored image prompt, accumulating new images alongside existing ones.
@@ -77,3 +79,21 @@ The system SHALL prevent multiple simultaneous regeneration requests for the sam
 
 - **WHEN** regeneration finishes (success or failure)
 - **THEN** the button re-enables (subject to cap check)
+
+### Requirement: Preserve regeneration access across view modes
+The system SHALL keep image regeneration controls available across quiet, insight, and test modes whenever regeneration is possible.
+
+#### Scenario: Regeneration is available in quiet mode
+- **WHEN** an analysis has an image prompt and regeneration is possible in `quiet` mode
+- **THEN** the system SHALL show the "Regenerate Images" button
+
+#### Scenario: Cap warning remains visible
+- **WHEN** an analysis reaches the maximum image count in any view-density mode
+- **THEN** the system SHALL disable the regeneration control
+- **AND** the system SHALL show the maximum-image warning message
+
+#### Scenario: Regeneration diagnostics are mode-limited
+- **WHEN** regeneration returns diagnostic context outside `test` mode
+- **THEN** the system SHALL hide diagnostic detail
+- **AND** the system SHALL keep any user-facing error or warning visible
+

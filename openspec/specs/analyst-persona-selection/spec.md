@@ -1,12 +1,10 @@
 ## Purpose
 
 Enable users to select their preferred analytical voice (persona) for journal analysis.
-
-## ADDED Requirements
-
+## Requirements
 ### Requirement: Display analyst persona selection options
 
-The system SHALL display an analyst persona picker with three options in the header, each with a display name and description.
+The system SHALL display an analyst persona picker in all view-density modes with three options in the header, each with a display name and description.
 
 | Display Name | Persona ID | Description |
 |-------------|----------|-------------|
@@ -17,6 +15,10 @@ The system SHALL display an analyst persona picker with three options in the hea
 #### Scenario: User views persona options
 - **WHEN** user opens the analyst persona picker dropdown
 - **THEN** system displays all three persona options with their display names and descriptions
+
+#### Scenario: User is in quiet mode
+- **WHEN** user views the page header while in `quiet` mode
+- **THEN** system displays the analyst persona picker
 
 ### Requirement: Default persona selection
 
@@ -49,3 +51,4 @@ The system SHALL store the analyst persona used for each analysis in the `analys
 #### Scenario: Retrieved analysis shows persona context
 - **WHEN** user views a historical analysis
 - **THEN** system retrieves and displays which analyst persona was used for that analysis
+

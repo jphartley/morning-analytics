@@ -14,11 +14,11 @@ export interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function isInvalidRefreshTokenError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
+  if (!error || typeof error !== 'object' || !('message' in error)) {
     return false;
   }
 
-  return /invalid refresh token|refresh token not found/i.test(error.message);
+  return /invalid refresh token|refresh token not found/i.test(String(error.message));
 }
 
 export function AuthSessionProvider({ children }: { children: ReactNode }) {
@@ -32,11 +32,37 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     const publicPaths = ['/signin', '/signup'];
     const isPublicPath = publicPaths.includes(pathname);
 
+    const clearInvalidSession = async () => {
+      await supabase.auth.signOut({ scope: 'local' });
+      setUser(null);
+
+      if (!isPublicPath) {
+        router.push('/signin');
+      }
+    };
+
     const checkSession = async () => {
       try {
         const {
           data: { session },
+          error,
         } = await supabase.auth.getSession();
+
+        if (error) {
+          if (isInvalidRefreshTokenError(error)) {
+            await clearInvalidSession();
+            return;
+          }
+
+          console.error('AuthSessionProvider: Error checking session:', error);
+          setUser(null);
+
+          if (!isPublicPath) {
+            router.push('/signin');
+          }
+
+          return;
+        }
 
         setUser(session?.user || null);
 
@@ -47,13 +73,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         if (isInvalidRefreshTokenError(error)) {
-          await supabase.auth.signOut({ scope: 'local' });
-          setUser(null);
-
-          if (!isPublicPath) {
-            router.push('/signin');
-          }
-
+          await clearInvalidSession();
           return;
         }
 
@@ -67,7 +87,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user || null);
 
       if (event === 'SIGNED_OUT') {

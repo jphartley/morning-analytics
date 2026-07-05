@@ -1,7 +1,5 @@
-## Purpose
+## MODIFIED Requirements
 
-Expose live journal word-count and auto-analyze readiness metadata while preserving stable writing layout.
-## Requirements
 ### Requirement: Live word count display
 The JournalInput component SHALL display a word count below the editor in insight and test modes that updates in real time as the user types or pastes text. The component SHALL hide the visible word count in quiet mode while preserving word-count-dependent behavior.
 
@@ -41,22 +39,3 @@ The word count display SHALL visually indicate when the 300-word auto-analyze th
 - **WHEN** the user pastes text that meets the auto-analyze threshold in `quiet` mode
 - **THEN** the system SHALL still trigger auto-analyze according to existing behavior
 - **AND** the system SHALL NOT show the word count or "(auto-analyze ready)" text
-
-### Requirement: No layout shift
-The word count display SHALL NOT cause layout shift as the number of digits changes.
-
-#### Scenario: Digit count increases
-- **WHEN** the word count increases from a lower digit count to a higher one (e.g., 99 to 100)
-- **THEN** the surrounding layout (editor and button) SHALL NOT shift position
-
-### Requirement: Word count works for both fresh and history views
-The word count SHALL be visible for both fresh input and when viewing historical analyses.
-
-#### Scenario: Fresh input
-- **WHEN** the user is composing a new journal entry
-- **THEN** the word count is displayed and updates in real time
-
-#### Scenario: History view with input text
-- **WHEN** the user views a historical analysis that has input text loaded into the editor
-- **THEN** the word count is displayed reflecting the historical text length
-

@@ -3,6 +3,7 @@ import { omitMarkdownNode } from "@/lib/markdown-props";
 
 interface AnalysisPanelProps {
   analysisText: string;
+  showReadingMetadata?: boolean;
 }
 
 function getReadableAnalysisText(markdown: string) {
@@ -35,14 +36,14 @@ function getAnalysisReadingMetadata(analysisText: string) {
   };
 }
 
-export function AnalysisPanel({ analysisText }: AnalysisPanelProps) {
+export function AnalysisPanel({ analysisText, showReadingMetadata = true }: AnalysisPanelProps) {
   const readingMetadata = getAnalysisReadingMetadata(analysisText);
 
   return (
     <div className="w-full p-6 bg-surface border border-outline rounded-lg animate-fade-in-up">
       <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
         <h2 className="text-xl font-semibold text-ink">Analysis</h2>
-        {readingMetadata && (
+        {showReadingMetadata && readingMetadata && (
           <p className="text-sm text-ink-muted tabular-nums">
             ~{readingMetadata.minutes} min read ({readingMetadata.wordCount}{" "}
             {readingMetadata.wordCount === 1 ? "word" : "words"})

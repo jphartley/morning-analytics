@@ -10,6 +10,7 @@ interface JournalInputProps {
   onChange: (value: string) => void;
   onAnalyze: () => void;
   disabled: boolean;
+  showWritingStats?: boolean;
 }
 
 const editorProseStyles = [
@@ -30,6 +31,7 @@ export function JournalInput({
   onChange,
   onAnalyze,
   disabled,
+  showWritingStats = true,
 }: JournalInputProps) {
   const isUpdatingFromProp = useRef(false);
   const pasteDetected = useRef(false);
@@ -123,14 +125,16 @@ export function JournalInput({
       >
         <EditorContent editor={editor} />
       </div>
-      <div
-        className={`text-sm text-right tabular-nums ${isThresholdMet ? "text-accent" : "text-ink-muted"}`}
-      >
-        {wordCount} {wordCount === 1 ? "word" : "words"}
-        {isThresholdMet && (
-          <span className="ml-1">(auto-analyze ready)</span>
-        )}
-      </div>
+      {showWritingStats && (
+        <div
+          className={`text-sm text-right tabular-nums ${isThresholdMet ? "text-accent" : "text-ink-muted"}`}
+        >
+          {wordCount} {wordCount === 1 ? "word" : "words"}
+          {isThresholdMet && (
+            <span className="ml-1">(auto-analyze ready)</span>
+          )}
+        </div>
+      )}
       <button
         className="w-full py-3 px-6 text-lg font-medium text-white bg-accent rounded-lg hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         onClick={onAnalyze}

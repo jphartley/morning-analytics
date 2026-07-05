@@ -13,15 +13,16 @@ import { LoadingState, ANALYSIS_MESSAGES, IMAGE_MESSAGES } from "@/components/Lo
 import { ErrorState } from "@/components/ErrorState";
 import { Lightbox } from "@/components/Lightbox";
 import { ImageGenerationDiagnosticsDisclosure } from "@/components/ImageGenerationDiagnosticsDisclosure";
-import { ModelPicker } from "@/components/ModelPicker";
+import { getStoredModel, ModelPicker } from "@/components/ModelPicker";
 import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { AppHeader } from "@/components/AppHeader";
 import { WelcomeEmptyState } from "@/components/WelcomeEmptyState";
+import { ViewDensityControl } from "@/components/ViewDensityControl";
 import { useAuth } from "@/lib/useAuth";
-import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { omitMarkdownNode } from "@/lib/markdown-props";
 import { ImageGenerationDiagnostics } from "@/lib/image-generation-diagnostics";
+import { getStoredViewDensityMode, setStoredViewDensityMode, ViewDensityMode } from "@/lib/view-density";
 
 type AppState = "idle" | "analyzing" | "text-ready" | "complete" | "error" | "viewing-history";
 
@@ -46,8 +47,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
+  const [selectedModel, setSelectedModel] = useState<string>(getStoredModel);
   const [selectedPersona, setSelectedPersona] = useState<string>("jungian");
+  const [viewMode, setViewMode] = useState<ViewDensityMode>(getStoredViewDensityMode);
   const [isPending, startTransition] = useTransition();
 
   // History state
@@ -89,6 +91,11 @@ export default function Home() {
 
   const handlePersonaChange = useCallback((persona: string) => {
     setSelectedPersona(persona);
+  }, []);
+
+  const handleViewModeChange = useCallback((mode: ViewDensityMode) => {
+    setViewMode(mode);
+    setStoredViewDensityMode(mode);
   }, []);
 
   const handleHistoryEmptyChange = useCallback((isEmpty: boolean) => {
@@ -295,6 +302,9 @@ export default function Home() {
   };
 
   const showWelcomeEmptyState = state === "idle" && isHistoryEmpty === true;
+  const isQuietMode = viewMode === "quiet";
+  const isInsightOrTestMode = viewMode === "insight" || viewMode === "test";
+  const isTestMode = viewMode === "test";
 
   return (
     <>
@@ -312,7 +322,7 @@ export default function Home() {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <main className="max-w-3xl mx-auto px-4 py-12">
-          {isMockMode && (
+          {isMockMode && isTestMode && (
             <div className="mb-6 rounded-lg border border-outline bg-accent-soft px-4 py-2 text-center text-sm text-ink">
               Mock mode active — using local images for faster testing.
             </div>
@@ -320,9 +330,12 @@ export default function Home() {
           <header className={showWelcomeEmptyState ? "mb-6" : "mb-12"}>
             <div className="flex justify-between items-start mb-4">
               <div />
-              <div className="flex gap-3">
+              <div className="flex flex-wrap justify-end gap-3">
                 <AnalystPicker onPersonaChange={handlePersonaChange} />
-                <ModelPicker onModelChange={handleModelChange} />
+                {!isQuietMode && (
+                  <ModelPicker onModelChange={handleModelChange} />
+                )}
+                <ViewDensityControl value={viewMode} onChange={handleViewModeChange} />
               </div>
             </div>
             <div className="text-center">
@@ -346,10 +359,17 @@ export default function Home() {
               onChange={setJournalText}
               onAnalyze={handleAnalyze}
               disabled={isPending}
+              showWritingStats={isInsightOrTestMode}
             />
           )}
 
-          {state === "analyzing" && <LoadingState messages={ANALYSIS_MESSAGES} durationHint="Usually takes ~15 seconds" />}
+          {state === "analyzing" && (
+            <LoadingState
+              messages={ANALYSIS_MESSAGES}
+              durationHint="Usually takes ~15 seconds"
+              showDurationHint={isInsightOrTestMode}
+            />
+          )}
 
           {state === "error" && error && (
             <ErrorState
@@ -360,7 +380,10 @@ export default function Home() {
 
           {(state === "text-ready" || state === "complete") && analysisResult && (
             <div className="space-y-8">
-              <AnalysisPanel analysisText={analysisResult.analysisText || ""} />
+              <AnalysisPanel
+                analysisText={analysisResult.analysisText || ""}
+                showReadingMetadata={isInsightOrTestMode}
+              />
 
               {state === "text-ready" && (
                 <div className="w-full">
@@ -369,16 +392,19 @@ export default function Home() {
                     <LoadingState
                       messages={IMAGE_MESSAGES}
                       durationHint="Usually takes about a minute"
+                      showDurationHint={isInsightOrTestMode}
                     />
                   </div>
-                  <div className="mt-2">
-                    <ImageGenerationDiagnosticsDisclosure
-                      diagnostics={null}
-                      statusMessage={imageGenerationStatus}
-                      pendingStartedAt={imageGenerationStartedAt}
-                      pendingElapsedSeconds={imageGenerationElapsedSeconds}
-                    />
-                  </div>
+                  {isTestMode && (
+                    <div className="mt-2">
+                      <ImageGenerationDiagnosticsDisclosure
+                        diagnostics={null}
+                        statusMessage={imageGenerationStatus}
+                        pendingStartedAt={imageGenerationStartedAt}
+                        pendingElapsedSeconds={imageGenerationElapsedSeconds}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -391,13 +417,15 @@ export default function Home() {
                       <p className="text-sm text-ink-muted">{imageGenerationStatus}</p>
                     </div>
                   )}
-                  <ImageGenerationDiagnosticsDisclosure
-                    diagnostics={imageGenerationDiagnostics}
-                    statusMessage={imageGenerationStatus}
-                    pendingStartedAt={imageGenerationStartedAt}
-                    pendingElapsedSeconds={imageGenerationElapsedSeconds}
-                  />
-                  {currentImagePrompt && imageUrls.length > 0 && (
+                  {isTestMode && (
+                    <ImageGenerationDiagnosticsDisclosure
+                      diagnostics={imageGenerationDiagnostics}
+                      statusMessage={imageGenerationStatus}
+                      pendingStartedAt={imageGenerationStartedAt}
+                      pendingElapsedSeconds={imageGenerationElapsedSeconds}
+                    />
+                  )}
+                  {isInsightOrTestMode && currentImagePrompt && imageUrls.length > 0 && (
                     <ImagePromptDisclosure imagePrompt={currentImagePrompt} />
                   )}
                   {currentImagePrompt && currentAnalysisId && (
@@ -416,7 +444,7 @@ export default function Home() {
           {/* Viewing historical analysis */}
           {state === "viewing-history" && historyViewData && (
             <div className="space-y-8">
-              {historyViewData.analystPersona && (
+              {isInsightOrTestMode && historyViewData.analystPersona && (
                 <div className="bg-accent-soft border border-outline rounded-lg p-3 mb-4">
                   <p className="text-sm text-ink">
                     <span className="font-medium">Analyzed by:</span>{" "}
@@ -462,12 +490,15 @@ export default function Home() {
                 </ReactMarkdown>
               </div>
 
-              <AnalysisPanel analysisText={historyViewData.analysisText} />
+              <AnalysisPanel
+                analysisText={historyViewData.analysisText}
+                showReadingMetadata={isInsightOrTestMode}
+              />
 
               {historyViewData.imageUrls.length > 0 && (
                 <>
                   <ImageGrid imageUrls={historyViewData.imageUrls} onImageClick={handleImageClick} />
-                  {historyViewData.imagePrompt && (
+                  {isInsightOrTestMode && historyViewData.imagePrompt && (
                     <ImagePromptDisclosure imagePrompt={historyViewData.imagePrompt} />
                   )}
                 </>
@@ -480,12 +511,14 @@ export default function Home() {
                   maxImages={MAX_IMAGES}
                 />
               )}
-              <ImageGenerationDiagnosticsDisclosure
-                diagnostics={imageGenerationDiagnostics}
-                statusMessage={imageGenerationStatus}
-                pendingStartedAt={imageGenerationStartedAt}
-                pendingElapsedSeconds={imageGenerationElapsedSeconds}
-              />
+              {isTestMode && (
+                <ImageGenerationDiagnosticsDisclosure
+                  diagnostics={imageGenerationDiagnostics}
+                  statusMessage={imageGenerationStatus}
+                  pendingStartedAt={imageGenerationStartedAt}
+                  pendingElapsedSeconds={imageGenerationElapsedSeconds}
+                />
+              )}
             </div>
           )}
         </main>

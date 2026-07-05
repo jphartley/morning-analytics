@@ -2,7 +2,6 @@
 
 ## Purpose
 Describe how image generation attempts expose safe, redacted diagnostics that make Midjourney/Discord handoff behavior understandable during local debugging.
-
 ## Requirements
 ### Requirement: Capture image generation attempt diagnostics
 
@@ -47,3 +46,17 @@ The system SHALL include redacted attempt diagnostics in image generation and im
 - **THEN** the user SHALL be able to copy a paste-ready diagnostic report
 - **THEN** the copied report SHALL include attempt metadata, final status, event meanings, raw event messages, and redacted event details
 - **THEN** the copied report SHALL NOT include secrets, full Discord IDs, full prompts, signed Discord CDN URLs, or Supabase secrets
+
+### Requirement: Limit diagnostic display to test mode
+The system SHALL display image-generation diagnostic affordances and detailed diagnostic traces only in test mode.
+
+#### Scenario: Diagnostics available in test mode
+- **WHEN** image generation is pending, succeeds, warns, or fails in `test` mode
+- **THEN** the system SHALL make the image-generation diagnostics disclosure available when diagnostic context exists
+- **AND** the disclosure SHALL include provider, attempt, timing, timeline, redacted metadata, and diagnostic copy affordances according to existing diagnostic behavior
+
+#### Scenario: Diagnostics hidden outside test mode
+- **WHEN** image generation is pending, succeeds, warns, or fails in `quiet` or `insight` mode
+- **THEN** the system SHALL NOT render the diagnostic disclosure or diagnostic copy affordance
+- **AND** the system SHALL still show any user-facing failure or warning summary
+

@@ -32,12 +32,14 @@ interface LoadingStateProps {
   messages: string[];
   durationHint: string;
   intervalMs?: number;
+  showDurationHint?: boolean;
 }
 
 export function LoadingState({
   messages,
   durationHint,
   intervalMs = 7000,
+  showDurationHint = true,
 }: LoadingStateProps) {
   const [index, setIndex] = useState(0);
   const [fading, setFading] = useState(false);
@@ -64,7 +66,9 @@ export function LoadingState({
       >
         {messages[index]}
       </p>
-      <p className="text-sm text-ink-muted">{durationHint}</p>
+      {showDurationHint && (
+        <p className="text-sm text-ink-muted">{durationHint}</p>
+      )}
     </div>
   );
 }

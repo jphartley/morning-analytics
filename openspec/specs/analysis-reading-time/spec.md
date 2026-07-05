@@ -4,15 +4,19 @@
 TBD - created by archiving change analysis-reading-time-estimate. Update Purpose after archive.
 ## Requirements
 ### Requirement: Display analysis reading estimate
-The AnalysisPanel component SHALL display a reading time estimate for non-empty analysis text.
+The AnalysisPanel component SHALL display a reading time estimate for non-empty analysis text in insight and test modes. The AnalysisPanel component SHALL hide reading metadata in quiet mode.
 
 #### Scenario: Fresh analysis shows reading estimate
-- **WHEN** a newly generated analysis is rendered in AnalysisPanel
+- **WHEN** a newly generated analysis is rendered in AnalysisPanel in `insight` or `test` mode
 - **THEN** the panel SHALL display a reading time estimate near the "Analysis" heading
 
 #### Scenario: History analysis shows reading estimate
-- **WHEN** a historical analysis is rendered in AnalysisPanel
+- **WHEN** a historical analysis is rendered in AnalysisPanel in `insight` or `test` mode
 - **THEN** the panel SHALL display a reading time estimate near the "Analysis" heading
+
+#### Scenario: Quiet mode hides reading estimate
+- **WHEN** a newly generated or historical analysis is rendered in `quiet` mode
+- **THEN** the panel SHALL NOT display reading time or analysis word count metadata
 
 ### Requirement: Calculate estimate from readable word count
 The reading time estimate SHALL be calculated from the analysis word count at 200 words per minute, rounded up to the nearest minute.
@@ -41,13 +45,13 @@ The word count used for reading time SHALL count readable analysis words and SHA
 - **THEN** the word count SHALL count "source text" and SHALL NOT count the URL or Markdown bracket syntax
 
 ### Requirement: Display estimate subtly with word count
-The reading estimate SHALL be styled as secondary metadata and SHALL include the calculated word count.
+The reading estimate SHALL be styled as secondary metadata and SHALL include the calculated word count when it is visible.
 
 #### Scenario: Estimate includes word count
-- **WHEN** AnalysisPanel displays a reading time estimate
+- **WHEN** AnalysisPanel displays a reading time estimate in `insight` or `test` mode
 - **THEN** the metadata SHALL include the word count in the format "(N words)"
 
 #### Scenario: Estimate uses muted styling
-- **WHEN** AnalysisPanel displays a reading time estimate
+- **WHEN** AnalysisPanel displays a reading time estimate in `insight` or `test` mode
 - **THEN** the metadata SHALL use a small, muted visual style that does not compete with the analysis heading or body
 

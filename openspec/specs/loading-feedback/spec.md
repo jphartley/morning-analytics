@@ -1,9 +1,7 @@
 ## Purpose
 
 Define loading feedback behavior for analysis and image generation states.
-
 ## Requirements
-
 ### Requirement: Display rotating status messages during loading
 
 The LoadingState component SHALL cycle through an array of status messages at a configurable interval (default 7 seconds). Messages SHALL transition with a fade effect.
@@ -23,17 +21,22 @@ The LoadingState component SHALL cycle through an array of status messages at a 
 
 ### Requirement: Display expected duration hint
 
-The LoadingState component SHALL display a duration hint below the rotating message in smaller, muted text.
+The LoadingState component SHALL display a duration hint below the rotating message in smaller, muted text in insight and test modes. Quiet mode SHALL hide duration hints while preserving gentle loading progress.
 
 #### Scenario: Duration hint for text analysis
 
-- **WHEN** the app is in the "analyzing" state
+- **WHEN** the app is in the "analyzing" state in `insight` or `test` mode
 - **THEN** the spinner SHALL display a duration hint indicating approximately 15 seconds
 
 #### Scenario: Duration hint for image generation
 
-- **WHEN** the app is in the "text-ready" state (images generating)
+- **WHEN** the app is in the "text-ready" state (images generating) in `insight` or `test` mode
 - **THEN** the spinner SHALL display a duration hint indicating approximately 1 minute
+
+#### Scenario: Quiet mode hides duration hint
+- **WHEN** the app is in a loading state in `quiet` mode
+- **THEN** the system SHALL show gentle progress
+- **AND** the system SHALL NOT show expected duration hints
 
 ### Requirement: Provide themed message sets
 
@@ -48,3 +51,4 @@ The component SHALL export two predefined message arrays: one for text analysis 
 
 - **WHEN** the image message set is used
 - **THEN** messages SHALL be themed around painting, composing, and creating imagery
+
