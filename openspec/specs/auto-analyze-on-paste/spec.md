@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define automatic analysis behavior when pasted journal content reaches the configured word-count threshold.
+
+## Requirements
 
 ### Requirement: Auto-trigger analysis on paste of 300+ words
 

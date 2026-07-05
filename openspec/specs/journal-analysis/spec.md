@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define the core journal analysis pipeline that sends text to Gemini, extracts image prompts, and handles analysis errors.
+
+## Requirements
 
 ### Requirement: Analyze journal text with Gemini
 

@@ -1,3 +1,9 @@
+## Purpose
+
+Define rich-text Markdown editing behavior for journal input while preserving the Markdown string interface.
+
+## Requirements
+
 ### Requirement: Render Markdown as rich text in the journal input
 The JournalInput component SHALL render Markdown content as formatted rich text using a TipTap WYSIWYG editor, displaying headings, bold, italic, and lists as styled elements instead of raw Markdown syntax.
 

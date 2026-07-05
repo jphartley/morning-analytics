@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define route access rules that protect the main app while allowing public authentication pages.
+
+## Requirements
 
 ### Requirement: Unauthenticated users redirected to signin
 The system SHALL prevent unauthenticated users from accessing the main app and redirect them to the signin page.

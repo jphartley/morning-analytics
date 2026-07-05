@@ -1,3 +1,9 @@
+## Purpose
+
+Define application branding assets and copy used across the browser, app header, auth pages, and main page.
+
+## Requirements
+
 ### Requirement: Display favicon
 
 The app SHALL use a custom favicon (32x32 PNG) placed at `app/app/icon.png` using the Next.js App Router file convention.

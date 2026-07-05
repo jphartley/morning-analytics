@@ -2,7 +2,7 @@
 
 Define three distinct analyst personas (Jungian Analyst, Mel Robbins, Loving Parent), each with custom section names, tones, and image generation guidance.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Define Jungian Analyst persona
 

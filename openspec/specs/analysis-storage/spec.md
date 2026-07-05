@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define authenticated analysis persistence, user ownership, image path storage, and pre-auth data cleanup expectations.
+
+## Requirements
 
 ### Requirement: analyses table has user_id field
 The system SHALL add a `user_id` UUID column to the `analyses` table with a NOT NULL constraint.

@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define authentication session state, Supabase client boundaries, timeout behavior, and logout behavior.
+
+## Requirements
 
 ### Requirement: Session state tracking
 The system SHALL track and maintain authentication session state on both client and server.

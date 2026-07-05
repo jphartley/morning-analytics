@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define how generated analysis Markdown is rendered as readable rich text while limiting unsupported elements.
+
+## Requirements
 
 ### Requirement: Render Markdown headers
 The AnalysisPanel component SHALL render Markdown headers (h1, h2, h3) as styled HTML headings with appropriate sizing and visual hierarchy.

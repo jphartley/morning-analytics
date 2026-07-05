@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define privacy isolation for stored analyses using Supabase Row-Level Security and trusted server actions.
+
+## Requirements
 
 ### Requirement: Row-Level Security (RLS) policies on analyses table
 The system SHALL enforce data privacy using Supabase RLS policies so each user can only access their own analyses.

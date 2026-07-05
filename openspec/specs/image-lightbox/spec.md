@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define full-size image viewing, modal behavior, and navigation for generated image sets.
+
+## Requirements
 
 ### Requirement: View image in lightbox
 

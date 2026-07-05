@@ -1,3 +1,9 @@
+## Purpose
+
+Define shared color design tokens, palette options, and runtime palette selection.
+
+## Requirements
+
 ### Requirement: Centralized color palette via CSS custom properties
 
 The system SHALL define all UI colors as CSS custom properties in `globals.css` under `:root`, registered as Tailwind theme colors via `@theme inline`. Components SHALL reference these as Tailwind utility classes (e.g., `bg-page`, `text-ink`, `border-outline`) instead of hardcoded color classes.
