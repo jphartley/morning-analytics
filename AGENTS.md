@@ -108,6 +108,8 @@ Safety rules:
 - Keep queue wrappers human readable: state which script they call, why, what safety boundary it enforces, and expected output.
 
 ## Commit & Pull Request Guidelines
+In the Codex managed sandbox, run all Git commands with escalation on the first attempt. This avoids predictable `.git/index.lock`, `.git/worktrees/.../index.lock`, worktree metadata, and network failures. Treat anything Git-related as outside-sandbox work by default, including read-only inspection (`git status`, `git diff`, `git log`, `git branch`), metadata writes (`git add`, `git commit`, `git restore`, `git switch`, `git merge`, `git rebase`, `git stash`), branch/worktree cleanup, and remote operations (`git fetch`, `git pull`, `git push`).
+
 Use concise imperative commit subjects (`Add ...`, `Fix ...`, `Prepare ...`) and keep commits focused.
 
 PRs should include:
