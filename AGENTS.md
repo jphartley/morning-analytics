@@ -78,7 +78,7 @@ Primary workflow:
 2. Route fuzzy input through `/opsx:explore`, detailed input through `/opsx:propose`, incomplete existing changes through `/opsx:continue`, or apply-ready existing changes through direct artifact review.
 3. Produce a short Design Gate Brief from apply-ready OpenSpec artifacts.
 4. Only after strict Gate 1 approval, enqueue/start the change, build in the candidate worktree, verify, start the dev server when capacity permits, and present Gate 2.
-5. Keep the candidate dev server running at Gate 2 when possible and wait for strict approval or rejection.
+5. Keep the candidate dev server running at Gate 2 when possible and always include the clickable local dev server URL in the test handoff. If the server cannot be started or is not ready, say that explicitly and include the command or next action needed to get a test link.
 6. If Gate 2 is rejected, preserve the same worktree and loop through implementation fixes or OpenSpec artifact updates as appropriate.
 7. If Gate 2 is approved, finalize by archiving, squash merging to `main`, pushing, and cleaning up safe local resources.
 
@@ -105,6 +105,7 @@ Safety rules:
 - Do not edit the planning checkout from the Builder role.
 - Do not finalize without explicit Gate 2 approval.
 - Do not delete dirty worktrees.
+- Whenever a change is ready for user testing, provide a clickable dev server link (for example, `http://localhost:3000` or the queue-assigned local URL) in the final handoff. Do not make the user ask for the link separately.
 - Keep queue wrappers human readable: state which script they call, why, what safety boundary it enforces, and expected output.
 
 ## Commit & Pull Request Guidelines

@@ -151,6 +151,11 @@ function normalizePromptForMatch(prompt: string): string {
     .slice(0, 36);
 }
 
+function hasMidjourneyProgressMarker(content: string): boolean {
+  return /\(\s*(?:waiting to start|queued|starting)\s*\)/i.test(content)
+    || /\(\s*(?:[1-9]?\d|100)\s*%\s*\)/.test(content);
+}
+
 function getCreatedAtMs(timestamp: string | undefined, fallback?: number): number | null {
   if (!timestamp) {
     return fallback ?? null;
@@ -280,8 +285,22 @@ function evaluateCandidate(
     };
   }
 
-  const hasCompletedShape = (params.componentItems > 0 && params.imageUrls.length >= 1)
-    || params.imageUrls.length === 4;
+  const hasImage = params.imageUrls.length >= 1;
+  const isProgressUpdate = hasMidjourneyProgressMarker(content);
+  const hasCompletedShape = (params.componentItems > 0 && hasImage)
+    || params.imageUrls.length === 4
+    || (hasImage && promptMatch && !isProgressUpdate);
+
+  if (isProgressUpdate) {
+    return {
+      completed: false,
+      imageUrls: [],
+      reason: "midjourney-still-progressing",
+      promptMatch,
+      createdAtMs: params.createdAtMs,
+      metadata,
+    };
+  }
 
   if (!hasCompletedShape) {
     return {
@@ -354,13 +373,74 @@ function evaluateApiMessage(
 
 async function findRecentCompletedGrid(
   options: WaitForImagesOptions,
-  channelId: string
+  channelId: string,
+  trackedMessageIds: string[] = []
 ): Promise<ListenerResult | null> {
   const token = process.env.DISCORD_BOT_TOKEN;
 
   if (!token) {
     options.diagnostics?.add("recovery", "error", "Cannot inspect recent messages without a Discord bot token.");
     return null;
+  }
+
+  if (trackedMessageIds.length > 0) {
+    options.diagnostics?.add("recovery", "info", "Inspecting tracked Midjourney progress messages.", {
+      channelId: redactId(channelId),
+      trackedMessageCount: trackedMessageIds.length,
+    });
+
+    const trackedMessages: DiscordApiMessage[] = [];
+    for (const messageId of trackedMessageIds.slice(-5)) {
+      const response = await fetch(
+        `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
+        {
+          headers: {
+            Authorization: `Bot ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        trackedMessages.push((await response.json()) as DiscordApiMessage);
+      } else {
+        options.diagnostics?.add("recovery", "warning", "Tracked Discord message lookup failed.", {
+          messageId: redactId(messageId),
+          status: response.status,
+          statusText: response.statusText,
+        });
+      }
+    }
+
+    const trackedCandidates = trackedMessages.map((message) => evaluateApiMessage(message, options, channelId));
+    const trackedCompleted = trackedCandidates
+      .filter((candidate) => candidate.completed)
+      .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+    const trackedRejectedSummary = trackedCandidates.reduce<Record<string, number>>((counts, candidate) => {
+      if (!candidate.completed) {
+        counts[candidate.reason || "unknown"] = (counts[candidate.reason || "unknown"] || 0) + 1;
+      }
+      return counts;
+    }, {});
+
+    options.diagnostics?.add("recovery", trackedCompleted.length > 0 ? "success" : "warning", trackedCompleted.length > 0
+      ? "Found a completed Midjourney grid by refetching a tracked progress message."
+      : "Tracked Midjourney progress messages are not completed yet.", {
+        inspected: trackedCandidates.length,
+        completedCandidates: trackedCompleted.length,
+        rejectedProgress: trackedRejectedSummary["midjourney-still-progressing"] || 0,
+        rejectedShape: trackedRejectedSummary["not-completed-grid-shape"] || 0,
+      });
+
+    if (trackedCompleted[0]) {
+      options.diagnostics?.add("recovery", "success", "Using tracked Midjourney grid image.", {
+        ...trackedCompleted[0].metadata,
+        promptMatch: trackedCompleted[0].promptMatch,
+      });
+      return {
+        success: true,
+        imageUrls: trackedCompleted[0].imageUrls,
+      };
+    }
   }
 
   options.diagnostics?.add("recovery", "info", "Inspecting recent Discord messages for a missed Midjourney grid.", {
@@ -415,6 +495,7 @@ async function findRecentCompletedGrid(
       rejectedNotMidjourney: rejectedSummary["not-midjourney"] || 0,
       rejectedWrongChannel: rejectedSummary["wrong-channel"] || 0,
       rejectedTooOld: rejectedSummary["before-attempt-start"] || 0,
+      rejectedProgress: rejectedSummary["midjourney-still-progressing"] || 0,
       rejectedShape: rejectedSummary["not-completed-grid-shape"] || 0,
     });
 
@@ -470,6 +551,7 @@ export async function waitForImages(options: WaitForImagesOptions): Promise<List
 
     return new Promise((resolve) => {
       let resolved = false;
+      const trackedMessageIds = new Set<string>();
 
       const cleanup = () => {
         clearTimeout(timeout);
@@ -491,7 +573,7 @@ export async function waitForImages(options: WaitForImagesOptions): Promise<List
       const recover = async (source: string) => {
         try {
           options.diagnostics?.add("recovery", "info", `Running bounded recovery after ${source}.`);
-          const recovered = await findRecentCompletedGrid(options, channelId);
+          const recovered = await findRecentCompletedGrid(options, channelId, [...trackedMessageIds]);
           if (recovered) {
             finish(recovered);
           }
@@ -525,6 +607,10 @@ export async function waitForImages(options: WaitForImagesOptions): Promise<List
         const candidate = evaluateDiscordMessage(message, eventType, options, channelId);
 
         if (!candidate.completed) {
+          if (candidate.reason === "midjourney-still-progressing" && candidate.promptMatch) {
+            trackedMessageIds.add(message.id);
+          }
+
           if (candidate.reason !== "not-midjourney") {
             options.diagnostics?.add("listener", "info", "Rejected Discord message candidate.", {
               ...candidate.metadata,

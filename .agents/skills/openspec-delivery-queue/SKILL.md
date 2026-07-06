@@ -111,6 +111,8 @@ Scripts:
 
 Safety boundary: do not approve Gate 2 or finalize. Do not run raw `npm run lint`, `npm run build`, or dev-server commands for a candidate outside queue-managed setup. Do not present a URL as ready unless the queue reports readiness.
 
+Manual test handoff: whenever a candidate is ready for user testing, include the clickable queue-reported dev server URL in the final handoff. If the server is not ready, state that explicitly and include the queue command or next action needed to obtain a test link.
+
 Verification scope policy: full `npm run lint` and `npm run build` remain expected candidate checks. If a failure is caused by the candidate, fix it in the candidate worktree. If a failure is unrelated baseline debt that predates the candidate, stop, report it separately, and continue only after explicit user approval to include that cleanup or after a dedicated hygiene change fixes the baseline.
 
 ### Finalizer

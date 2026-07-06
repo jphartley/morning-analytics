@@ -64,7 +64,7 @@ function describeEvent(event: DiagnosticEvent): string {
   }
 
   if (event.stage === "listener" && event.message.includes("Rejected Discord message candidate")) {
-    if (reason === "not-completed-grid-shape") {
+    if (reason === "midjourney-still-progressing" || reason === "not-completed-grid-shape") {
       return "Midjourney sent a progress update, but it did not look like the final four-image grid yet, so the app ignored it.";
     }
 
@@ -81,6 +81,18 @@ function describeEvent(event: DiagnosticEvent): string {
 
   if (event.stage === "recovery" && event.message.includes("Inspecting recent Discord messages")) {
     return "The backup check is scanning recent messages in the generation channel.";
+  }
+
+  if (event.stage === "recovery" && event.message.includes("Inspecting tracked Midjourney progress messages")) {
+    return "The backup check is refetching the exact Midjourney progress message in case it was edited into the final grid.";
+  }
+
+  if (event.stage === "recovery" && event.message.includes("Tracked Midjourney progress messages are not completed")) {
+    return "The tracked Midjourney message still looks like a progress update, so the app is continuing to wait.";
+  }
+
+  if (event.stage === "recovery" && event.message.includes("Using tracked Midjourney grid")) {
+    return "The backup check found the completed grid by refetching the earlier progress message.";
   }
 
   if (event.stage === "recovery" && event.message.includes("No matching completed Midjourney grid")) {
