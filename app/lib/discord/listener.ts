@@ -50,6 +50,11 @@ interface DiscordApiMessage {
   components?: DiscordApiComponentRow[];
 }
 
+interface DiscordLookupAuth {
+  label: "bot-token" | "user-token";
+  authorization: string;
+}
+
 interface CandidateResult {
   completed: boolean;
   imageUrls: string[];
@@ -90,6 +95,26 @@ const MOCK_IMAGE_URLS = [
   "https://placehold.co/512x512/0f3460/eee8d5?text=Image+3",
   "https://placehold.co/512x512/533483/eee8d5?text=Image+4",
 ];
+
+function getRecoveryAuths(): DiscordLookupAuth[] {
+  const auths: DiscordLookupAuth[] = [];
+
+  if (process.env.DISCORD_BOT_TOKEN) {
+    auths.push({
+      label: "bot-token",
+      authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+    });
+  }
+
+  if (process.env.DISCORD_USER_TOKEN) {
+    auths.push({
+      label: "user-token",
+      authorization: process.env.DISCORD_USER_TOKEN,
+    });
+  }
+
+  return auths;
+}
 
 // Singleton bot client
 let botClient: Client | null = null;
@@ -376,138 +401,148 @@ async function findRecentCompletedGrid(
   channelId: string,
   trackedMessageIds: string[] = []
 ): Promise<ListenerResult | null> {
-  const token = process.env.DISCORD_BOT_TOKEN;
+  const auths = getRecoveryAuths();
 
-  if (!token) {
-    options.diagnostics?.add("recovery", "error", "Cannot inspect recent messages without a Discord bot token.");
+  if (auths.length === 0) {
+    options.diagnostics?.add("recovery", "error", "Cannot inspect recent messages without a Discord bot token or user token.");
     return null;
   }
 
-  if (trackedMessageIds.length > 0) {
-    options.diagnostics?.add("recovery", "info", "Inspecting tracked Midjourney progress messages.", {
-      channelId: redactId(channelId),
-      trackedMessageCount: trackedMessageIds.length,
-    });
+  for (const auth of auths) {
+    if (trackedMessageIds.length > 0) {
+      options.diagnostics?.add("recovery", "info", "Inspecting tracked Midjourney progress messages.", {
+        authSource: auth.label,
+        channelId: redactId(channelId),
+        trackedMessageCount: trackedMessageIds.length,
+      });
 
-    const trackedMessages: DiscordApiMessage[] = [];
-    for (const messageId of trackedMessageIds.slice(-5)) {
-      const response = await fetch(
-        `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
-        {
-          headers: {
-            Authorization: `Bot ${token}`,
-          },
+      const trackedMessages: DiscordApiMessage[] = [];
+      for (const messageId of trackedMessageIds.slice(-5)) {
+        const response = await fetch(
+          `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
+          {
+            headers: {
+              Authorization: auth.authorization,
+            },
+          }
+        );
+
+        if (response.ok) {
+          trackedMessages.push((await response.json()) as DiscordApiMessage);
+        } else {
+          options.diagnostics?.add("recovery", "warning", "Tracked Discord message lookup failed.", {
+            authSource: auth.label,
+            messageId: redactId(messageId),
+            status: response.status,
+            statusText: response.statusText,
+          });
         }
-      );
+      }
 
-      if (response.ok) {
-        trackedMessages.push((await response.json()) as DiscordApiMessage);
-      } else {
-        options.diagnostics?.add("recovery", "warning", "Tracked Discord message lookup failed.", {
-          messageId: redactId(messageId),
-          status: response.status,
-          statusText: response.statusText,
+      const trackedCandidates = trackedMessages.map((message) => evaluateApiMessage(message, options, channelId));
+      const trackedCompleted = trackedCandidates
+        .filter((candidate) => candidate.completed)
+        .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+      const trackedRejectedSummary = trackedCandidates.reduce<Record<string, number>>((counts, candidate) => {
+        if (!candidate.completed) {
+          counts[candidate.reason || "unknown"] = (counts[candidate.reason || "unknown"] || 0) + 1;
+        }
+        return counts;
+      }, {});
+
+      options.diagnostics?.add("recovery", trackedCompleted.length > 0 ? "success" : "warning", trackedCompleted.length > 0
+        ? "Found a completed Midjourney grid by refetching a tracked progress message."
+        : "Tracked Midjourney progress messages are not completed yet.", {
+          authSource: auth.label,
+          inspected: trackedCandidates.length,
+          completedCandidates: trackedCompleted.length,
+          rejectedProgress: trackedRejectedSummary["midjourney-still-progressing"] || 0,
+          rejectedShape: trackedRejectedSummary["not-completed-grid-shape"] || 0,
         });
+
+      if (trackedCompleted[0]) {
+        options.diagnostics?.add("recovery", "success", "Using tracked Midjourney grid image.", {
+          authSource: auth.label,
+          ...trackedCompleted[0].metadata,
+          promptMatch: trackedCompleted[0].promptMatch,
+        });
+        return {
+          success: true,
+          imageUrls: trackedCompleted[0].imageUrls,
+        };
       }
     }
 
-    const trackedCandidates = trackedMessages.map((message) => evaluateApiMessage(message, options, channelId));
-    const trackedCompleted = trackedCandidates
+    options.diagnostics?.add("recovery", "info", "Inspecting recent Discord messages for a missed Midjourney grid.", {
+      authSource: auth.label,
+      channelId: redactId(channelId),
+      limit: RECOVERY_MESSAGE_LIMIT,
+    });
+
+    const response = await fetch(
+      `https://discord.com/api/v10/channels/${channelId}/messages?limit=${RECOVERY_MESSAGE_LIMIT}`,
+      {
+        headers: {
+          Authorization: auth.authorization,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const body = await response.text();
+      options.diagnostics?.add("recovery", "error", "Discord recent-message lookup failed.", {
+        authSource: auth.label,
+        status: response.status,
+        statusText: response.statusText,
+        responsePreview: body.slice(0, 120),
+      });
+      continue;
+    }
+
+    const messages = (await response.json()) as DiscordApiMessage[];
+    const candidates = messages.map((message) => evaluateApiMessage(message, options, channelId));
+    const completed = candidates
       .filter((candidate) => candidate.completed)
-      .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
-    const trackedRejectedSummary = trackedCandidates.reduce<Record<string, number>>((counts, candidate) => {
+      .sort((a, b) => {
+        if (a.promptMatch !== b.promptMatch) {
+          return a.promptMatch ? -1 : 1;
+        }
+
+        return (b.createdAtMs || 0) - (a.createdAtMs || 0);
+      });
+
+    const rejectedSummary = candidates.reduce<Record<string, number>>((counts, candidate) => {
       if (!candidate.completed) {
         counts[candidate.reason || "unknown"] = (counts[candidate.reason || "unknown"] || 0) + 1;
       }
       return counts;
     }, {});
 
-    options.diagnostics?.add("recovery", trackedCompleted.length > 0 ? "success" : "warning", trackedCompleted.length > 0
-      ? "Found a completed Midjourney grid by refetching a tracked progress message."
-      : "Tracked Midjourney progress messages are not completed yet.", {
-        inspected: trackedCandidates.length,
-        completedCandidates: trackedCompleted.length,
-        rejectedProgress: trackedRejectedSummary["midjourney-still-progressing"] || 0,
-        rejectedShape: trackedRejectedSummary["not-completed-grid-shape"] || 0,
+    options.diagnostics?.add("recovery", completed.length > 0 ? "success" : "warning", completed.length > 0
+      ? "Found a completed Midjourney grid in recent Discord messages."
+      : "No matching completed Midjourney grid found in recent Discord messages.", {
+        authSource: auth.label,
+        inspected: candidates.length,
+        completedCandidates: completed.length,
+        promptMatchedCandidates: completed.filter((candidate) => candidate.promptMatch).length,
+        rejectedNotMidjourney: rejectedSummary["not-midjourney"] || 0,
+        rejectedWrongChannel: rejectedSummary["wrong-channel"] || 0,
+        rejectedTooOld: rejectedSummary["before-attempt-start"] || 0,
+        rejectedProgress: rejectedSummary["midjourney-still-progressing"] || 0,
+        rejectedShape: rejectedSummary["not-completed-grid-shape"] || 0,
       });
 
-    if (trackedCompleted[0]) {
-      options.diagnostics?.add("recovery", "success", "Using tracked Midjourney grid image.", {
-        ...trackedCompleted[0].metadata,
-        promptMatch: trackedCompleted[0].promptMatch,
+    if (completed[0]) {
+      options.diagnostics?.add("recovery", "success", "Using recovered Midjourney grid image.", {
+        authSource: auth.label,
+        ...completed[0].metadata,
+        promptMatch: completed[0].promptMatch,
       });
       return {
         success: true,
-        imageUrls: trackedCompleted[0].imageUrls,
+        imageUrls: completed[0].imageUrls,
       };
     }
-  }
-
-  options.diagnostics?.add("recovery", "info", "Inspecting recent Discord messages for a missed Midjourney grid.", {
-    channelId: redactId(channelId),
-    limit: RECOVERY_MESSAGE_LIMIT,
-  });
-
-  const response = await fetch(
-    `https://discord.com/api/v10/channels/${channelId}/messages?limit=${RECOVERY_MESSAGE_LIMIT}`,
-    {
-      headers: {
-        Authorization: `Bot ${token}`,
-      },
-    }
-  );
-
-  if (!response.ok) {
-    const body = await response.text();
-    options.diagnostics?.add("recovery", "error", "Discord recent-message lookup failed.", {
-      status: response.status,
-      statusText: response.statusText,
-      responsePreview: body.slice(0, 120),
-    });
-    return null;
-  }
-
-  const messages = (await response.json()) as DiscordApiMessage[];
-  const candidates = messages.map((message) => evaluateApiMessage(message, options, channelId));
-  const completed = candidates
-    .filter((candidate) => candidate.completed)
-    .sort((a, b) => {
-      if (a.promptMatch !== b.promptMatch) {
-        return a.promptMatch ? -1 : 1;
-      }
-
-      return (b.createdAtMs || 0) - (a.createdAtMs || 0);
-    });
-
-  const rejectedSummary = candidates.reduce<Record<string, number>>((counts, candidate) => {
-    if (!candidate.completed) {
-      counts[candidate.reason || "unknown"] = (counts[candidate.reason || "unknown"] || 0) + 1;
-    }
-    return counts;
-  }, {});
-
-  options.diagnostics?.add("recovery", completed.length > 0 ? "success" : "warning", completed.length > 0
-    ? "Found a completed Midjourney grid in recent Discord messages."
-    : "No matching completed Midjourney grid found in recent Discord messages.", {
-      inspected: candidates.length,
-      completedCandidates: completed.length,
-      promptMatchedCandidates: completed.filter((candidate) => candidate.promptMatch).length,
-      rejectedNotMidjourney: rejectedSummary["not-midjourney"] || 0,
-      rejectedWrongChannel: rejectedSummary["wrong-channel"] || 0,
-      rejectedTooOld: rejectedSummary["before-attempt-start"] || 0,
-      rejectedProgress: rejectedSummary["midjourney-still-progressing"] || 0,
-      rejectedShape: rejectedSummary["not-completed-grid-shape"] || 0,
-    });
-
-  if (completed[0]) {
-    options.diagnostics?.add("recovery", "success", "Using recovered Midjourney grid image.", {
-      ...completed[0].metadata,
-      promptMatch: completed[0].promptMatch,
-    });
-    return {
-      success: true,
-      imageUrls: completed[0].imageUrls,
-    };
   }
 
   return null;
