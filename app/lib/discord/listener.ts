@@ -79,6 +79,7 @@ const TIMEOUT_MS = 120000; // 120 seconds
 const RECOVERY_INTERVAL_MS = 30000;
 const RECOVERY_MESSAGE_LIMIT = 25;
 const START_TIME_TOLERANCE_MS = 10000;
+const DISCORD_EPOCH_MS = 1420070400000;
 const MIDJOURNEY_BOT_ID = "936929561302675456";
 
 // Debug logging - enable with DEBUG_DISCORD=true in .env.local
@@ -188,6 +189,11 @@ function getCreatedAtMs(timestamp: string | undefined, fallback?: number): numbe
 
   const parsed = Date.parse(timestamp);
   return Number.isNaN(parsed) ? fallback ?? null : parsed;
+}
+
+function snowflakeFromTimestamp(timestampMs: number): string {
+  const safeTimestampMs = Math.max(0, Math.floor(timestampMs - DISCORD_EPOCH_MS));
+  return (BigInt(safeTimestampMs) * BigInt(4194304)).toString();
 }
 
 function extractImageUrlsFromMessage(message: Message): string[] {
@@ -477,10 +483,18 @@ async function findRecentCompletedGrid(
       authSource: auth.label,
       channelId: redactId(channelId),
       limit: RECOVERY_MESSAGE_LIMIT,
+      afterAttemptStart: true,
     });
 
+    const afterSnowflake = snowflakeFromTimestamp(
+      options.startedAt.getTime() - START_TIME_TOLERANCE_MS
+    );
+    const searchParams = new URLSearchParams({
+      limit: String(RECOVERY_MESSAGE_LIMIT),
+      after: afterSnowflake,
+    });
     const response = await fetch(
-      `https://discord.com/api/v10/channels/${channelId}/messages?limit=${RECOVERY_MESSAGE_LIMIT}`,
+      `https://discord.com/api/v10/channels/${channelId}/messages?${searchParams.toString()}`,
       {
         headers: {
           Authorization: auth.authorization,
@@ -586,6 +600,7 @@ export async function waitForImages(options: WaitForImagesOptions): Promise<List
 
     return new Promise((resolve) => {
       let resolved = false;
+      let recoveryInFlight: Promise<void> | null = null;
       const trackedMessageIds = new Set<string>();
 
       const cleanup = () => {
@@ -605,19 +620,38 @@ export async function waitForImages(options: WaitForImagesOptions): Promise<List
         resolve(result);
       };
 
-      const recover = async (source: string) => {
-        try {
-          options.diagnostics?.add("recovery", "info", `Running bounded recovery after ${source}.`);
-          const recovered = await findRecentCompletedGrid(options, channelId, [...trackedMessageIds]);
-          if (recovered) {
-            finish(recovered);
-          }
-        } catch (error) {
-          options.diagnostics?.add("recovery", "error", "Recent-message recovery threw an error.", {
-            error: error instanceof Error ? error.message : "Unknown recovery error",
-          });
+      const recover = (source: string): Promise<void> => {
+        if (recoveryInFlight) {
+          options.diagnostics?.add("recovery", "info", `Recovery after ${source} skipped because another recovery check is already running.`);
+          return recoveryInFlight;
         }
+
+        recoveryInFlight = (async () => {
+          try {
+            if (resolved) {
+              return;
+            }
+
+            options.diagnostics?.add("recovery", "info", `Running bounded recovery after ${source}.`);
+            const recovered = await findRecentCompletedGrid(options, channelId, [...trackedMessageIds]);
+            if (recovered) {
+              finish(recovered);
+            }
+          } catch (error) {
+            options.diagnostics?.add("recovery", "error", "Recent-message recovery threw an error.", {
+              error: error instanceof Error ? error.message : "Unknown recovery error",
+            });
+          } finally {
+            recoveryInFlight = null;
+          }
+        })();
+
+        return recoveryInFlight;
       };
+
+      const recoveryInterval = setInterval(() => {
+        void recover("scheduled check");
+      }, RECOVERY_INTERVAL_MS);
 
       const timeout = setTimeout(async () => {
         console.log("[Discord] TIMEOUT - no completed grid received after", TIMEOUT_MS / 1000, "s");
@@ -631,10 +665,6 @@ export async function waitForImages(options: WaitForImagesOptions): Promise<List
           });
         }
       }, TIMEOUT_MS);
-
-      const recoveryInterval = setInterval(() => {
-        void recover("scheduled check");
-      }, RECOVERY_INTERVAL_MS);
 
       const checkMessage = (message: Message, eventType: string) => {
         debug(`[${eventType}] Message from: ${message.author.id} (${message.author.username}), channel: ${message.channelId}`);
