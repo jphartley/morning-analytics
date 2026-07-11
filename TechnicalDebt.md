@@ -36,6 +36,12 @@ This document tracks technical decisions deferred from MVP and features planned 
 
 - [ ] **Auth metrics**: Track signup rate, signin failures, auth errors, session timeout events. Useful for debugging production issues and understanding user behavior.
 
+## Image Provider Compatibility Phase
+
+- [ ] **Remove the legacy public provider fallback**: `NEXT_PUBLIC_IMAGE_PROVIDER` is still accepted when `IMAGE_GENERATION_PROVIDER` is unset so existing deployments continue to work. Remove the fallback after every environment has migrated to the server-only setting. Origin: `add-switchable-image-providers`; small effort after deployment audit.
+- [ ] **Replace in-memory data URLs with streamed or staged files**: All providers currently normalize images to data URLs before the shared Supabase upload. Four 1024x1024 BFL images can create avoidable server memory pressure. The durable-job phase should stream downloads to storage or stage files with bounded memory. Origin: `add-switchable-image-providers`; medium effort because the shared upload contract changes.
+- [ ] **Persist provider attribution with analyses**: Provider and model are present in attempt diagnostics but are not stored on historical analysis rows. Add provider/model attribution when the durable image-job schema is introduced. Origin: `add-switchable-image-providers`; small schema/UI effort, best combined with the job migration.
+
 ## Design & Palette System (from design-palette-tokens)
 
 **Resolved:** Flash of default palette on page load — stored palette is applied before first paint; removed from open debt.

@@ -44,7 +44,7 @@ export async function uploadImagesToStorage(
   const paths: string[] = [];
   let hasFailures = false;
 
-  diagnostics?.add("upload", "info", "Uploading split images to Supabase Storage.", {
+  diagnostics?.add("upload", "info", "Uploading generated images to Supabase Storage.", {
     imageCount: imageDataUrls.length,
     startIndex,
   });
@@ -108,7 +108,7 @@ export async function uploadImagesToStorage(
     };
   }
 
-  diagnostics?.add("upload", "success", "All split images uploaded to Supabase Storage.", {
+  diagnostics?.add("upload", "success", "All generated images uploaded to Supabase Storage.", {
     uploadedCount: paths.length,
   });
 

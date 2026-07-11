@@ -46,6 +46,7 @@ Local development may require a private npm registry (for example via `~/.npmrc`
 Reference docs:
 - `docs/railway-deployment-plan.md`
 - `docs/research/railway-npm-ci-failure.md`
+- `docs/image-generation-architecture.md` (Midjourney/Discord failure conclusions, rejected approaches, and recommended direct-provider job architecture)
 
 ## Coding Style & Naming Conventions
 Use strict TypeScript (`app/tsconfig.json`). Follow existing style: 2-space indentation, semicolons, double quotes, and `@/*` imports. Use PascalCase for component files, camelCase for functions/variables, and descriptive kebab-case names for non-component files. Use design-token Tailwind classes (`bg-page`, `text-ink`, `border-outline`) instead of hardcoded color utilities.

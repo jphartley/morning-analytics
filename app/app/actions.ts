@@ -1,14 +1,8 @@
 "use server";
 
-import path from "path";
-import { existsSync } from "fs";
-import { readFile, readdir } from "fs/promises";
 import { v4 as uuidv4 } from "uuid";
 import { analyzeWithGemini } from "@/lib/gemini";
 import { assertServerSupabaseEnv } from "@/lib/supabase";
-import { triggerImagine } from "@/lib/discord/trigger";
-import { waitForImages } from "@/lib/discord/listener";
-import { splitGridImage } from "@/lib/image-splitter";
 import { saveAnalysis as saveToStorage, uploadImagesToStorage, updateAnalysisImagePaths } from "@/lib/analytics-storage";
 import { getServerSupabase } from "@/lib/supabase";
 import {
@@ -16,6 +10,9 @@ import {
   ImageGenerationDiagnostics,
   ImageGenerationDiagnosticsRecorder,
 } from "@/lib/image-generation-diagnostics";
+import { resolveImageProvider } from "@/lib/image-providers/registry";
+import { ImageProviderError } from "@/lib/image-providers/types";
+import type { ImageProviderId } from "@/lib/image-providers/types";
 
 assertServerSupabaseEnv();
 
@@ -53,55 +50,17 @@ export interface RegenerateImagesResponse {
 }
 
 const MAX_IMAGES_PER_ANALYSIS = 20;
-const MOCK_IMAGE_COUNT = 4;
-const MOCK_IMAGE_DELAY_MS = 1000;
+const GENERATED_IMAGE_COUNT = 4;
 
-function getImageProvider(): "midjourney" | "mock" {
-  if (process.env.NEXT_PUBLIC_IMAGE_PROVIDER === "mock") {
-    return "mock";
-  }
-
-  return "midjourney";
-}
-
-function getContentTypeFromExtension(extension: string): string | null {
-  switch (extension.toLowerCase()) {
-    case ".png":
-      return "image/png";
-    case ".jpg":
-    case ".jpeg":
-      return "image/jpeg";
+function providerLabel(provider: ImageProviderId): string {
+  switch (provider) {
+    case "black-forest-labs":
+      return "Black Forest Labs";
+    case "midjourney":
+      return "Midjourney";
     default:
-      return null;
+      return "Mock provider";
   }
-}
-
-async function loadMockImages(): Promise<string[]> {
-  const directBaseDir = path.join(process.cwd(), "public", "mock-images");
-  const nestedBaseDir = path.join(process.cwd(), "app", "public", "mock-images");
-  const baseDir = existsSync(directBaseDir) ? directBaseDir : nestedBaseDir;
-  const entries = await readdir(baseDir);
-  const imageFiles = entries
-    .filter((entry) => getContentTypeFromExtension(path.extname(entry)) !== null)
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-    .slice(0, MOCK_IMAGE_COUNT)
-    .map((entry) => path.join(baseDir, entry));
-
-  if (imageFiles.length < MOCK_IMAGE_COUNT) {
-    throw new Error(`Expected ${MOCK_IMAGE_COUNT} mock images in ${baseDir}`);
-  }
-
-  return Promise.all(
-    imageFiles.map(async (filePath) => {
-      const buffer = await readFile(filePath);
-      const contentType = getContentTypeFromExtension(path.extname(filePath)) || "image/jpeg";
-      return `data:${contentType};base64,${buffer.toString("base64")}`;
-    })
-  );
-}
-
-async function delay(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -147,49 +106,24 @@ export async function analyzeText(
 }
 
 /**
- * Phase 2: Generate images with Midjourney
- * Takes image prompt from Phase 1, returns 4 split images
- * Also uploads to Supabase storage and returns paths
- * Requires authenticated user - userId passed from client session
+ * Phase 2: Generate exactly four images with the selected provider.
+ * Also uploads them to Supabase storage and returns their paths.
  */
 export async function generateImages(
   imagePrompt: string,
-  userId: string
+  userId: string,
+  providerOverride?: string | null,
+  testMode: boolean = false
 ): Promise<ImageGenerationResponse> {
   const analysisId = uuidv4();
-  const imageProvider = getImageProvider();
-  const diagnostics = createImageGenerationDiagnosticsRecorder(analysisId, imageProvider);
-  diagnostics.add("attempt", "info", "Image generation attempt started.", {
-    provider: imageProvider,
-  });
+  let diagnostics: ImageGenerationDiagnosticsRecorder | undefined;
 
   try {
     if (!userId) {
       return {
         success: false,
         analysisId,
-        diagnostics: diagnostics.complete("error", "Image generation blocked because the user is not authenticated."),
         error: "User must be authenticated to generate images.",
-      };
-    }
-
-    if (imageProvider === "mock") {
-      diagnostics.add("mock", "info", "Using mock image provider.");
-      await delay(MOCK_IMAGE_DELAY_MS);
-      const mockImages = await loadMockImages();
-      const uploadResult = await uploadImagesToStorage(analysisId, mockImages, userId, 0, diagnostics);
-      const status = uploadResult.error ? "warning" : "success";
-      const summary = uploadResult.error
-        ? "Mock images generated, but upload failed."
-        : "Mock images generated and uploaded.";
-
-      return {
-        success: true,
-        imageUrls: mockImages,
-        imagePaths: uploadResult.paths,
-        analysisId,
-        diagnostics: diagnostics.complete(status, summary),
-        uploadError: uploadResult.error,
       };
     }
 
@@ -197,61 +131,45 @@ export async function generateImages(
       return {
         success: false,
         analysisId,
-        diagnostics: diagnostics.complete("error", "No image prompt was provided."),
         error: "No image prompt provided.",
       };
     }
 
-    // Trigger Midjourney
-    const triggerResult = await triggerImagine(imagePrompt, diagnostics);
-    if (!triggerResult.success) {
-      return {
-        success: false,
-        analysisId,
-        diagnostics: diagnostics.complete("error", "Discord trigger failed before Midjourney generation could start."),
-        error: triggerResult.error || "Failed to trigger image generation.",
-      };
-    }
+    const resolved = resolveImageProvider({ override: providerOverride, testMode });
+    diagnostics = createImageGenerationDiagnosticsRecorder(analysisId, resolved.id);
+    diagnostics.add("provider-selection", "info", "Image provider selected.", {
+      provider: resolved.id,
+      source: resolved.source,
+    });
 
-    // Wait for Midjourney response
-    const listenerResult = await waitForImages({
-      nonce: triggerResult.nonce,
-      startedAt: diagnostics.startedAt,
+    const generated = await resolved.provider.generateImageSet({
+      attemptId: analysisId,
       prompt: imagePrompt,
+      count: GENERATED_IMAGE_COUNT,
       diagnostics,
     });
-    if (!listenerResult.success) {
-      return {
-        success: false,
-        analysisId,
-        diagnostics: diagnostics.complete("error", "Discord trigger succeeded, but no usable Midjourney grid was captured."),
-        error: listenerResult.error || "Failed to receive generated images.",
-      };
+    if (generated.imageDataUrls.length !== GENERATED_IMAGE_COUNT) {
+      throw new ImageProviderError(
+        "incomplete-set",
+        `${providerLabel(resolved.id)} returned ${generated.imageDataUrls.length} images instead of ${GENERATED_IMAGE_COUNT}.`
+      );
     }
 
-    // Split the grid image into 4 separate images
-    const gridImageUrl = listenerResult.imageUrls[0];
-    if (!gridImageUrl) {
-      return {
-        success: false,
-        analysisId,
-        diagnostics: diagnostics.complete("error", "Midjourney response did not include an image URL."),
-        error: "No image URL received from Midjourney.",
-      };
-    }
-
-    const splitImages = await splitGridImage(gridImageUrl, diagnostics);
-
-    // Upload images to Supabase storage (server-side, no client round-trip)
-    const uploadResult = await uploadImagesToStorage(analysisId, splitImages, userId, 0, diagnostics);
+    const uploadResult = await uploadImagesToStorage(
+      analysisId,
+      generated.imageDataUrls,
+      userId,
+      0,
+      diagnostics
+    );
     const status = uploadResult.error ? "warning" : "success";
     const summary = uploadResult.error
-      ? "Midjourney images were generated, but upload failed."
-      : "Midjourney images were generated, split, and uploaded.";
+      ? `${providerLabel(resolved.id)} images were generated, but upload failed.`
+      : `${providerLabel(resolved.id)} images were generated and uploaded.`;
 
     return {
       success: true,
-      imageUrls: splitImages,
+      imageUrls: generated.imageDataUrls,
       imagePaths: uploadResult.paths,
       analysisId,
       diagnostics: diagnostics.complete(status, summary),
@@ -259,13 +177,14 @@ export async function generateImages(
     };
   } catch (error) {
     console.error("Image generation error:", error);
-    diagnostics.add("attempt", "error", "Image generation threw an unexpected error.", {
+    diagnostics?.add("attempt", "error", "Image generation failed.", {
+      code: error instanceof ImageProviderError ? error.code : "unexpected",
       error: error instanceof Error ? error.message : "Unknown image generation error",
     });
     return {
       success: false,
       analysisId,
-      diagnostics: diagnostics.complete("error", "Image generation failed with an unexpected error."),
+      diagnostics: diagnostics?.complete("error", "Image generation failed."),
       error: error instanceof Error ? error.message : "Failed to generate images.",
     };
   }
@@ -320,7 +239,9 @@ export async function saveAnalysis(
  */
 export async function regenerateImages(
   analysisId: string,
-  userId: string
+  userId: string,
+  providerOverride?: string | null,
+  testMode: boolean = false
 ): Promise<RegenerateImagesResponse> {
   let diagnostics: ImageGenerationDiagnosticsRecorder | undefined;
 
@@ -350,58 +271,31 @@ export async function regenerateImages(
     }
 
     const currentPaths: string[] = analysis.image_paths || [];
-    if (currentPaths.length + 4 > MAX_IMAGES_PER_ANALYSIS) {
+    if (currentPaths.length + GENERATED_IMAGE_COUNT > MAX_IMAGES_PER_ANALYSIS) {
       return { success: false, error: `Maximum of ${MAX_IMAGES_PER_ANALYSIS} images reached.` };
     }
 
     const startIndex = currentPaths.length;
-    const imageProvider = getImageProvider();
-    diagnostics = createImageGenerationDiagnosticsRecorder(analysisId, imageProvider);
-    diagnostics.add("attempt", "info", "Image regeneration attempt started.", {
-      provider: imageProvider,
+    const resolved = resolveImageProvider({ override: providerOverride, testMode });
+    diagnostics = createImageGenerationDiagnosticsRecorder(analysisId, resolved.id);
+    diagnostics.add("provider-selection", "info", "Image provider selected for regeneration.", {
+      provider: resolved.id,
+      source: resolved.source,
       startIndex,
     });
 
-    let newImageUrls: string[];
-
-    if (imageProvider === "mock") {
-      diagnostics.add("mock", "info", "Using mock image provider for regeneration.");
-      await delay(MOCK_IMAGE_DELAY_MS);
-      newImageUrls = await loadMockImages();
-    } else {
-      const triggerResult = await triggerImagine(analysis.image_prompt, diagnostics);
-      if (!triggerResult.success) {
-        return {
-          success: false,
-          diagnostics: diagnostics.complete("error", "Discord trigger failed before Midjourney regeneration could start."),
-          error: triggerResult.error || "Failed to trigger image generation.",
-        };
-      }
-
-      const listenerResult = await waitForImages({
-        nonce: triggerResult.nonce,
-        startedAt: diagnostics.startedAt,
-        prompt: analysis.image_prompt,
-        diagnostics,
-      });
-      if (!listenerResult.success) {
-        return {
-          success: false,
-          diagnostics: diagnostics.complete("error", "Discord trigger succeeded, but no usable Midjourney grid was captured."),
-          error: listenerResult.error || "Failed to receive generated images.",
-        };
-      }
-
-      const gridImageUrl = listenerResult.imageUrls[0];
-      if (!gridImageUrl) {
-        return {
-          success: false,
-          diagnostics: diagnostics.complete("error", "Midjourney response did not include an image URL."),
-          error: "No image URL received from Midjourney.",
-        };
-      }
-
-      newImageUrls = await splitGridImage(gridImageUrl, diagnostics);
+    const generated = await resolved.provider.generateImageSet({
+      attemptId: analysisId,
+      prompt: analysis.image_prompt,
+      count: GENERATED_IMAGE_COUNT,
+      diagnostics,
+    });
+    const newImageUrls = generated.imageDataUrls;
+    if (newImageUrls.length !== GENERATED_IMAGE_COUNT) {
+      throw new ImageProviderError(
+        "incomplete-set",
+        `${providerLabel(resolved.id)} returned ${newImageUrls.length} images instead of ${GENERATED_IMAGE_COUNT}.`
+      );
     }
 
     // Upload with offset index
@@ -435,12 +329,13 @@ export async function regenerateImages(
     };
   } catch (error) {
     console.error("Image regeneration error:", error);
-    diagnostics?.add("attempt", "error", "Image regeneration threw an unexpected error.", {
+    diagnostics?.add("attempt", "error", "Image regeneration failed.", {
+      code: error instanceof ImageProviderError ? error.code : "unexpected",
       error: error instanceof Error ? error.message : "Unknown image regeneration error",
     });
     return {
       success: false,
-      diagnostics: diagnostics?.complete("error", "Image regeneration failed with an unexpected error."),
+      diagnostics: diagnostics?.complete("error", "Image regeneration failed."),
       error: error instanceof Error ? error.message : "Failed to regenerate images.",
     };
   }

@@ -45,7 +45,21 @@ The system SHALL enforce a maximum of 20 images per analysis (5 regeneration rou
 
 - **WHEN** user triggers regeneration but current image count + 4 would exceed 20
 - **THEN** system returns an error before triggering image generation
-- **THEN** no Midjourney API call is made
+- **THEN** no external image-provider request is made
+
+### Requirement: Use the selected provider for regeneration
+The system SHALL resolve regeneration through the same provider-selection contract used for initial image generation.
+
+#### Scenario: Regeneration uses deployment default
+- **WHEN** a user requests regeneration without an allowed provider override
+- **THEN** the system SHALL generate four new images with the configured deployment-default provider
+- **AND** the system SHALL use the stored image prompt from the analysis
+
+#### Scenario: Regeneration uses test override
+- **WHEN** an authenticated user in test mode supplies an allowed provider override
+- **AND** server-side provider override support is enabled
+- **THEN** the system SHALL generate the new image round with the selected provider
+- **AND** existing images SHALL remain visible and unchanged
 
 ### Requirement: Regenerate button visibility
 
@@ -96,4 +110,3 @@ The system SHALL keep image regeneration controls available across quiet, insigh
 - **WHEN** regeneration returns diagnostic context outside `test` mode
 - **THEN** the system SHALL hide diagnostic detail
 - **AND** the system SHALL keep any user-facing error or warning visible
-

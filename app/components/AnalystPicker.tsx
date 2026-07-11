@@ -42,7 +42,7 @@ export function AnalystPicker({ onPersonaChange }: AnalystPickerProps) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm text-ink-muted bg-surface border border-outline rounded-lg hover:bg-page focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors"
+        className="flex h-[42px] items-center gap-2 px-3 text-sm text-ink-muted bg-surface border border-outline rounded-lg hover:bg-page focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors"
       >
         <span className="font-medium">{currentPersona.displayName}</span>
         <svg

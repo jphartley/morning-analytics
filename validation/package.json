@@ -4,7 +4,8 @@
   "scripts": {
     "test-prompt": "node test-prompt.mjs",
     "test-discord": "node test-discord.mjs",
-    "test-midjourney": "node test-midjourney.mjs"
+    "test-midjourney": "node test-midjourney.mjs",
+    "test-black-forest-labs": "node test-black-forest-labs.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

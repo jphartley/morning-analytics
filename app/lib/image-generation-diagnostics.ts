@@ -1,3 +1,5 @@
+import type { ImageProviderId } from "@/lib/image-providers/types";
+
 export type ImageGenerationDiagnosticStatus = "info" | "success" | "warning" | "error";
 
 export type ImageGenerationDiagnosticMetadata = Record<
@@ -15,7 +17,7 @@ export interface ImageGenerationDiagnosticEvent {
 
 export interface ImageGenerationDiagnostics {
   attemptId: string;
-  provider: "midjourney" | "mock";
+  provider: ImageProviderId;
   startedAt: string;
   completedAt?: string;
   status: "running" | "success" | "warning" | "error";
@@ -25,7 +27,7 @@ export interface ImageGenerationDiagnostics {
 
 export interface ImageGenerationDiagnosticsRecorder {
   attemptId: string;
-  provider: "midjourney" | "mock";
+  provider: ImageProviderId;
   startedAt: Date;
   add: (
     stage: string,
@@ -38,6 +40,7 @@ export interface ImageGenerationDiagnosticsRecorder {
 }
 
 const MAX_METADATA_STRING_LENGTH = 140;
+const SENSITIVE_METADATA_KEY = /(authorization|api[-_]?key|secret|token|polling[-_]?url|delivery[-_]?url|signed[-_]?url)/i;
 
 function sanitizeMetadataValue(
   value: string | number | boolean | null | undefined
@@ -46,7 +49,12 @@ function sanitizeMetadataValue(
     return value;
   }
 
-  if (value.includes("discordapp.com") || value.includes("discord.com/api")) {
+  if (
+    /^https?:\/\//i.test(value)
+    || value.includes("discordapp.com")
+    || value.includes("discord.com/api")
+    || /(?:^|\.)bfl\.ai(?:\/|$)/i.test(value)
+  ) {
     return "[redacted-url]";
   }
 
@@ -57,7 +65,7 @@ function sanitizeMetadataValue(
   return value;
 }
 
-function sanitizeMetadata(
+export function sanitizeDiagnosticMetadata(
   metadata?: ImageGenerationDiagnosticMetadata
 ): ImageGenerationDiagnosticMetadata | undefined {
   if (!metadata) {
@@ -67,7 +75,10 @@ function sanitizeMetadata(
   return Object.fromEntries(
     Object.entries(metadata)
       .filter(([, value]) => value !== undefined)
-      .map(([key, value]) => [key, sanitizeMetadataValue(value)])
+      .map(([key, value]) => [
+        key,
+        SENSITIVE_METADATA_KEY.test(key) ? "[redacted]" : sanitizeMetadataValue(value),
+      ])
   );
 }
 
@@ -105,7 +116,7 @@ export function describePrompt(prompt: string): ImageGenerationDiagnosticMetadat
 
 export function createImageGenerationDiagnosticsRecorder(
   attemptId: string,
-  provider: "midjourney" | "mock"
+  provider: ImageProviderId
 ): ImageGenerationDiagnosticsRecorder {
   const startedAt = new Date();
   const events: ImageGenerationDiagnosticEvent[] = [];
@@ -133,7 +144,7 @@ export function createImageGenerationDiagnosticsRecorder(
         stage,
         status,
         message,
-        metadata: sanitizeMetadata(metadata),
+        metadata: sanitizeDiagnosticMetadata(metadata),
       });
     },
     complete: (status, summary) => {

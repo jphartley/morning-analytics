@@ -1,29 +1,39 @@
 ## Purpose
 
-Define Midjourney image generation behavior, Discord capture, image splitting, and image-generation error handling.
+Define provider-neutral image generation, normalized storage output, and provider-specific Midjourney capture behavior.
 ## Requirements
-### Requirement: Trigger Midjourney image generation
+### Requirement: Normalize provider image output before storage
+The system SHALL normalize output from every registered image provider into the same four-image application contract before shared storage and response handling.
 
-The system SHALL send an image prompt to Midjourney via Discord and return the generated images. The system SHALL support generating images for both new and existing analyses.
+#### Scenario: Provider returns a successful image set
+- **WHEN** the selected provider returns exactly four supported images
+- **THEN** the system SHALL upload the four images through the shared Supabase storage path
+- **AND** the system SHALL return four displayable images and their storage paths
 
-#### Scenario: Successful generation
+#### Scenario: Provider returns an invalid image set
+- **WHEN** the selected provider returns an unsupported content type, empty image data, or an unexpected image count
+- **THEN** the system SHALL reject the image set before reporting success
+- **AND** diagnostics SHALL identify output normalization as the failure stage
 
-- **WHEN** system receives an image prompt
-- **THEN** system sends `/imagine` command to Midjourney via Discord
-- **THEN** system waits for Midjourney to complete generation
-- **THEN** system returns 4 image URLs
+### Requirement: Generate images with the selected provider
+The system SHALL send an image prompt to the provider resolved for the current attempt and SHALL return the generated images without changing the selected provider during that attempt.
 
-#### Scenario: Generation for existing analysis (regeneration)
+#### Scenario: Midjourney generation succeeds
+- **WHEN** Midjourney is selected and its Discord workflow captures a completed grid
+- **THEN** the system SHALL split the grid and return four normalized images according to the existing Midjourney requirements
 
-- **WHEN** system receives a regeneration request with an existing analysis ID
-- **THEN** system uses the stored image prompt from the analysis record
-- **THEN** system uploads images with indices offset by the current image count
-- **THEN** system returns 4 new image URLs
+#### Scenario: Black Forest Labs generation succeeds
+- **WHEN** Black Forest Labs is selected and its four image slots complete successfully
+- **THEN** the system SHALL return four normalized images without invoking Discord or grid splitting
 
-#### Scenario: Generation timeout
+#### Scenario: Mock generation succeeds
+- **WHEN** mock is selected
+- **THEN** the system SHALL return four local fixture images without invoking an external image provider
 
-- **WHEN** Midjourney does not respond within the timeout period
-- **THEN** system returns a timeout error
+#### Scenario: Selected provider fails
+- **WHEN** the selected provider returns a terminal failure or timeout
+- **THEN** the system SHALL return an error attributed to that provider
+- **AND** the system SHALL NOT automatically invoke another provider
 
 ### Requirement: Capture Midjourney response
 
@@ -91,4 +101,3 @@ The system SHALL return actionable image-generation errors when Discord trigger,
 - **WHEN** the prompt trigger succeeds but no usable Midjourney grid is captured from the configured channel
 - **THEN** the system SHALL return an error that distinguishes capture failure from trigger failure
 - **THEN** the diagnostics SHALL include redacted configured channel context and latest inspected candidate counts when available
-

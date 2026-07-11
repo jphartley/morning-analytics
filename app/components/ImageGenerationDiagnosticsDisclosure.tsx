@@ -39,6 +39,30 @@ function statusSummary(status: ImageGenerationDiagnostics["status"]): {
 function describeEvent(event: DiagnosticEvent): string {
   const reason = event.metadata?.reason;
 
+  if (event.stage === "provider-selection") {
+    return `The app selected ${String(event.metadata?.provider || "the configured provider")} for this request.`;
+  }
+
+  if (event.stage === "provider-submit") {
+    return event.status === "success"
+      ? "The image provider accepted this generation request."
+      : "The app is submitting the prompt to the selected image provider.";
+  }
+
+  if (event.stage === "provider-wait") {
+    return "The app is checking whether the selected image provider has finished generating this image.";
+  }
+
+  if (event.stage === "provider-download") {
+    return "The app is downloading a completed image before its temporary delivery link expires.";
+  }
+
+  if (event.stage === "provider-result") {
+    return event.status === "success"
+      ? "The selected provider returned the complete image set."
+      : "The selected provider did not return all four required images.";
+  }
+
   if (event.stage === "trigger" && event.status === "info") {
     return "The app is sending the image prompt to Discord as a Midjourney /imagine request.";
   }
@@ -127,7 +151,7 @@ function describeEvent(event: DiagnosticEvent): string {
     return "One generated image was uploaded successfully.";
   }
 
-  if (event.stage === "upload" && event.message.includes("All split images uploaded")) {
+  if (event.stage === "upload" && event.message.includes("All generated images uploaded")) {
     return "All generated images were uploaded and are ready for the app to show.";
   }
 
@@ -205,7 +229,7 @@ export function ImageGenerationDiagnosticsDisclosure({
           {pendingElapsedSeconds !== null && pendingElapsedSeconds !== undefined && (
             <p className="mt-1">Waiting for {pendingElapsedSeconds} seconds so far.</p>
           )}
-          <p className="mt-1">{statusMessage || "The prompt has been sent and the app is waiting for a completed Midjourney grid."}</p>
+          <p className="mt-1">{statusMessage || "The prompt has been sent and the app is waiting for the selected image provider."}</p>
           <p className="mt-1">
             Detailed server events will appear here after the request succeeds, fails, or times out.
           </p>

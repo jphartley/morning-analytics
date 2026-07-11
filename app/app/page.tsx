@@ -19,10 +19,13 @@ import { HistorySidebar } from "@/components/HistorySidebar";
 import { AppHeader } from "@/components/AppHeader";
 import { WelcomeEmptyState } from "@/components/WelcomeEmptyState";
 import { ViewDensityControl } from "@/components/ViewDensityControl";
+import { ImageProviderPicker } from "@/components/ImageProviderPicker";
 import { useAuth } from "@/lib/useAuth";
 import { omitMarkdownNode } from "@/lib/markdown-props";
 import { ImageGenerationDiagnostics } from "@/lib/image-generation-diagnostics";
 import { getStoredViewDensityMode, setStoredViewDensityMode, ViewDensityMode } from "@/lib/view-density";
+import { IMAGE_PROVIDER_IDS } from "@/lib/image-providers/types";
+import type { ImageProviderId } from "@/lib/image-providers/types";
 
 type AppState = "idle" | "analyzing" | "text-ready" | "complete" | "error" | "viewing-history";
 
@@ -36,7 +39,13 @@ interface HistoryViewData {
 }
 
 const MAX_IMAGES = 20;
-const isMockMode = process.env.NEXT_PUBLIC_IMAGE_PROVIDER === "mock";
+const providerOverrideEnabled = process.env.NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED === "true";
+const configuredProvider = process.env.NEXT_PUBLIC_CONFIGURED_IMAGE_PROVIDER;
+const defaultImageProvider: ImageProviderId = IMAGE_PROVIDER_IDS.includes(
+  configuredProvider as ImageProviderId
+)
+  ? configuredProvider as ImageProviderId
+  : "midjourney";
 
 export default function Home() {
   const { user } = useAuth();
@@ -50,6 +59,7 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState<string>(getStoredModel);
   const [selectedPersona, setSelectedPersona] = useState<string>("jungian");
   const [viewMode, setViewMode] = useState<ViewDensityMode>(getStoredViewDensityMode);
+  const [selectedImageProvider, setSelectedImageProvider] = useState<ImageProviderId>(defaultImageProvider);
   const [isPending, startTransition] = useTransition();
 
   // History state
@@ -139,7 +149,14 @@ export default function Home() {
         setImageGenerationStatus("Image generation request is still running.");
         setImageGenerationStartedAt(Date.now());
         setImageGenerationElapsedSeconds(0);
-        const imageResult = await generateImages(textResult.imagePrompt, user!.id);
+        const imageResult = await generateImages(
+          textResult.imagePrompt,
+          user!.id,
+          viewMode === "test" && selectedImageProvider !== defaultImageProvider
+            ? selectedImageProvider
+            : null,
+          viewMode === "test"
+        );
         setImageGenerationStartedAt(null);
         setImageGenerationElapsedSeconds(null);
         setImageGenerationDiagnostics(imageResult.diagnostics || null);
@@ -264,12 +281,19 @@ export default function Home() {
 
     setIsRegenerating(true);
     setSaveError(null);
-    setImageGenerationStatus("Requesting four more Midjourney images.");
+    setImageGenerationStatus("Requesting four more images.");
     setImageGenerationDiagnostics(null);
     setImageGenerationStartedAt(Date.now());
     setImageGenerationElapsedSeconds(0);
 
-    const result = await regenerateImages(analysisId, user.id);
+    const result = await regenerateImages(
+      analysisId,
+      user.id,
+      viewMode === "test" && selectedImageProvider !== defaultImageProvider
+        ? selectedImageProvider
+        : null,
+      viewMode === "test"
+    );
     setImageGenerationStartedAt(null);
     setImageGenerationElapsedSeconds(null);
     setImageGenerationDiagnostics(result.diagnostics || null);
@@ -305,6 +329,7 @@ export default function Home() {
   const isQuietMode = viewMode === "quiet";
   const isInsightOrTestMode = viewMode === "insight" || viewMode === "test";
   const isTestMode = viewMode === "test";
+  const isMockProviderActive = selectedImageProvider === "mock";
 
   return (
     <>
@@ -322,18 +347,25 @@ export default function Home() {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <main className="max-w-3xl mx-auto px-4 py-12">
-          {isMockMode && isTestMode && (
+          {isMockProviderActive && isTestMode && (
             <div className="mb-6 rounded-lg border border-outline bg-accent-soft px-4 py-2 text-center text-sm text-ink">
               Mock mode active — using local images for faster testing.
             </div>
           )}
           <header className={showWelcomeEmptyState ? "mb-6" : "mb-12"}>
-            <div className="flex justify-between items-start mb-4">
+            <div className="flex items-center justify-between mb-4">
               <div />
-              <div className="flex flex-wrap justify-end gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-3">
                 <AnalystPicker onPersonaChange={handlePersonaChange} />
                 {!isQuietMode && (
                   <ModelPicker onModelChange={handleModelChange} />
+                )}
+                {isTestMode && providerOverrideEnabled && (
+                  <ImageProviderPicker
+                    value={selectedImageProvider}
+                    defaultProvider={defaultImageProvider}
+                    onChange={setSelectedImageProvider}
+                  />
                 )}
                 <ViewDensityControl value={viewMode} onChange={handleViewModeChange} />
               </div>
