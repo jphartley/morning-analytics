@@ -1,50 +1,46 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  generateImageSet: vi.fn(),
+  executeImageGeneration: vi.fn(),
   getServerSupabase: vi.fn(),
-  resolveImageProvider: vi.fn(),
-  saveToStorage: vi.fn(),
-  updateAnalysisImagePaths: vi.fn(),
-  uploadImagesToStorage: vi.fn(),
-  uuidv4: vi.fn(),
+  resolveImageGenerationSelection: vi.fn(),
+  updateAnalysisImageGeneration: vi.fn(),
 }));
 
-vi.mock("uuid", () => ({
-  v4: mocks.uuidv4,
-}));
-
-vi.mock("@/lib/gemini", () => ({
-  analyzeWithGemini: vi.fn(),
-}));
-
+vi.mock("uuid", () => ({ v4: vi.fn(() => "analysis-generated") }));
+vi.mock("@/lib/gemini", () => ({ analyzeWithGemini: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
   assertServerSupabaseEnv: vi.fn(),
   getServerSupabase: mocks.getServerSupabase,
 }));
-
 vi.mock("@/lib/analytics-storage", () => ({
-  saveAnalysis: mocks.saveToStorage,
-  updateAnalysisImagePaths: mocks.updateAnalysisImagePaths,
-  uploadImagesToStorage: mocks.uploadImagesToStorage,
+  saveAnalysis: vi.fn(),
+  updateAnalysisImageGeneration: mocks.updateAnalysisImageGeneration,
 }));
-
+vi.mock("@/lib/image-generation-orchestrator", () => ({
+  executeImageGeneration: mocks.executeImageGeneration,
+}));
 vi.mock("@/lib/image-providers/registry", () => ({
-  resolveImageProvider: mocks.resolveImageProvider,
+  resolveImageGenerationSelection: mocks.resolveImageGenerationSelection,
 }));
 
 import { regenerateImages } from "./actions";
 
-const GENERATED_IMAGES = [
-  "data:image/jpeg;base64,AQ==",
-  "data:image/jpeg;base64,Ag==",
-  "data:image/jpeg;base64,Aw==",
-  "data:image/jpeg;base64,BA==",
-];
+const DUAL_SELECTION = {
+  selection: "dual" as const,
+  providers: [{ id: "black-forest-labs" }, { id: "midjourney" }],
+};
+const EXECUTION_RESULT = {
+  success: true,
+  partial: false,
+  groups: [],
+  batches: [],
+  imageUrls: Array(8).fill("data:image/jpeg;base64,AQ=="),
+  imagePaths: Array.from({ length: 8 }, (_, index) => `analysis-123/${index}.jpg`),
+  diagnostics: [],
+};
 
-beforeEach(() => {
-  vi.clearAllMocks();
-
+function analysisWithPaths(count: number) {
   mocks.getServerSupabase.mockReturnValue({
     from: vi.fn(() => ({
       select: vi.fn(() => ({
@@ -52,7 +48,8 @@ beforeEach(() => {
           single: vi.fn(async () => ({
             data: {
               image_prompt: "A luminous blue lotus",
-              image_paths: [],
+              image_paths: Array.from({ length: count }, (_, index) => `analysis-123/${index}.jpg`),
+              image_generation_batches: [],
               user_id: "user-123",
             },
             error: null,
@@ -61,59 +58,43 @@ beforeEach(() => {
       })),
     })),
   });
-  mocks.generateImageSet.mockResolvedValue({
-    provider: "black-forest-labs",
-    imageDataUrls: GENERATED_IMAGES,
-  });
-  mocks.resolveImageProvider.mockReturnValue({
-    id: "black-forest-labs",
-    provider: { generateImageSet: mocks.generateImageSet },
-    source: "deployment-default",
-  });
-  mocks.uploadImagesToStorage.mockImplementation(
-    async (analysisId: string, _images: string[], _userId: string, startIndex: number) => ({
-      paths: GENERATED_IMAGES.map((_, index) => `${analysisId}/${startIndex + index}.jpg`),
-    })
-  );
-  mocks.updateAnalysisImagePaths.mockResolvedValue({ success: true });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  analysisWithPaths(0);
+  mocks.resolveImageGenerationSelection.mockReturnValue(DUAL_SELECTION);
+  mocks.executeImageGeneration.mockResolvedValue(EXECUTION_RESULT);
+  mocks.updateAnalysisImageGeneration.mockResolvedValue({ success: true });
 });
 
-describe("regenerateImages attempt identity", () => {
-  it("uses a fresh provider and diagnostic attempt ID for every round", async () => {
-    mocks.uuidv4
-      .mockReturnValueOnce("attempt-round-one")
-      .mockReturnValueOnce("attempt-round-two");
+describe("regenerateImages dual mode", () => {
+  it("persists successful paths and every provider batch together", async () => {
+    const result = await regenerateImages("analysis-123", "user-123", "dual", true);
 
-    const first = await regenerateImages("analysis-123", "user-123");
-    const second = await regenerateImages("analysis-123", "user-123");
+    expect(result.success).toBe(true);
+    expect(mocks.executeImageGeneration).toHaveBeenCalledWith(expect.objectContaining({
+      analysisId: "analysis-123",
+      prompt: "A luminous blue lotus",
+      startIndex: 0,
+      resolvedSelection: DUAL_SELECTION,
+      context: "regeneration",
+    }));
+    expect(mocks.updateAnalysisImageGeneration).toHaveBeenCalledWith(
+      "analysis-123",
+      EXECUTION_RESULT.imagePaths,
+      EXECUTION_RESULT.batches
+    );
+  });
 
-    expect(first.success).toBe(true);
-    expect(second.success).toBe(true);
-    expect(first.diagnostics?.attemptId).toBe("attempt-round-one");
-    expect(second.diagnostics?.attemptId).toBe("attempt-round-two");
-    expect(mocks.generateImageSet).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ attemptId: "attempt-round-one" })
-    );
-    expect(mocks.generateImageSet).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ attemptId: "attempt-round-two" })
-    );
-    expect(mocks.uploadImagesToStorage).toHaveBeenNthCalledWith(
-      1,
-      "analysis-123",
-      GENERATED_IMAGES,
-      "user-123",
-      0,
-      expect.objectContaining({ attemptId: "attempt-round-one" })
-    );
-    expect(mocks.uploadImagesToStorage).toHaveBeenNthCalledWith(
-      2,
-      "analysis-123",
-      GENERATED_IMAGES,
-      "user-123",
-      0,
-      expect.objectContaining({ attemptId: "attempt-round-two" })
-    );
+  it("rejects a dual round before provider calls when eight slots do not remain", async () => {
+    analysisWithPaths(16);
+
+    const result = await regenerateImages("analysis-123", "user-123", "dual", true);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Maximum of 20/);
+    expect(mocks.executeImageGeneration).not.toHaveBeenCalled();
+    expect(mocks.updateAnalysisImageGeneration).not.toHaveBeenCalled();
   });
 });

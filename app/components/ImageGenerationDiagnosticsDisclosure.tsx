@@ -335,3 +335,37 @@ export function ImageGenerationDiagnosticsDisclosure({
     </details>
   );
 }
+
+interface ImageGenerationDiagnosticsListProps {
+  diagnostics: ImageGenerationDiagnostics[];
+  statusMessage?: string | null;
+}
+
+export function ImageGenerationDiagnosticsList({
+  diagnostics,
+  statusMessage,
+}: ImageGenerationDiagnosticsListProps) {
+  if (diagnostics.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      {diagnostics.map((attempt) => (
+        <div key={attempt.attemptId} className="flex items-start gap-2">
+          <span className="pt-1 text-xs font-medium text-ink-muted">
+            {attempt.provider === "black-forest-labs"
+              ? "Black Forest Labs"
+              : attempt.provider === "midjourney"
+                ? "Midjourney"
+                : "Mock"}
+          </span>
+          <ImageGenerationDiagnosticsDisclosure
+            diagnostics={attempt}
+            statusMessage={statusMessage}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}

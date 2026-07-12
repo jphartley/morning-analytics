@@ -6,13 +6,16 @@ import { analyzeText, generateImages, saveAnalysis, regenerateImages, TextAnalys
 import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { JournalInput } from "@/components/JournalInput";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
-import { ImageGrid } from "@/components/ImageGrid";
+import { ProviderImageGroups } from "@/components/ProviderImageGroups";
 import { ImagePromptDisclosure } from "@/components/ImagePromptDisclosure";
 import { RegenerateButton } from "@/components/RegenerateButton";
 import { LoadingState, ANALYSIS_MESSAGES, IMAGE_MESSAGES } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
 import { Lightbox } from "@/components/Lightbox";
-import { ImageGenerationDiagnosticsDisclosure } from "@/components/ImageGenerationDiagnosticsDisclosure";
+import {
+  ImageGenerationDiagnosticsDisclosure,
+  ImageGenerationDiagnosticsList,
+} from "@/components/ImageGenerationDiagnosticsDisclosure";
 import { getStoredModel, ModelPicker } from "@/components/ModelPicker";
 import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar } from "@/components/HistorySidebar";
@@ -26,6 +29,14 @@ import { ImageGenerationDiagnostics } from "@/lib/image-generation-diagnostics";
 import { getStoredViewDensityMode, setStoredViewDensityMode, ViewDensityMode } from "@/lib/view-density";
 import { IMAGE_PROVIDER_IDS } from "@/lib/image-providers/types";
 import type { ImageProviderId } from "@/lib/image-providers/types";
+import {
+  ImageDisplayGroup,
+  ImageGenerationBatch,
+  ImageGenerationSelection,
+  flattenDisplayGroupUrls,
+  providerResultGroupToDisplayGroup,
+  requiredImageCapacity,
+} from "@/lib/image-generation-types";
 
 type AppState = "idle" | "analyzing" | "text-ready" | "complete" | "error" | "viewing-history";
 
@@ -33,13 +44,14 @@ interface HistoryViewData {
   id: string;
   inputText: string;
   analysisText: string;
-  imageUrls: string[];
+  imageGroups: ImageDisplayGroup[];
   imagePrompt?: string | null;
   analystPersona?: string | null;
 }
 
 const MAX_IMAGES = 20;
 const providerOverrideEnabled = process.env.NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED === "true";
+const dualModeEnabled = process.env.NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED === "true";
 const configuredProvider = process.env.NEXT_PUBLIC_CONFIGURED_IMAGE_PROVIDER;
 const defaultImageProvider: ImageProviderId = IMAGE_PROVIDER_IDS.includes(
   configuredProvider as ImageProviderId
@@ -52,14 +64,14 @@ export default function Home() {
   const [state, setState] = useState<AppState>("idle");
   const [journalText, setJournalText] = useState("");
   const [analysisResult, setAnalysisResult] = useState<TextAnalysisResponse | null>(null);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imageGroups, setImageGroups] = useState<ImageDisplayGroup[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>(getStoredModel);
   const [selectedPersona, setSelectedPersona] = useState<string>("jungian");
   const [viewMode, setViewMode] = useState<ViewDensityMode>(getStoredViewDensityMode);
-  const [selectedImageProvider, setSelectedImageProvider] = useState<ImageProviderId>(defaultImageProvider);
+  const [selectedImageProvider, setSelectedImageProvider] = useState<ImageGenerationSelection>(defaultImageProvider);
   const [isPending, startTransition] = useTransition();
 
   // History state
@@ -74,7 +86,7 @@ export default function Home() {
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [imageGenerationStatus, setImageGenerationStatus] = useState<string | null>(null);
-  const [imageGenerationDiagnostics, setImageGenerationDiagnostics] = useState<ImageGenerationDiagnostics | null>(null);
+  const [imageGenerationDiagnostics, setImageGenerationDiagnostics] = useState<ImageGenerationDiagnostics[]>([]);
   const [imageGenerationStartedAt, setImageGenerationStartedAt] = useState<number | null>(null);
   const [imageGenerationElapsedSeconds, setImageGenerationElapsedSeconds] = useState<number | null>(null);
 
@@ -117,9 +129,9 @@ export default function Home() {
     setState("analyzing");
     setError(null);
     setSaveError(null);
-    setImageUrls([]);
+    setImageGroups([]);
     setImageGenerationStatus(null);
-    setImageGenerationDiagnostics(null);
+    setImageGenerationDiagnostics([]);
     setImageGenerationStartedAt(null);
     setImageGenerationElapsedSeconds(null);
     setSelectedHistoryId(null);
@@ -142,6 +154,7 @@ export default function Home() {
 
       // Phase 2: Generate images in background
       let imagePaths: string[] = [];
+      let imageGenerationBatches: ImageGenerationBatch[] = [];
       let uploadErrorMessage: string | null = null;
       let imageGenerationErrorMessage: string | null = null;
       let analysisId: string | undefined;
@@ -159,20 +172,26 @@ export default function Home() {
         );
         setImageGenerationStartedAt(null);
         setImageGenerationElapsedSeconds(null);
-        setImageGenerationDiagnostics(imageResult.diagnostics || null);
+        setImageGenerationDiagnostics(imageResult.diagnostics || []);
+        if (imageResult.groups) {
+          setImageGroups(imageResult.groups.map(providerResultGroupToDisplayGroup));
+        }
 
         if (imageResult.success && imageResult.imageUrls) {
-          setImageUrls(imageResult.imageUrls);
           imagePaths = imageResult.imagePaths || [];
+          imageGenerationBatches = imageResult.batches || [];
           analysisId = imageResult.analysisId;
-          setImageGenerationStatus(imageResult.uploadError
-            ? "Images generated, but storage upload needs attention."
-            : "Images generated successfully.");
+          setImageGenerationStatus(imageResult.partial
+            ? "One provider succeeded and one provider failed."
+            : imageResult.uploadError
+              ? "Images generated, but storage upload needs attention."
+              : "Images generated successfully.");
           if (imageResult.uploadError) {
             uploadErrorMessage = imageResult.uploadError;
           }
         } else if (!imageResult.success) {
           imageGenerationErrorMessage = imageResult.error || "Failed to generate images";
+          imageGenerationBatches = imageResult.batches || [];
           analysisId = imageResult.analysisId;
           setImageGenerationStatus(imageGenerationErrorMessage);
         }
@@ -192,7 +211,8 @@ export default function Home() {
         imagePaths,
         user!.id,
         analysisId,
-        selectedPersona
+        selectedPersona,
+        imageGenerationBatches
       );
 
       const nonBlockingErrorMessage = imageGenerationErrorMessage || uploadErrorMessage;
@@ -214,11 +234,11 @@ export default function Home() {
   const handleRetry = () => {
     setState("idle");
     setAnalysisResult(null);
-    setImageUrls([]);
+    setImageGroups([]);
     setError(null);
     setSaveError(null);
     setImageGenerationStatus(null);
-    setImageGenerationDiagnostics(null);
+    setImageGenerationDiagnostics([]);
     setImageGenerationStartedAt(null);
     setImageGenerationElapsedSeconds(null);
   };
@@ -227,11 +247,11 @@ export default function Home() {
     setState("idle");
     setJournalText("");
     setAnalysisResult(null);
-    setImageUrls([]);
+    setImageGroups([]);
     setError(null);
     setSaveError(null);
     setImageGenerationStatus(null);
-    setImageGenerationDiagnostics(null);
+    setImageGenerationDiagnostics([]);
     setImageGenerationStartedAt(null);
     setImageGenerationElapsedSeconds(null);
     setSelectedHistoryId(null);
@@ -245,7 +265,7 @@ export default function Home() {
     setState("viewing-history");
     setError(null);
     setImageGenerationStatus(null);
-    setImageGenerationDiagnostics(null);
+    setImageGenerationDiagnostics([]);
     setImageGenerationStartedAt(null);
     setImageGenerationElapsedSeconds(null);
 
@@ -256,7 +276,7 @@ export default function Home() {
         id: result.data.id,
         inputText: result.data.input_text,
         analysisText: result.data.analysis_text,
-        imageUrls: result.data.imageUrls,
+        imageGroups: result.data.imageGroups,
         imagePrompt: result.data.image_prompt,
         analystPersona: result.data.analyst_persona,
       });
@@ -281,8 +301,9 @@ export default function Home() {
 
     setIsRegenerating(true);
     setSaveError(null);
-    setImageGenerationStatus("Requesting four more images.");
-    setImageGenerationDiagnostics(null);
+    const roundCapacity = requiredImageCapacity(selectedImageProvider);
+    setImageGenerationStatus(`Requesting ${roundCapacity} more images.`);
+    setImageGenerationDiagnostics([]);
     setImageGenerationStartedAt(Date.now());
     setImageGenerationElapsedSeconds(0);
 
@@ -296,25 +317,29 @@ export default function Home() {
     );
     setImageGenerationStartedAt(null);
     setImageGenerationElapsedSeconds(null);
-    setImageGenerationDiagnostics(result.diagnostics || null);
+    setImageGenerationDiagnostics(result.diagnostics || []);
 
-    if (result.success && result.imageUrls) {
+    const newGroups = (result.groups || []).map(providerResultGroupToDisplayGroup);
+    if (newGroups.length > 0) {
       if (state === "viewing-history" && historyViewData) {
-        // Refresh the history view with appended images
         setHistoryViewData({
           ...historyViewData,
-          imageUrls: [...historyViewData.imageUrls, ...result.imageUrls],
+          imageGroups: [...historyViewData.imageGroups, ...newGroups],
         });
       } else {
-        // Append to current analysis images
-        setImageUrls((prev) => [...prev, ...result.imageUrls!]);
+        setImageGroups((previous) => [...previous, ...newGroups]);
       }
+    }
+
+    if (result.success) {
       if (result.uploadError) {
         setSaveError(result.uploadError);
         setImageGenerationStatus("Images regenerated, but storage update needs attention.");
       } else {
-        setImageGenerationStatus("Images regenerated successfully.");
-        setSuccessToast("4 new images added");
+        setImageGenerationStatus(result.partial
+          ? "One provider succeeded and one provider failed."
+          : "Images regenerated successfully.");
+        setSuccessToast(`${result.imageUrls?.length || 0} new images added`);
       }
     } else {
       const message = result.error || "Failed to regenerate images";
@@ -330,6 +355,11 @@ export default function Home() {
   const isInsightOrTestMode = viewMode === "insight" || viewMode === "test";
   const isTestMode = viewMode === "test";
   const isMockProviderActive = selectedImageProvider === "mock";
+  const currentImageUrls = flattenDisplayGroupUrls(imageGroups);
+  const historyImageUrls = historyViewData
+    ? flattenDisplayGroupUrls(historyViewData.imageGroups)
+    : [];
+  const regenerationCapacity = requiredImageCapacity(selectedImageProvider);
 
   return (
     <>
@@ -364,6 +394,7 @@ export default function Home() {
                   <ImageProviderPicker
                     value={selectedImageProvider}
                     defaultProvider={defaultImageProvider}
+                    dualModeEnabled={dualModeEnabled}
                     onChange={setSelectedImageProvider}
                   />
                 )}
@@ -442,30 +473,29 @@ export default function Home() {
 
               {state === "complete" && (
                 <>
-                  <ImageGrid imageUrls={imageUrls} onImageClick={handleImageClick} />
-                  {imageGenerationStatus && imageUrls.length === 0 && (
+                  <ProviderImageGroups groups={imageGroups} onImageClick={handleImageClick} />
+                  {imageGenerationStatus && imageGroups.length === 0 && (
                     <div className="rounded-lg border border-outline bg-surface p-4">
                       <h2 className="text-xl font-semibold text-ink mb-2">Generated Images</h2>
                       <p className="text-sm text-ink-muted">{imageGenerationStatus}</p>
                     </div>
                   )}
                   {isTestMode && (
-                    <ImageGenerationDiagnosticsDisclosure
+                    <ImageGenerationDiagnosticsList
                       diagnostics={imageGenerationDiagnostics}
                       statusMessage={imageGenerationStatus}
-                      pendingStartedAt={imageGenerationStartedAt}
-                      pendingElapsedSeconds={imageGenerationElapsedSeconds}
                     />
                   )}
-                  {isInsightOrTestMode && currentImagePrompt && imageUrls.length > 0 && (
+                  {isInsightOrTestMode && currentImagePrompt && currentImageUrls.length > 0 && (
                     <ImagePromptDisclosure imagePrompt={currentImagePrompt} />
                   )}
                   {currentImagePrompt && currentAnalysisId && (
                     <RegenerateButton
                       onClick={handleRegenerate}
                       isRegenerating={isRegenerating}
-                      imageCount={imageUrls.length}
+                      imageCount={currentImageUrls.length}
                       maxImages={MAX_IMAGES}
+                      requiredCapacity={regenerationCapacity}
                     />
                   )}
                 </>
@@ -527,9 +557,12 @@ export default function Home() {
                 showReadingMetadata={isInsightOrTestMode}
               />
 
-              {historyViewData.imageUrls.length > 0 && (
+              {historyViewData.imageGroups.length > 0 && (
                 <>
-                  <ImageGrid imageUrls={historyViewData.imageUrls} onImageClick={handleImageClick} />
+                  <ProviderImageGroups
+                    groups={historyViewData.imageGroups}
+                    onImageClick={handleImageClick}
+                  />
                   {isInsightOrTestMode && historyViewData.imagePrompt && (
                     <ImagePromptDisclosure imagePrompt={historyViewData.imagePrompt} />
                   )}
@@ -539,16 +572,15 @@ export default function Home() {
                 <RegenerateButton
                   onClick={handleRegenerate}
                   isRegenerating={isRegenerating}
-                  imageCount={historyViewData.imageUrls.length}
+                  imageCount={historyImageUrls.length}
                   maxImages={MAX_IMAGES}
+                  requiredCapacity={regenerationCapacity}
                 />
               )}
               {isTestMode && (
-                <ImageGenerationDiagnosticsDisclosure
+                <ImageGenerationDiagnosticsList
                   diagnostics={imageGenerationDiagnostics}
                   statusMessage={imageGenerationStatus}
-                  pendingStartedAt={imageGenerationStartedAt}
-                  pendingElapsedSeconds={imageGenerationElapsedSeconds}
                 />
               )}
             </div>
@@ -558,7 +590,7 @@ export default function Home() {
 
       {lightboxIndex !== null && (
         <Lightbox
-          imageUrls={state === "viewing-history" && historyViewData ? historyViewData.imageUrls : imageUrls}
+          imageUrls={state === "viewing-history" && historyViewData ? historyImageUrls : currentImageUrls}
           initialIndex={lightboxIndex}
           onClose={handleCloseLightbox}
         />

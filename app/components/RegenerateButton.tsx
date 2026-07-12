@@ -3,6 +3,15 @@ interface RegenerateButtonProps {
   isRegenerating: boolean;
   imageCount: number;
   maxImages: number;
+  requiredCapacity?: number;
+}
+
+export function canRegenerateImages(
+  imageCount: number,
+  maxImages: number,
+  requiredCapacity: number
+): boolean {
+  return imageCount + requiredCapacity <= maxImages;
 }
 
 export function RegenerateButton({
@@ -10,8 +19,9 @@ export function RegenerateButton({
   isRegenerating,
   imageCount,
   maxImages,
+  requiredCapacity = 4,
 }: RegenerateButtonProps) {
-  const capReached = imageCount >= maxImages;
+  const capReached = !canRegenerateImages(imageCount, maxImages, requiredCapacity);
   const disabled = isRegenerating || capReached;
 
   return (
@@ -32,7 +42,9 @@ export function RegenerateButton({
       </button>
       {capReached && (
         <p className="text-sm text-ink-muted">
-          Maximum of {maxImages} images reached
+          {requiredCapacity === 8
+            ? `Dual mode needs 8 available image slots (maximum ${maxImages}).`
+            : `Not enough room for 4 more images (maximum ${maxImages}).`}
         </p>
       )}
     </div>

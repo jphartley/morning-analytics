@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getDeploymentImageProviderId, resolveImageProvider } from "./registry";
+import {
+  getDeploymentImageProviderId,
+  resolveImageGenerationSelection,
+  resolveImageProvider,
+} from "./registry";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -34,5 +38,23 @@ describe("image provider resolution", () => {
     vi.stubEnv("BLACK_FOREST_LABS_API_KEY", "");
 
     expect(resolveImageProvider().id).toBe("mock");
+  });
+
+  it("keeps dual outside the provider registry and requires every server gate", () => {
+    vi.stubEnv("IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED", "true");
+    vi.stubEnv("IMAGE_PROVIDER_DUAL_MODE_ENABLED", "false");
+
+    expect(() => resolveImageProvider({ override: "dual", testMode: true })).toThrow(/Unsupported/);
+    expect(() => resolveImageGenerationSelection({ override: "dual", testMode: true })).toThrow(/disabled/);
+
+    vi.stubEnv("IMAGE_PROVIDER_DUAL_MODE_ENABLED", "true");
+    expect(() => resolveImageGenerationSelection({ override: "dual", testMode: false })).toThrow(/test mode/);
+
+    const resolved = resolveImageGenerationSelection({ override: "dual", testMode: true });
+    expect(resolved.selection).toBe("dual");
+    expect(resolved.providers.map((provider) => provider.id)).toEqual([
+      "black-forest-labs",
+      "midjourney",
+    ]);
   });
 });

@@ -3,16 +3,17 @@
 interface ImageGridProps {
   imageUrls: string[];
   onImageClick?: (index: number) => void;
+  title?: string;
 }
 
-export function ImageGrid({ imageUrls, onImageClick }: ImageGridProps) {
+export function ImageGrid({ imageUrls, onImageClick, title = "Generated Images" }: ImageGridProps) {
   if (imageUrls.length === 0) {
     return null;
   }
 
   return (
     <div className="w-full animate-fade-in-up">
-      <h2 className="text-xl font-semibold text-ink mb-4">Generated Images</h2>
+      <h2 className="text-xl font-semibold text-ink mb-4">{title}</h2>
       <div className="grid grid-cols-2 gap-6">
         {imageUrls.map((url, index) => (
           <button

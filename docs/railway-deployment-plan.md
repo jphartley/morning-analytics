@@ -29,12 +29,37 @@ MIDJOURNEY_APP_ID
 MIDJOURNEY_IMAGINE_COMMAND_ID
 USE_AI_MOCKS
 NEXT_PUBLIC_IMAGE_PROVIDER
+IMAGE_GENERATION_PROVIDER
+IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED
+NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED
+IMAGE_PROVIDER_DUAL_MODE_ENABLED
+NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 ```
 
 Note: `PORT` is not needed — Railway injects its own.
+
+### Dual image provider trial
+
+The optional Test-view comparison mode requires all four flags below in the
+`morning-analytics` service's **production** environment:
+
+```text
+IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED=true
+NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED=true
+IMAGE_PROVIDER_DUAL_MODE_ENABLED=true
+NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED=true
+```
+
+Keep both Dual mode flags `false` until the database migration adding
+`analyses.image_generation_batches` and the compatible application release are
+deployed. Railway variable edits are staged: review the staged changes and
+click **Deploy** before treating them as active. Always deploy or redeploy after
+any variable change. `NEXT_PUBLIC_*` values are compiled into the Next.js client
+bundle and specifically require a rebuild/redeploy before browsers can see the
+new picker option.
 
 ---
 
@@ -109,6 +134,7 @@ Full end-to-end test on the live domain:
 | Build fails after Node pin change | App and lockfile engine metadata out of sync | Keep `app/.nvmrc`, `app/package.json`, and lockfile root `engines.node` aligned |
 | App loads but analysis fails | Missing `GEMINI_API_KEY` | Check Variables tab |
 | Images don't generate | Missing Discord env vars | Check all `DISCORD_*` vars |
+| Dual mode is missing | One of the four Test/Dual flags is disabled or was not rebuilt into the client | Check production Variables, deploy staged changes, and redeploy |
 | Images 403 Forbidden | Supabase bucket not public | Enable public read on `analysis-images` bucket |
 | Custom domain not resolving | Missing/mismatched Railway verification record | Ensure both app routing record and `_railway-verify` TXT record match Railway exactly |
 | HTTPS not working | SSL not provisioned yet | Railway does this automatically, wait a few minutes |

@@ -3,6 +3,10 @@ import {
   AnalysisInsert,
 } from "./supabase";
 import { ImageGenerationDiagnosticsRecorder } from "./image-generation-diagnostics";
+import {
+  ImageGenerationBatch,
+  parseImageGenerationBatches,
+} from "./image-generation-types";
 
 const BUCKET_NAME = "analysis-images";
 
@@ -120,16 +124,31 @@ export async function uploadImagesToStorage(
  * Append new image paths to an existing analysis's image_paths array.
  * Uses service role client (bypasses RLS).
  */
-export async function updateAnalysisImagePaths(
+export function appendImageGenerationState(
+  currentPaths: string[] | null | undefined,
+  currentBatches: unknown,
+  newPaths: string[],
+  newBatches: ImageGenerationBatch[]
+): { imagePaths: string[]; imageGenerationBatches: ImageGenerationBatch[] } {
+  return {
+    imagePaths: [...(currentPaths || []), ...newPaths],
+    imageGenerationBatches: [
+      ...parseImageGenerationBatches(currentBatches),
+      ...newBatches,
+    ],
+  };
+}
+
+export async function updateAnalysisImageGeneration(
   analysisId: string,
-  newPaths: string[]
+  newPaths: string[],
+  newBatches: ImageGenerationBatch[]
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = getServerSupabase();
 
-  // Fetch current paths
   const { data, error: fetchError } = await supabase
     .from("analyses")
-    .select("image_paths")
+    .select("image_paths, image_generation_batches")
     .eq("id", analysisId)
     .single();
 
@@ -137,12 +156,19 @@ export async function updateAnalysisImagePaths(
     return { success: false, error: fetchError?.message || "Analysis not found" };
   }
 
-  const currentPaths: string[] = data.image_paths || [];
-  const updatedPaths = [...currentPaths, ...newPaths];
+  const updated = appendImageGenerationState(
+    data.image_paths,
+    data.image_generation_batches,
+    newPaths,
+    newBatches
+  );
 
   const { error: updateError } = await supabase
     .from("analyses")
-    .update({ image_paths: updatedPaths })
+    .update({
+      image_paths: updated.imagePaths,
+      image_generation_batches: updated.imageGenerationBatches,
+    })
     .eq("id", analysisId);
 
   if (updateError) {
@@ -165,7 +191,8 @@ export async function saveAnalysis(
   imagePaths: string[],
   analysisId: string | undefined,
   analystPersona: string = "jungian",
-  userId: string
+  userId: string,
+  imageGenerationBatches: ImageGenerationBatch[] = []
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   const supabase = getServerSupabase();
 
@@ -176,6 +203,7 @@ export async function saveAnalysis(
     image_prompt: imagePrompt,
     model_id: modelId,
     image_paths: imagePaths.length > 0 ? imagePaths : null,
+    image_generation_batches: imageGenerationBatches,
     analyst_persona: analystPersona,
     ...(analysisId ? { id: analysisId } : {}),
   };

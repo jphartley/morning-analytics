@@ -3,16 +3,18 @@
 import { v4 as uuidv4 } from "uuid";
 import { analyzeWithGemini } from "@/lib/gemini";
 import { assertServerSupabaseEnv } from "@/lib/supabase";
-import { saveAnalysis as saveToStorage, uploadImagesToStorage, updateAnalysisImagePaths } from "@/lib/analytics-storage";
+import { saveAnalysis as saveToStorage, updateAnalysisImageGeneration } from "@/lib/analytics-storage";
 import { getServerSupabase } from "@/lib/supabase";
 import {
-  createImageGenerationDiagnosticsRecorder,
   ImageGenerationDiagnostics,
-  ImageGenerationDiagnosticsRecorder,
 } from "@/lib/image-generation-diagnostics";
-import { resolveImageProvider } from "@/lib/image-providers/registry";
-import { ImageProviderError } from "@/lib/image-providers/types";
-import type { ImageProviderId } from "@/lib/image-providers/types";
+import { executeImageGeneration } from "@/lib/image-generation-orchestrator";
+import {
+  ImageGenerationBatch,
+  ProviderResultGroup,
+  requiredImageCapacity,
+} from "@/lib/image-generation-types";
+import { resolveImageGenerationSelection } from "@/lib/image-providers/registry";
 
 assertServerSupabaseEnv();
 
@@ -29,7 +31,10 @@ export interface ImageGenerationResponse {
   imageUrls?: string[];
   imagePaths?: string[]; // Storage paths for saving
   analysisId?: string;
-  diagnostics?: ImageGenerationDiagnostics;
+  groups?: ProviderResultGroup[];
+  batches?: ImageGenerationBatch[];
+  diagnostics?: ImageGenerationDiagnostics[];
+  partial?: boolean;
   uploadError?: string;
   error?: string;
 }
@@ -44,24 +49,14 @@ export interface RegenerateImagesResponse {
   success: boolean;
   imageUrls?: string[];
   imagePaths?: string[];
-  diagnostics?: ImageGenerationDiagnostics;
+  groups?: ProviderResultGroup[];
+  diagnostics?: ImageGenerationDiagnostics[];
+  partial?: boolean;
   uploadError?: string;
   error?: string;
 }
 
 const MAX_IMAGES_PER_ANALYSIS = 20;
-const GENERATED_IMAGE_COUNT = 4;
-
-function providerLabel(provider: ImageProviderId): string {
-  switch (provider) {
-    case "black-forest-labs":
-      return "Black Forest Labs";
-    case "midjourney":
-      return "Midjourney";
-    default:
-      return "Mock provider";
-  }
-}
 
 /**
  * Phase 1: Analyze text with Gemini
@@ -116,8 +111,6 @@ export async function generateImages(
   testMode: boolean = false
 ): Promise<ImageGenerationResponse> {
   const analysisId = uuidv4();
-  const attemptId = uuidv4();
-  let diagnostics: ImageGenerationDiagnosticsRecorder | undefined;
 
   try {
     if (!userId) {
@@ -136,56 +129,28 @@ export async function generateImages(
       };
     }
 
-    const resolved = resolveImageProvider({ override: providerOverride, testMode });
-    diagnostics = createImageGenerationDiagnosticsRecorder(attemptId, resolved.id);
-    diagnostics.add("provider-selection", "info", "Image provider selected.", {
-      provider: resolved.id,
-      source: resolved.source,
+    const resolvedSelection = resolveImageGenerationSelection({
+      override: providerOverride,
+      testMode,
     });
-
-    const generated = await resolved.provider.generateImageSet({
-      attemptId,
-      prompt: imagePrompt,
-      count: GENERATED_IMAGE_COUNT,
-      diagnostics,
-    });
-    if (generated.imageDataUrls.length !== GENERATED_IMAGE_COUNT) {
-      throw new ImageProviderError(
-        "incomplete-set",
-        `${providerLabel(resolved.id)} returned ${generated.imageDataUrls.length} images instead of ${GENERATED_IMAGE_COUNT}.`
-      );
-    }
-
-    const uploadResult = await uploadImagesToStorage(
+    const result = await executeImageGeneration({
       analysisId,
-      generated.imageDataUrls,
       userId,
-      0,
-      diagnostics
-    );
-    const status = uploadResult.error ? "warning" : "success";
-    const summary = uploadResult.error
-      ? `${providerLabel(resolved.id)} images were generated, but upload failed.`
-      : `${providerLabel(resolved.id)} images were generated and uploaded.`;
+      prompt: imagePrompt,
+      startIndex: 0,
+      resolvedSelection,
+      context: "initial",
+    });
 
     return {
-      success: true,
-      imageUrls: generated.imageDataUrls,
-      imagePaths: uploadResult.paths,
+      ...result,
       analysisId,
-      diagnostics: diagnostics.complete(status, summary),
-      uploadError: uploadResult.error,
     };
   } catch (error) {
     console.error("Image generation error:", error);
-    diagnostics?.add("attempt", "error", "Image generation failed.", {
-      code: error instanceof ImageProviderError ? error.code : "unexpected",
-      error: error instanceof Error ? error.message : "Unknown image generation error",
-    });
     return {
       success: false,
       analysisId,
-      diagnostics: diagnostics?.complete("error", "Image generation failed."),
       error: error instanceof Error ? error.message : "Failed to generate images.",
     };
   }
@@ -204,7 +169,8 @@ export async function saveAnalysis(
   imagePaths: string[],
   userId: string,
   analysisId?: string,
-  analystPersona: string = "jungian"
+  analystPersona: string = "jungian",
+  imageGenerationBatches: ImageGenerationBatch[] = []
 ): Promise<SaveAnalysisResponse> {
   try {
     if (!userId) {
@@ -222,7 +188,8 @@ export async function saveAnalysis(
       imagePaths,
       analysisId,
       analystPersona,
-      userId
+      userId,
+      imageGenerationBatches
     );
     return result;
   } catch (error) {
@@ -244,8 +211,6 @@ export async function regenerateImages(
   providerOverride?: string | null,
   testMode: boolean = false
 ): Promise<RegenerateImagesResponse> {
-  let diagnostics: ImageGenerationDiagnosticsRecorder | undefined;
-
   try {
     if (!userId) {
       return { success: false, error: "User must be authenticated to regenerate images." };
@@ -255,7 +220,7 @@ export async function regenerateImages(
     const supabase = getServerSupabase();
     const { data: analysis, error: fetchError } = await supabase
       .from("analyses")
-      .select("image_prompt, image_paths, user_id")
+      .select("image_prompt, image_paths, image_generation_batches, user_id")
       .eq("id", analysisId)
       .single();
 
@@ -271,73 +236,43 @@ export async function regenerateImages(
       return { success: false, error: "This analysis has no image prompt." };
     }
 
+    const resolvedSelection = resolveImageGenerationSelection({
+      override: providerOverride,
+      testMode,
+    });
     const currentPaths: string[] = analysis.image_paths || [];
-    if (currentPaths.length + GENERATED_IMAGE_COUNT > MAX_IMAGES_PER_ANALYSIS) {
+    const requiredCapacity = requiredImageCapacity(resolvedSelection.selection);
+    if (currentPaths.length + requiredCapacity > MAX_IMAGES_PER_ANALYSIS) {
       return { success: false, error: `Maximum of ${MAX_IMAGES_PER_ANALYSIS} images reached.` };
     }
 
     const startIndex = currentPaths.length;
-    const attemptId = uuidv4();
-    const resolved = resolveImageProvider({ override: providerOverride, testMode });
-    diagnostics = createImageGenerationDiagnosticsRecorder(attemptId, resolved.id);
-    diagnostics.add("provider-selection", "info", "Image provider selected for regeneration.", {
-      provider: resolved.id,
-      source: resolved.source,
-      startIndex,
-   });
-
-    const generated = await resolved.provider.generateImageSet({
-      attemptId,
+    const result = await executeImageGeneration({
+      analysisId,
+      userId,
       prompt: analysis.image_prompt,
-      count: GENERATED_IMAGE_COUNT,
-      diagnostics,
+      startIndex,
+      resolvedSelection,
+      context: "regeneration",
     });
-    const newImageUrls = generated.imageDataUrls;
-    if (newImageUrls.length !== GENERATED_IMAGE_COUNT) {
-      throw new ImageProviderError(
-        "incomplete-set",
-        `${providerLabel(resolved.id)} returned ${newImageUrls.length} images instead of ${GENERATED_IMAGE_COUNT}.`
-      );
-    }
 
-    // Upload with offset index
-    const uploadResult = await uploadImagesToStorage(analysisId, newImageUrls, userId, startIndex, diagnostics);
-
-    if (uploadResult.error) {
-      return {
-        success: false,
-        diagnostics: diagnostics.complete("error", "Images were generated, but upload failed."),
-        error: uploadResult.error,
-      };
-    }
-
-    // Append paths to the database record
-    const updateResult = await updateAnalysisImagePaths(analysisId, uploadResult.paths);
+    const updateResult = await updateAnalysisImageGeneration(
+      analysisId,
+      result.imagePaths,
+      result.batches
+    );
     if (!updateResult.success) {
       return {
-        success: true,
-        imageUrls: newImageUrls,
-        imagePaths: uploadResult.paths,
-        diagnostics: diagnostics.complete("warning", "Images generated and uploaded, but database update failed."),
+        ...result,
         uploadError: "Images generated but failed to update database: " + updateResult.error,
       };
     }
 
-    return {
-      success: true,
-      imageUrls: newImageUrls,
-      imagePaths: uploadResult.paths,
-      diagnostics: diagnostics.complete("success", "Images regenerated, uploaded, and appended to the analysis."),
-    };
+    return result;
   } catch (error) {
     console.error("Image regeneration error:", error);
-    diagnostics?.add("attempt", "error", "Image regeneration failed.", {
-      code: error instanceof ImageProviderError ? error.code : "unexpected",
-      error: error instanceof Error ? error.message : "Unknown image regeneration error",
-    });
     return {
       success: false,
-      diagnostics: diagnostics?.complete("error", "Image regeneration failed."),
       error: error instanceof Error ? error.message : "Failed to regenerate images.",
     };
   }

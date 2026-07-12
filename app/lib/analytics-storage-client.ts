@@ -1,4 +1,9 @@
 import { getBrowserSupabase, AnalysisListItem, AnalysisRecord } from "./supabase";
+import {
+  ImageDisplayGroup,
+  imageProviderLabel,
+  parseImageGenerationBatches,
+} from "./image-generation-types";
 
 const BUCKET_NAME = "analysis-images";
 
@@ -12,6 +17,43 @@ function getPublicImageUrls(paths: string[]): string[] {
   return paths
     .map((path) => supabase.storage.from(BUCKET_NAME).getPublicUrl(path).data?.publicUrl)
     .filter((url): url is string => Boolean(url));
+}
+
+export function buildHistoricalImageGroups(
+  analysisId: string,
+  imagePrompt: string | null,
+  imagePaths: string[],
+  rawBatches: unknown,
+  resolveUrls: (paths: string[]) => string[]
+): ImageDisplayGroup[] {
+  const batches = parseImageGenerationBatches(rawBatches);
+  if (batches.length > 0) {
+    return batches.map((batch) => ({
+      id: batch.attemptId,
+      provider: batch.provider,
+      label: imageProviderLabel(batch.provider),
+      prompt: batch.prompt,
+      status: batch.status,
+      imageUrls: resolveUrls(batch.imagePaths),
+      ...(batch.status === "failed"
+        ? { error: batch.errorCode
+          ? `Generation failed (${batch.errorCode}).`
+          : "Generation failed." }
+        : {}),
+    }));
+  }
+
+  const imageUrls = resolveUrls(imagePaths);
+  return imageUrls.length > 0
+    ? [{
+      id: `legacy-${analysisId}`,
+      provider: null,
+      label: "Generated Images (provider unavailable)",
+      prompt: imagePrompt,
+      status: "success",
+      imageUrls,
+    }]
+    : [];
 }
 
 export async function listAnalyses(): Promise<{
@@ -50,7 +92,14 @@ export async function listAnalyses(): Promise<{
 
 export async function getAnalysisById(
   id: string
-): Promise<{ success: boolean; data?: AnalysisRecord & { imageUrls: string[] }; error?: string }> {
+): Promise<{
+  success: boolean;
+  data?: AnalysisRecord & {
+    imageUrls: string[];
+    imageGroups: ImageDisplayGroup[];
+  };
+  error?: string;
+}> {
   try {
     const supabase = getBrowserSupabase();
 
@@ -72,13 +121,24 @@ export async function getAnalysisById(
       return { success: false, error: "Analysis not found" };
     }
 
-    const imageUrls = getPublicImageUrls(data.image_paths || []);
+    const imagePaths: string[] = data.image_paths || [];
+    const imageUrls = getPublicImageUrls(imagePaths);
+    const batches = parseImageGenerationBatches(data.image_generation_batches);
+    const imageGroups = buildHistoricalImageGroups(
+      data.id,
+      data.image_prompt || null,
+      imagePaths,
+      batches,
+      getPublicImageUrls
+    );
 
     return {
       success: true,
       data: {
         ...data,
+        image_generation_batches: batches,
         imageUrls,
+        imageGroups,
       },
     };
   } catch (error) {

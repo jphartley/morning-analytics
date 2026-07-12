@@ -21,6 +21,11 @@ export interface ResolvedImageProvider {
   source: "deployment-default" | "test-override";
 }
 
+export interface ResolvedImageGenerationSelection {
+  selection: ImageProviderId | "dual";
+  providers: ResolvedImageProvider[];
+}
+
 export function isImageProviderId(value: string): value is ImageProviderId {
   return IMAGE_PROVIDER_IDS.includes(value as ImageProviderId);
 }
@@ -79,3 +84,44 @@ export function resolveImageProvider(
   };
 }
 
+export function resolveImageGenerationSelection(
+  options: ResolveImageProviderOptions = {}
+): ResolvedImageGenerationSelection {
+  const override = options.override?.trim();
+
+  if (override === "dual") {
+    if (process.env.IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED !== "true") {
+      throw new ImageProviderError(
+        "configuration",
+        "Image provider test overrides are disabled on the server."
+      );
+    }
+    if (!options.testMode) {
+      throw new ImageProviderError(
+        "configuration",
+        "Image provider overrides are only allowed in test mode."
+      );
+    }
+    if (process.env.IMAGE_PROVIDER_DUAL_MODE_ENABLED !== "true") {
+      throw new ImageProviderError(
+        "configuration",
+        "Dual image provider mode is disabled on the server."
+      );
+    }
+
+    return {
+      selection: "dual",
+      providers: ["black-forest-labs", "midjourney"].map((id) => ({
+        id: id as ImageProviderId,
+        provider: PROVIDERS[id as ImageProviderId],
+        source: "test-override" as const,
+      })),
+    };
+  }
+
+  const resolved = resolveImageProvider(options);
+  return {
+    selection: resolved.id,
+    providers: [resolved],
+  };
+}

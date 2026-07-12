@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
       process.env.IMAGE_GENERATION_PROVIDER
       || process.env.NEXT_PUBLIC_IMAGE_PROVIDER
       || "midjourney",
+    NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED:
+      process.env.NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED || "false",
   },
   turbopack: {
     root: currentDir,

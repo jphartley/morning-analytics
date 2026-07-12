@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import type { ImageGenerationBatch } from "./image-generation-types";
 
 // Auth types
 export interface AuthUser {
@@ -17,6 +18,7 @@ export interface AnalysisRecord {
   image_prompt: string | null;
   model_id: string;
   image_paths: string[] | null;
+  image_generation_batches?: ImageGenerationBatch[] | null;
   analyst_persona?: string | null;
 }
 
@@ -28,6 +30,7 @@ export interface AnalysisInsert {
   image_prompt?: string | null;
   model_id: string;
   image_paths?: string[] | null;
+  image_generation_batches?: ImageGenerationBatch[];
   analyst_persona?: string;
 }
 

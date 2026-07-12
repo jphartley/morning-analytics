@@ -40,7 +40,8 @@ This document tracks technical decisions deferred from MVP and features planned 
 
 - [ ] **Remove the legacy public provider fallback**: `NEXT_PUBLIC_IMAGE_PROVIDER` is still accepted when `IMAGE_GENERATION_PROVIDER` is unset so existing deployments continue to work. Remove the fallback after every environment has migrated to the server-only setting. Origin: `add-switchable-image-providers`; small effort after deployment audit.
 - [ ] **Replace in-memory data URLs with streamed or staged files**: All providers currently normalize images to data URLs before the shared Supabase upload. Four 1024x1024 BFL images can create avoidable server memory pressure. The durable-job phase should stream downloads to storage or stage files with bounded memory. Origin: `add-switchable-image-providers`; medium effort because the shared upload contract changes.
-- [ ] **Persist provider attribution with analyses**: Provider and model are present in attempt diagnostics but are not stored on historical analysis rows. Add provider/model attribution when the durable image-job schema is introduced. Origin: `add-switchable-image-providers`; small schema/UI effort, best combined with the job migration.
+- [x] **Persist provider attribution with analyses**: Resolved by `add-dual-image-provider-trial`. Versioned generation batches preserve provider, model, exact per-attempt prompt, attempt identity, outcome, timestamp, and image paths while legacy flat paths remain readable.
+- [ ] **Optionally parallelize Dual mode orchestration**: The trial deliberately runs Black Forest Labs and Midjourney sequentially for simpler failure isolation and Discord observation. If Railway request-duration measurements show enough benefit and headroom, switch the stable grouped-result contract to settled parallel execution. Origin: `add-dual-image-provider-trial`; small orchestration change plus production timing validation.
 
 ## Design & Palette System (from design-palette-tokens)
 
