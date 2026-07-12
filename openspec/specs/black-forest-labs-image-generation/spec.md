@@ -13,6 +13,11 @@ The Black Forest Labs provider SHALL submit four text-to-image requests using th
 - **AND** each request SHALL use a distinct recorded seed or equivalent variation input
 - **AND** each request SHALL request an application-compatible square image and supported output format
 
+#### Scenario: Separate attempts use separate variation inputs
+- **WHEN** Black Forest Labs generates more than one attempt for the same analysis and prompt
+- **THEN** every attempt SHALL receive a distinct attempt ID from shared orchestration
+- **AND** each slot seed SHALL be derived from that distinct attempt ID so separate attempts do not intentionally reuse the same four-seed set
+
 #### Scenario: Submission succeeds
 - **WHEN** Black Forest Labs accepts a generation request
 - **THEN** the provider SHALL retain the returned provider request ID and polling URL for that image slot

@@ -116,6 +116,7 @@ export async function generateImages(
   testMode: boolean = false
 ): Promise<ImageGenerationResponse> {
   const analysisId = uuidv4();
+  const attemptId = uuidv4();
   let diagnostics: ImageGenerationDiagnosticsRecorder | undefined;
 
   try {
@@ -136,14 +137,14 @@ export async function generateImages(
     }
 
     const resolved = resolveImageProvider({ override: providerOverride, testMode });
-    diagnostics = createImageGenerationDiagnosticsRecorder(analysisId, resolved.id);
+    diagnostics = createImageGenerationDiagnosticsRecorder(attemptId, resolved.id);
     diagnostics.add("provider-selection", "info", "Image provider selected.", {
       provider: resolved.id,
       source: resolved.source,
     });
 
     const generated = await resolved.provider.generateImageSet({
-      attemptId: analysisId,
+      attemptId,
       prompt: imagePrompt,
       count: GENERATED_IMAGE_COUNT,
       diagnostics,
@@ -276,16 +277,17 @@ export async function regenerateImages(
     }
 
     const startIndex = currentPaths.length;
+    const attemptId = uuidv4();
     const resolved = resolveImageProvider({ override: providerOverride, testMode });
-    diagnostics = createImageGenerationDiagnosticsRecorder(analysisId, resolved.id);
+    diagnostics = createImageGenerationDiagnosticsRecorder(attemptId, resolved.id);
     diagnostics.add("provider-selection", "info", "Image provider selected for regeneration.", {
       provider: resolved.id,
       source: resolved.source,
       startIndex,
-    });
+   });
 
     const generated = await resolved.provider.generateImageSet({
-      attemptId: analysisId,
+      attemptId,
       prompt: analysis.image_prompt,
       count: GENERATED_IMAGE_COUNT,
       diagnostics,

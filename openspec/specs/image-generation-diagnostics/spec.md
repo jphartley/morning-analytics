@@ -37,6 +37,20 @@ The system SHALL redact sensitive provider, prompt, asset, and storage data befo
 - **WHEN** diagnostic metadata contains a URL with query parameters, signatures, tokens, or provider result access information
 - **THEN** the system SHALL redact the complete URL rather than returning a truncated prefix
 
+### Requirement: Distinguish attempt identity from analysis identity
+The system SHALL use a fresh diagnostic attempt ID for every initial-generation or regeneration invocation independently of the permanent analysis ID used for persistence.
+
+#### Scenario: Initial generation starts
+- **WHEN** initial image generation starts for a new analysis
+- **THEN** diagnostics and the selected provider SHALL receive the same fresh attempt ID
+- **AND** storage and analysis persistence SHALL continue using the permanent analysis ID
+
+#### Scenario: Regeneration starts
+- **WHEN** image regeneration starts for an existing analysis
+- **THEN** diagnostics and the selected provider SHALL receive the same fresh attempt ID for that round
+- **AND** the diagnostic attempt ID SHALL differ from the permanent analysis ID
+- **AND** the permanent analysis ID SHALL continue identifying the database record and storage directory
+
 ### Requirement: Return diagnostics with image generation responses
 
 The system SHALL include redacted attempt diagnostics in image generation and image regeneration responses.

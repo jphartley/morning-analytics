@@ -17,13 +17,19 @@ function imageResponse(bytes: number[] = [1, 2, 3]): Response {
   });
 }
 
-function request() {
+function request(attemptId: string = "attempt-123") {
   return {
-    attemptId: "attempt-123",
+    attemptId,
     prompt: "A blue lotus surrounded by precise golden geometry",
     count: 4,
-    diagnostics: createImageGenerationDiagnosticsRecorder("attempt-123", "black-forest-labs"),
+    diagnostics: createImageGenerationDiagnosticsRecorder(attemptId, "black-forest-labs"),
   } as const;
+}
+
+function recordedSeeds(input: ReturnType<typeof request>): number[] {
+  return input.diagnostics.snapshot().events
+    .filter((event) => event.message === "Submitting Black Forest Labs image slot.")
+    .map((event) => Number(event.metadata?.seed));
 }
 
 function readyFetch(options: { moderatedSlot?: number; invalidDelivery?: boolean } = {}) {
@@ -117,10 +123,23 @@ describe("Black Forest Labs provider", () => {
     expect(result.providerRequestIds).toEqual(["request-0", "request-1", "request-2", "request-3"]);
     const serializedDiagnostics = JSON.stringify(input.diagnostics.snapshot());
     expect(serializedDiagnostics).not.toContain("token=secret");
-    const seeds = input.diagnostics.snapshot().events
-      .filter((event) => event.message === "Submitting Black Forest Labs image slot.")
-      .map((event) => event.metadata?.seed);
+    const seeds = recordedSeeds(input);
     expect(new Set(seeds).size).toBe(4);
+  });
+
+  it("derives a different four-seed set for each attempt", async () => {
+    vi.stubGlobal("fetch", readyFetch());
+    const first = request("attempt-one");
+    const second = request("attempt-two");
+
+    await blackForestLabsImageProvider.generateImageSet(first);
+    await blackForestLabsImageProvider.generateImageSet(second);
+
+    const firstSeeds = recordedSeeds(first);
+    const secondSeeds = recordedSeeds(second);
+    expect(firstSeeds).toHaveLength(4);
+    expect(secondSeeds).toHaveLength(4);
+    expect(new Set([...firstSeeds, ...secondSeeds]).size).toBe(8);
   });
 
   it("retries a rate-limited submission and then succeeds", async () => {
