@@ -43,6 +43,17 @@ Local development may require a private npm registry (for example via `~/.npmrc`
   - `app/package.json` (`engines.node`)
   - `app/package-lock.json` (root `packages[""].engines.node`)
 
+### Railway Environment Variable Sync
+Railway does not read local `.env` files. Whenever an environment variable is added, removed, renamed, or its required value changes in `.env.example`, local `.env*` files, application code, or deployment configuration:
+
+1. Identify the exact variable names affected without exposing secret values.
+2. Remind the user to add or update them in the Railway `morning-analytics` service under **Variables** for the **production** environment. Variables are environment-scoped, so updating another Railway environment is not sufficient.
+3. Treat the Railway change as incomplete until its staged changes have been reviewed and deployed. Saving a variable alone does not make it active in the running deployment.
+4. Explicitly note that `NEXT_PUBLIC_*` values are compiled into the Next.js client bundle and therefore require a rebuild/redeploy. For consistency, require a Railway deploy/redeploy after any variable change, including server-only variables.
+5. Include an `Environment / Railway variables` note in the final handoff and PR description, listing variable names and whether each is new, changed, or removed.
+
+Never copy local secret values into documentation, commits, diagnostics, or chat. The user should enter secret values directly in Railway.
+
 Reference docs:
 - `docs/railway-deployment-plan.md`
 - `docs/research/railway-npm-ci-failure.md`
