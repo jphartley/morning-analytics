@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useTransition, useCallback, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
 import { analyzeText, generateImages, saveAnalysis, regenerateImages, TextAnalysisResponse } from "./actions";
 import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { JournalInput } from "@/components/JournalInput";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { ProviderImageGroups } from "@/components/ProviderImageGroups";
 import { ImagePromptDisclosure } from "@/components/ImagePromptDisclosure";
+import { OriginalEntryDisclosure } from "@/components/OriginalEntryDisclosure";
 import { RegenerateButton } from "@/components/RegenerateButton";
 import { LoadingState, ANALYSIS_MESSAGES, IMAGE_MESSAGES } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
@@ -24,7 +24,6 @@ import { WelcomeEmptyState } from "@/components/WelcomeEmptyState";
 import { ViewDensityControl } from "@/components/ViewDensityControl";
 import { ImageProviderPicker } from "@/components/ImageProviderPicker";
 import { useAuth } from "@/lib/useAuth";
-import { omitMarkdownNode } from "@/lib/markdown-props";
 import { ImageGenerationDiagnostics } from "@/lib/image-generation-diagnostics";
 import { getStoredViewDensityMode, setStoredViewDensityMode, ViewDensityMode } from "@/lib/view-density";
 import { IMAGE_PROVIDER_IDS } from "@/lib/image-providers/types";
@@ -47,6 +46,7 @@ interface HistoryViewData {
   imageGroups: ImageDisplayGroup[];
   imagePrompt?: string | null;
   analystPersona?: string | null;
+  createdAt?: string | null;
 }
 
 const MAX_IMAGES = 20;
@@ -279,6 +279,7 @@ export default function Home() {
         imageGroups: result.data.imageGroups,
         imagePrompt: result.data.image_prompt,
         analystPersona: result.data.analyst_persona,
+        createdAt: result.data.created_at,
       });
     } else {
       setError(result.error || "Failed to load analysis");
@@ -520,37 +521,11 @@ export default function Home() {
                   </p>
                 </div>
               )}
-              <div className="bg-surface border border-outline rounded-lg p-4 mb-4">
-                <h3 className="text-sm font-medium text-ink-muted mb-2">Original Input</h3>
-                <ReactMarkdown
-                  allowedElements={["h1", "h2", "h3", "strong", "em", "ul", "ol", "li", "p", "br"]}
-                  components={{
-                    h1: (props) => (
-                      <h1 className="text-xl font-bold text-ink mt-6 mb-4" {...omitMarkdownNode(props)} />
-                    ),
-                    h2: (props) => (
-                      <h2 className="text-lg font-bold text-ink mt-5 mb-3" {...omitMarkdownNode(props)} />
-                    ),
-                    h3: (props) => (
-                      <h3 className="text-base font-bold text-ink mt-4 mb-2" {...omitMarkdownNode(props)} />
-                    ),
-                    p: (props) => (
-                      <p className="mb-4 text-ink leading-relaxed" {...omitMarkdownNode(props)} />
-                    ),
-                    ul: (props) => (
-                      <ul className="list-disc list-inside mb-4 text-ink" {...omitMarkdownNode(props)} />
-                    ),
-                    ol: (props) => (
-                      <ol className="list-decimal list-inside mb-4 text-ink" {...omitMarkdownNode(props)} />
-                    ),
-                    li: (props) => (
-                      <li className="mb-1" {...omitMarkdownNode(props)} />
-                    ),
-                  }}
-                >
-                  {historyViewData.inputText}
-                </ReactMarkdown>
-              </div>
+              <OriginalEntryDisclosure
+                key={historyViewData.id}
+                inputText={historyViewData.inputText}
+                createdAt={historyViewData.createdAt}
+              />
 
               <AnalysisPanel
                 analysisText={historyViewData.analysisText}
