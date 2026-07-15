@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "feature_slug": "collapsible-history-entry",
+  "stages": [],
+  "gate_decisions": [
+    {
+      "stage": "plan",
+      "decision": "AUTONOMOUS_ARM",
+      "auto": false,
+      "run_mode": "autonomous",
+      "run_mode_source": "user-choice",
+      "reason": "user explicitly requested unattended build after teach-me exit",
+      "ts": "2026-07-15T00:00:00Z"
+    }
+  ],
+  "totals": { "tokens": 0, "cost_usd": 0, "latency_ms": 0 }
+}
