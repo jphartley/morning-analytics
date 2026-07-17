@@ -1,42 +1,22 @@
 "use client";
 
 import { useState } from "react";
-
-const ANALYST_PERSONAS = [
-  {
-    id: "jungian",
-    displayName: "Jungian Analyst",
-    description: "Psychoanalytic depth – symbolic insights, spiritual perspective",
-  },
-  {
-    id: "mel-robbins",
-    displayName: "Mel Robbins",
-    description: "Action-oriented – bold moves, practical breakthrough",
-  },
-  {
-    id: "loving-parent",
-    displayName: "Loving Parent",
-    description: "Compassionate – empathetic support, nurturing perspective",
-  },
-];
-
-const DEFAULT_PERSONA = "jungian";
+import { ANALYST_PERSONAS, type AnalystPersona } from "@/lib/top-bar-presets";
 
 interface AnalystPickerProps {
-  onPersonaChange: (persona: string) => void;
+  value: AnalystPersona;
+  onChange: (persona: AnalystPersona) => void;
 }
 
-export function AnalystPicker({ onPersonaChange }: AnalystPickerProps) {
-  const [selectedPersona, setSelectedPersona] = useState<string>(DEFAULT_PERSONA);
+export function AnalystPicker({ value, onChange }: AnalystPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleSelect = (persona: string) => {
-    setSelectedPersona(persona);
-    onPersonaChange(persona);
+  const handleSelect = (persona: AnalystPersona) => {
+    onChange(persona);
     setIsOpen(false);
   };
 
-  const currentPersona = ANALYST_PERSONAS.find((p) => p.id === selectedPersona) || ANALYST_PERSONAS[0];
+  const currentPersona = ANALYST_PERSONAS.find((persona) => persona.id === value) || ANALYST_PERSONAS[0];
 
   return (
     <div className="relative">
@@ -64,7 +44,7 @@ export function AnalystPicker({ onPersonaChange }: AnalystPickerProps) {
                 key={persona.id}
                 onClick={() => handleSelect(persona.id)}
                 className={`w-full px-4 py-3 text-left hover:bg-page first:rounded-t-lg last:rounded-b-lg transition-colors ${
-                  persona.id === selectedPersona ? "bg-accent-soft" : ""
+                  persona.id === value ? "bg-accent-soft" : ""
                 }`}
               >
                 <div className="font-medium text-ink">{persona.displayName}</div>

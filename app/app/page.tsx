@@ -16,7 +16,7 @@ import {
   ImageGenerationDiagnosticsDisclosure,
   ImageGenerationDiagnosticsList,
 } from "@/components/ImageGenerationDiagnosticsDisclosure";
-import { getStoredModel, ModelPicker } from "@/components/ModelPicker";
+import { ModelPicker } from "@/components/ModelPicker";
 import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { AppHeader } from "@/components/AppHeader";
@@ -25,7 +25,18 @@ import { ViewDensityControl } from "@/components/ViewDensityControl";
 import { ImageProviderPicker } from "@/components/ImageProviderPicker";
 import { useAuth } from "@/lib/useAuth";
 import { ImageGenerationDiagnostics } from "@/lib/image-generation-diagnostics";
-import { getStoredViewDensityMode, setStoredViewDensityMode, ViewDensityMode } from "@/lib/view-density";
+import {
+  DEFAULT_ANALYST_PERSONA,
+  DEFAULT_VIEW_DENSITY_MODE,
+  getStoredTopBarPresets,
+  setStoredAnalystPersona,
+  setStoredImageProvider,
+  setStoredModel,
+  setStoredViewDensityMode,
+  type AnalystPersona,
+  type ViewDensityMode,
+} from "@/lib/top-bar-presets";
+import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { IMAGE_PROVIDER_IDS } from "@/lib/image-providers/types";
 import type { ImageProviderId } from "@/lib/image-providers/types";
 import {
@@ -68,9 +79,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>(getStoredModel);
-  const [selectedPersona, setSelectedPersona] = useState<string>("jungian");
-  const [viewMode, setViewMode] = useState<ViewDensityMode>(getStoredViewDensityMode);
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
+  const [selectedPersona, setSelectedPersona] = useState<AnalystPersona>(DEFAULT_ANALYST_PERSONA);
+  const [viewMode, setViewMode] = useState<ViewDensityMode>(DEFAULT_VIEW_DENSITY_MODE);
   const [selectedImageProvider, setSelectedImageProvider] = useState<ImageGenerationSelection>(defaultImageProvider);
   const [isPending, startTransition] = useTransition();
 
@@ -89,6 +100,23 @@ export default function Home() {
   const [imageGenerationDiagnostics, setImageGenerationDiagnostics] = useState<ImageGenerationDiagnostics[]>([]);
   const [imageGenerationStartedAt, setImageGenerationStartedAt] = useState<number | null>(null);
   const [imageGenerationElapsedSeconds, setImageGenerationElapsedSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    const restoreTimer = window.setTimeout(() => {
+      const storedPresets = getStoredTopBarPresets(
+        defaultImageProvider,
+        providerOverrideEnabled,
+        dualModeEnabled
+      );
+
+      setSelectedModel(storedPresets.modelId);
+      setSelectedPersona(storedPresets.analystPersona);
+      setViewMode(storedPresets.viewDensityMode);
+      setSelectedImageProvider(storedPresets.imageProvider);
+    }, 0);
+
+    return () => window.clearTimeout(restoreTimer);
+  }, []);
 
   // Auto-dismiss success toast
   useEffect(() => {
@@ -109,15 +137,22 @@ export default function Home() {
 
   const handleModelChange = useCallback((modelId: string) => {
     setSelectedModel(modelId);
+    setStoredModel(modelId);
   }, []);
 
-  const handlePersonaChange = useCallback((persona: string) => {
+  const handlePersonaChange = useCallback((persona: AnalystPersona) => {
     setSelectedPersona(persona);
+    setStoredAnalystPersona(persona);
   }, []);
 
   const handleViewModeChange = useCallback((mode: ViewDensityMode) => {
     setViewMode(mode);
     setStoredViewDensityMode(mode);
+  }, []);
+
+  const handleImageProviderChange = useCallback((provider: ImageGenerationSelection) => {
+    setSelectedImageProvider(provider);
+    setStoredImageProvider(provider);
   }, []);
 
   const handleHistoryEmptyChange = useCallback((isEmpty: boolean) => {
@@ -387,16 +422,16 @@ export default function Home() {
             <div className="flex items-center justify-between mb-4">
               <div />
               <div className="flex flex-wrap items-center justify-end gap-3">
-                <AnalystPicker onPersonaChange={handlePersonaChange} />
+                <AnalystPicker value={selectedPersona} onChange={handlePersonaChange} />
                 {!isQuietMode && (
-                  <ModelPicker onModelChange={handleModelChange} />
+                  <ModelPicker value={selectedModel} onChange={handleModelChange} />
                 )}
                 {isTestMode && providerOverrideEnabled && (
                   <ImageProviderPicker
                     value={selectedImageProvider}
                     defaultProvider={defaultImageProvider}
                     dualModeEnabled={dualModeEnabled}
-                    onChange={setSelectedImageProvider}
+                    onChange={handleImageProviderChange}
                   />
                 )}
                 <ViewDensityControl value={viewMode} onChange={handleViewModeChange} />

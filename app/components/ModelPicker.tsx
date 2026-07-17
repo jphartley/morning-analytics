@@ -1,53 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { GEMINI_MODELS, DEFAULT_MODEL_ID } from "@/lib/models";
-
-const STORAGE_KEY = "gemini-model";
+import { useState } from "react";
+import { GEMINI_MODELS } from "@/lib/models";
 
 interface ModelPickerProps {
-  onModelChange: (modelId: string) => void;
+  value: string;
+  onChange: (modelId: string) => void;
 }
 
-export function getStoredModel(): string {
-  try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored && GEMINI_MODELS.some((m) => m.id === stored)) {
-        return stored;
-      }
-    }
-  } catch {
-    // localStorage unavailable (SSR, private browsing, etc.)
-  }
-  return DEFAULT_MODEL_ID;
-}
-
-function setStoredModel(modelId: string): void {
-  try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem(STORAGE_KEY, modelId);
-    }
-  } catch {
-    // localStorage unavailable
-  }
-}
-
-export function ModelPicker({ onModelChange }: ModelPickerProps) {
-  const [selectedModel, setSelectedModel] = useState<string>(getStoredModel);
+export function ModelPicker({ value, onChange }: ModelPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    onModelChange(selectedModel);
-  }, [onModelChange, selectedModel]);
-
   const handleSelect = (modelId: string) => {
-    setSelectedModel(modelId);
-    setStoredModel(modelId);
+    onChange(modelId);
     setIsOpen(false);
   };
 
-  const currentModel = GEMINI_MODELS.find((m) => m.id === selectedModel) || GEMINI_MODELS[0];
+  const currentModel = GEMINI_MODELS.find((model) => model.id === value) || GEMINI_MODELS[0];
 
   return (
     <div className="relative">
@@ -75,7 +44,7 @@ export function ModelPicker({ onModelChange }: ModelPickerProps) {
                 key={model.id}
                 onClick={() => handleSelect(model.id)}
                 className={`w-full px-4 py-3 text-left hover:bg-page first:rounded-t-lg last:rounded-b-lg transition-colors ${
-                  model.id === selectedModel ? "bg-accent-soft" : ""
+                  model.id === value ? "bg-accent-soft" : ""
                 }`}
               >
                 <div className="font-medium text-ink">{model.displayName}</div>
