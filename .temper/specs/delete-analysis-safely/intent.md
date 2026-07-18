@@ -1,5 +1,8 @@
 # Intent — Delete an analysis safely
 
+**Status:** completed
+**Completed:** 2026-07-18
+
 _Source: docs/ui-ux-improvement-backlog.md § 6 "Delete an analysis safely" (P1 · Size M · Difficulty Hard · History Management & Privacy)._
 
 ## Intent
