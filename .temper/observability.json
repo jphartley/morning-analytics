@@ -1,17 +1,51 @@
 {
-  "version": 2,
-  "feature_slug": "collapsible-history-entry",
-  "stages": [],
-  "gate_decisions": [
+  "version": 3,
+  "feature": "delete-analysis-safely",
+  "schema_source": "reference/orchestrator-patterns.md#observabilityjson-v3-schema",
+  "stages": [
     {
       "stage": "plan",
+      "model_tier": "tier-frontier",
+      "model_source": "routing",
+      "tokens": { "input": 106872, "input_source": "estimated", "output": 45803, "output_source": "estimated" },
+      "latency_ms": { "value": 314935, "source": "measured" },
+      "tool_calls": { "value": 19, "source": "measured" },
+      "cost_usd": { "value": 0.0, "source": "pricing" },
+      "retries": { "value": 0, "source": "measured" },
+      "ts_start": "2026-07-18T00:00:00Z",
+      "ts_end": "2026-07-18T00:05:15Z"
+    },
+    {
+      "stage": "design",
+      "model_tier": "tier-frontier",
+      "model_source": "routing",
+      "tokens": { "input": 77154, "input_source": "estimated", "output": 33066, "output_source": "estimated" },
+      "latency_ms": { "value": 332502, "source": "measured" },
+      "tool_calls": { "value": 17, "source": "measured" },
+      "cost_usd": { "value": 0.0, "source": "pricing" },
+      "retries": { "value": 0, "source": "measured" },
+      "ts_start": "2026-07-18T00:05:15Z",
+      "ts_end": "2026-07-18T00:10:47Z"
+    }
+  ],
+  "loops": [],
+  "gate_decisions": [
+    {
+      "stage": "design",
       "decision": "AUTONOMOUS_ARM",
       "auto": false,
       "run_mode": "autonomous",
       "run_mode_source": "user-choice",
-      "reason": "user explicitly requested unattended build after teach-me exit",
-      "ts": "2026-07-15T00:00:00Z"
+      "reason": "user selected Automated at the post-design Auto/Stage Choice Gate",
+      "confidence": { "value": 1.0, "source": "user-override" },
+      "ts": "2026-07-18T00:11:00Z"
     }
   ],
-  "totals": { "tokens": 0, "cost_usd": 0, "latency_ms": 0 }
+  "run_mode": "autonomous",
+  "run_mode_source": "user-choice",
+  "totals": {
+    "tokens": { "value": 262895, "source": "measured" },
+    "cost_usd": { "value": 0.0, "source": "pricing" },
+    "latency_ms": { "value": 647437, "source": "measured" }
+  }
 }

@@ -254,9 +254,11 @@
   --color-accent-soft: var(--accent-soft);
   --color-outline: var(--border);
   /* Palette-independent destructive tokens (D7): a fixed red reads as destructive in
-     every palette, so these are declared once here rather than per-palette. */
-  --color-danger: #dc2626;
-  --color-danger-hover: #b91c1c;
+     every palette, so these are declared once here rather than per-palette. A muted
+     brick red (rather than a saturated alert-red) sits better against the warm,
+     paper-toned surfaces most palettes use. */
+  --color-danger: #a83a2c;
+  --color-danger-hover: #8f3025;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --animate-fade-in-up: fade-in-up 300ms ease-out both;

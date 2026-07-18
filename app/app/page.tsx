@@ -104,7 +104,7 @@ export default function Home() {
   const [imageGenerationElapsedSeconds, setImageGenerationElapsedSeconds] = useState<number | null>(null);
 
   // Delete-analysis state
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; dateLabel: string; preview: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; dateLabel: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pendingRemovedId, setPendingRemovedId] = useState<string | null>(null);
@@ -177,7 +177,7 @@ export default function Home() {
   }, []);
 
   const handleRequestDelete = useCallback(
-    (entry: { id: string; dateLabel: string; preview: string }) => {
+    (entry: { id: string; dateLabel: string }) => {
       setPendingRemovedId(null);
       setDeleteError(null);
       setPendingDelete(entry);
@@ -419,7 +419,6 @@ export default function Home() {
     setPendingDelete({
       id: historyViewData.id,
       dateLabel: historyViewData.createdAt ? formatDateTime(historyViewData.createdAt) : "this analysis",
-      preview: historyViewData.inputText.slice(0, 100),
     });
   };
 
@@ -699,7 +698,6 @@ export default function Home() {
       {pendingDelete && (
         <ConfirmDeleteDialog
           dateLabel={pendingDelete.dateLabel}
-          preview={pendingDelete.preview}
           isDeleting={isDeleting}
           error={deleteError}
           onConfirm={handleConfirmDelete}

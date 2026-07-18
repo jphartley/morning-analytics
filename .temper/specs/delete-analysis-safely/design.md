@@ -173,7 +173,6 @@ Presentational modal. Owns no data-fetching and never calls the server itself �
 ```tsx
 interface ConfirmDeleteDialogProps {
   dateLabel: string;                       // e.g. "Jul 14, 9:32 AM" (formatted by caller)
-  preview: string;                         // short text preview identifying the entry
   isDeleting: boolean;                     // disables buttons + backdrop/Escape while true
   error: string | null;                    // shown inline; dialog stays open for retry
   onConfirm: () => void;                   // page runs the server action
@@ -182,14 +181,21 @@ interface ConfirmDeleteDialogProps {
 }
 ```
 
+> **Post-Check revision:** a `preview` prop (short text excerpt of the journal entry) was cut
+> after direct product feedback at the Commit gate — showing a text quote inside a destructive
+> confirmation was judged to overload the message. See intent.md SC2 for the rationale. The
+> `bg-danger` token (D7) was also retuned from a saturated alert-red (`#dc2626`) to a muted
+> brick red (`#a83a2c`) for the same reason — it read as clashing against the warm, paper-toned
+> surfaces most palettes use.
+
 **Rendering / a11y:**
 - Backdrop + centered panel using design tokens only (`bg-surface`, `text-ink`, `text-ink-muted`,
   `border-outline`, `bg-page` overlay via `/opacity`).
 - Panel: `role="dialog"`, `aria-modal="true"`, `aria-labelledby={titleId}`,
   `aria-describedby={bodyId}`.
-- Title (e.g. "Delete this analysis?"). Body identifies the entry (`dateLabel` + `preview`) and
-  states verbatim intent: **"Its generated images will also be permanently deleted. This cannot be
-  undone."** (satisfies SC2).
+- Title (e.g. "Delete this analysis?"). Body identifies the entry by `dateLabel` and states
+  verbatim intent: **"The analysis from {dateLabel} and its generated images will be permanently
+  deleted. This cannot be undone."** (satisfies SC2, post-Check revision — no text preview).
 - Two buttons:
   - **Cancel** — neutral (`border-outline`, `text-ink`), autofocused on open (safe default for a
     destructive dialog).

@@ -40,7 +40,8 @@ Three layers, following the existing `regenerateImages` shape end-to-end.
 
 ### 3. UI (two surfaces + one dialog)
 - **`app/components/ConfirmDeleteDialog.tsx` (create)** — presentational modal. Props:
-  `{ dateLabel, preview, isDeleting, error, onConfirm, onCancel }`. Responsibilities: `role="dialog"`
+  `{ dateLabel, isDeleting, error, onConfirm, onCancel }` (a `preview` prop was cut post-Check per
+  direct product feedback — see intent.md SC2 revision note). Responsibilities: `role="dialog"`
   + `aria-modal="true"` + accessible name; states images will be deleted; focus moves in on open,
   focus trap, Escape/backdrop cancel, focus restored to the opener on close; destructive confirm
   button visually distinct (design tokens). Shows `error` + keeps the dialog open for retry when a

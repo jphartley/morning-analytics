@@ -1,11 +1,13 @@
 {
-  "stage": "design_complete",
+  "stage": "check_complete",
   "spec": "delete-analysis-safely",
   "spec_path": ".temper/specs/delete-analysis-safely",
   "branch": "feature/delete-analysis-safely",
   "original_args": "Item 6 from docs/ui-ux-improvement-backlog.md",
-  "next_stage": "build",
+  "next_stage": "commit",
   "artifacts": ["intent.md", "tasks.md", "plan.md", "design.md"],
   "base_sha": "0246d8ed56dcb02149ca29b7f5f0d56241eaf29d",
-  "updated": "2026-07-18T00:00:00Z"
+  "run_mode": "autonomous",
+  "run_mode_source": "user-choice",
+  "updated": "2026-07-18T00:35:00Z"
 }

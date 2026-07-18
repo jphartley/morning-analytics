@@ -28,9 +28,13 @@ sidebar and (as it lands) the mobile drawer.
 - **SC1 — Guarded, discoverable delete control.** Each owned history entry exposes a delete action
   that cannot fire from a single accidental click (menu → explicit confirm).
   Validate: scenario — covered by "Delete is discoverable but guarded against accidental clicks".
-- **SC2 — Informative confirmation.** The confirmation names the analysis by date + preview and
+- **SC2 — Informative confirmation.** The confirmation names the analysis by date and
   states that its generated images will also be removed.
   Validate: scenario — covered by "Confirmation identifies the item and warns about image deletion".
+  _Revised post-Check via direct product feedback: the original backlog wording asked for
+  "date and preview," but a text excerpt of the journal entry in a destructive-confirmation
+  dialog was judged to overload the message — date alone is sufficient identification given
+  the dialog only ever opens from a control already next to (or showing) that entry._
 - **SC3 — Cancel restores focus.** Cancelling returns focus to the control that opened the dialog.
   If a successful delete has removed that control from the DOM (e.g. the sidebar kebab of the
   now-deleted entry), focus falls back to a stable landmark (the sidebar's "New Analysis" button)
@@ -91,9 +95,9 @@ Note: manual
 
 ### Scenario: Confirmation identifies the item and warns about image deletion
 ```gherkin
-Given I have chosen "Delete" on an analysis created on a known date with a known preview
+Given I have chosen "Delete" on an analysis created on a known date
 When the confirmation dialog appears
-Then it shows the analysis date and a text preview identifying the entry
+Then it shows the analysis date identifying the entry
 And it states that the associated generated images will also be permanently deleted
 And the destructive confirm control is visually distinct from cancel
 ```

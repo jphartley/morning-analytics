@@ -12,7 +12,6 @@ export interface HistoryEntry {
 interface DeleteRequest {
   id: string;
   dateLabel: string;
-  preview: string;
 }
 
 interface HistorySidebarProps {
@@ -189,7 +188,6 @@ export function HistorySidebar({
                             onRequestDelete({
                               id: entry.id,
                               dateLabel: formatDateTime(entry.created_at),
-                              preview: entry.input_preview,
                             });
                           }}
                           className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-page transition-colors"

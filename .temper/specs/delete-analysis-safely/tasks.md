@@ -40,7 +40,7 @@ Stack commands: `cd app && npm run build`, `npx tsc --noEmit`, `npm test`, `npm 
 **File:** `app/components/ConfirmDeleteDialog.tsx` (create)
 **Traced to:** Scenario: "Confirmation identifies the item and warns about image deletion",
 "Cancel returns focus to the opening control", "Delete is discoverable but guarded against accidental clicks"
-- Props: `{ dateLabel: string; preview: string; isDeleting: boolean; error: string | null; onConfirm: () => void; onCancel: () => void; fallbackFocusRef: React.RefObject<HTMLElement> }`.
+- Props: `{ dateLabel: string; isDeleting: boolean; error: string | null; onConfirm: () => void; onCancel: () => void; fallbackFocusRef: React.RefObject<HTMLElement> }` (`preview` was cut post-Check — see intent.md SC2 revision note).
 - `role="dialog"`, `aria-modal="true"`, `aria-labelledby`/`aria-describedby`; body names date + preview and states generated images will be permanently removed.
 - Focus moves to the dialog on open; focus trap; Escape + backdrop click → `onCancel`; on unmount/close restore focus to the previously focused element (opener) if it's still in the DOM (`document.contains`); otherwise call the `fallbackFocusRef` prop (never leave focus on `<body>`).
 - Add `fallbackFocusRef: React.RefObject<HTMLElement>` prop for the case where a successful delete removes the opener (sidebar kebab) from the DOM.

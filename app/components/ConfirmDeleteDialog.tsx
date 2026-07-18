@@ -4,7 +4,6 @@ import { useEffect, useId, useLayoutEffect, useRef } from "react";
 
 interface ConfirmDeleteDialogProps {
   dateLabel: string;
-  preview: string;
   isDeleting: boolean;
   error: string | null;
   onConfirm: () => void;
@@ -17,7 +16,6 @@ const FOCUSABLE_SELECTOR =
 
 export function ConfirmDeleteDialog({
   dateLabel,
-  preview,
   isDeleting,
   error,
   onConfirm,
@@ -117,9 +115,9 @@ export function ConfirmDeleteDialog({
         <h2 id={titleId} className="text-lg font-semibold text-ink mb-2">
           Delete this analysis?
         </h2>
-        <p id={bodyId} className="text-sm text-ink-muted mb-4">
-          {dateLabel} — &ldquo;{preview}&rdquo;. Its generated images will also be
-          permanently deleted. This cannot be undone.
+        <p id={bodyId} className="text-sm text-ink mb-4">
+          The analysis from {dateLabel} and its generated images will be permanently
+          deleted. This cannot be undone.
         </p>
 
         {error && (
