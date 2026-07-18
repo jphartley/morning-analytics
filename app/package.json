@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "test:image-providers": "vitest run lib/image-providers",
     "check:auth-env": "node scripts/check-auth-env.mjs",
     "check:lockfile-registry": "node scripts/check-lockfile-registry.mjs",

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition, useCallback, useEffect } from "react";
-import { analyzeText, generateImages, saveAnalysis, regenerateImages, TextAnalysisResponse } from "./actions";
+import { useState, useTransition, useCallback, useEffect, useRef } from "react";
+import { analyzeText, generateImages, saveAnalysis, regenerateImages, deleteAnalysis, TextAnalysisResponse } from "./actions";
 import { getAnalysisById } from "@/lib/analytics-storage-client";
+import { selectNeighborId } from "@/lib/history-neighbor";
 import { JournalInput } from "@/components/JournalInput";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { ProviderImageGroups } from "@/components/ProviderImageGroups";
@@ -12,13 +13,14 @@ import { RegenerateButton } from "@/components/RegenerateButton";
 import { LoadingState, ANALYSIS_MESSAGES, IMAGE_MESSAGES } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
 import { Lightbox } from "@/components/Lightbox";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import {
   ImageGenerationDiagnosticsDisclosure,
   ImageGenerationDiagnosticsList,
 } from "@/components/ImageGenerationDiagnosticsDisclosure";
 import { ModelPicker } from "@/components/ModelPicker";
 import { AnalystPicker } from "@/components/AnalystPicker";
-import { HistorySidebar } from "@/components/HistorySidebar";
+import { HistorySidebar, HistoryEntry, formatDateTime } from "@/components/HistorySidebar";
 import { AppHeader } from "@/components/AppHeader";
 import { WelcomeEmptyState } from "@/components/WelcomeEmptyState";
 import { ViewDensityControl } from "@/components/ViewDensityControl";
@@ -101,6 +103,14 @@ export default function Home() {
   const [imageGenerationStartedAt, setImageGenerationStartedAt] = useState<number | null>(null);
   const [imageGenerationElapsedSeconds, setImageGenerationElapsedSeconds] = useState<number | null>(null);
 
+  // Delete-analysis state
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; dateLabel: string; preview: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [pendingRemovedId, setPendingRemovedId] = useState<string | null>(null);
+  const [historyEntryIds, setHistoryEntryIds] = useState<string[]>([]);
+  const newAnalysisButtonRef = useRef<HTMLButtonElement | null>(null);
+
   useEffect(() => {
     const restoreTimer = window.setTimeout(() => {
       const storedPresets = getStoredTopBarPresets(
@@ -158,6 +168,22 @@ export default function Home() {
   const handleHistoryEmptyChange = useCallback((isEmpty: boolean) => {
     setIsHistoryEmpty(isEmpty);
   }, []);
+
+  const handleHistoryEntriesChange = useCallback((entries: HistoryEntry[]) => {
+    setHistoryEntryIds(entries.map((entry) => entry.id));
+    setPendingRemovedId((current) =>
+      current && !entries.some((entry) => entry.id === current) ? null : current
+    );
+  }, []);
+
+  const handleRequestDelete = useCallback(
+    (entry: { id: string; dateLabel: string; preview: string }) => {
+      setPendingRemovedId(null);
+      setDeleteError(null);
+      setPendingDelete(entry);
+    },
+    []
+  );
 
   const handleAnalyze = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -386,6 +412,57 @@ export default function Home() {
     setIsRegenerating(false);
   };
 
+  const handleOpenDeleteForCurrent = () => {
+    if (!historyViewData) return;
+    setPendingRemovedId(null);
+    setDeleteError(null);
+    setPendingDelete({
+      id: historyViewData.id,
+      dateLabel: historyViewData.createdAt ? formatDateTime(historyViewData.createdAt) : "this analysis",
+      preview: historyViewData.inputText.slice(0, 100),
+    });
+  };
+
+  const handleCancelDelete = () => {
+    if (isDeleting) return;
+    setPendingDelete(null);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete || !user) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    const result = await deleteAnalysis(pendingDelete.id, user.id);
+
+    if (!result.success) {
+      setDeleteError(result.error || "Failed to delete analysis.");
+      setIsDeleting(false);
+      return;
+    }
+
+    const deletedId = pendingDelete.id;
+    setPendingRemovedId(deletedId); // sidebar hides row synchronously -> opener leaves DOM
+    setPendingDelete(null); // unmount dialog -> focus-restore effect -> fallback
+    setIsDeleting(false);
+
+    if (deletedId === selectedHistoryId) {
+      // Deleted the entry that is currently open -> navigate to a sensible next view.
+      const neighbor = selectNeighborId(historyEntryIds, deletedId);
+      if (neighbor) {
+        handleHistorySelect(neighbor);
+      } else {
+        handleNewAnalysis();
+      }
+    }
+    // Else: deleted a non-selected entry -> leave selectedHistoryId/historyViewData untouched.
+
+    setHistoryRefreshTrigger((prev) => prev + 1);
+    setSuccessToast("Analysis deleted.");
+  };
+
   const showWelcomeEmptyState = state === "idle" && isHistoryEmpty === true;
   const isQuietMode = viewMode === "quiet";
   const isInsightOrTestMode = viewMode === "insight" || viewMode === "test";
@@ -408,6 +485,10 @@ export default function Home() {
         onNewAnalysis={handleNewAnalysis}
         refreshTrigger={historyRefreshTrigger}
         onHistoryEmptyChange={handleHistoryEmptyChange}
+        onRequestDelete={handleRequestDelete}
+        onEntriesChange={handleHistoryEntriesChange}
+        pendingRemovedId={pendingRemovedId}
+        newAnalysisButtonRef={newAnalysisButtonRef}
       />
 
       {/* Main Content */}
@@ -542,6 +623,15 @@ export default function Home() {
           {/* Viewing historical analysis */}
           {state === "viewing-history" && historyViewData && (
             <div className="space-y-8">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleOpenDeleteForCurrent}
+                  className="text-sm text-ink-muted hover:text-danger focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 rounded transition-colors"
+                >
+                  Delete analysis
+                </button>
+              </div>
               {isInsightOrTestMode && historyViewData.analystPersona && (
                 <div className="bg-accent-soft border border-outline rounded-lg p-3 mb-4">
                   <p className="text-sm text-ink">
@@ -606,6 +696,18 @@ export default function Home() {
         />
       )}
 
+      {pendingDelete && (
+        <ConfirmDeleteDialog
+          dateLabel={pendingDelete.dateLabel}
+          preview={pendingDelete.preview}
+          isDeleting={isDeleting}
+          error={deleteError}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+          fallbackFocusRef={newAnalysisButtonRef}
+        />
+      )}
+
       {/* Save error toast */}
       {saveError && (
         <div className="fixed bottom-4 right-4 bg-red-100 border border-red-300 text-red-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
@@ -619,9 +721,13 @@ export default function Home() {
         </div>
       )}
 
-      {/* Success toast */}
+      {/* Success toast (also serves as the accessible deletion-confirmation announcement) */}
       {successToast && (
-        <div className="fixed bottom-4 right-4 bg-accent-soft border border-outline text-ink px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 bg-accent-soft border border-outline text-ink px-4 py-3 rounded-lg shadow-lg flex items-center gap-3"
+        >
           <span className="text-sm">{successToast}</span>
           <button
             onClick={() => setSuccessToast(null)}

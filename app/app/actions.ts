@@ -3,7 +3,12 @@
 import { v4 as uuidv4 } from "uuid";
 import { analyzeWithGemini } from "@/lib/gemini";
 import { assertServerSupabaseEnv } from "@/lib/supabase";
-import { saveAnalysis as saveToStorage, updateAnalysisImageGeneration } from "@/lib/analytics-storage";
+import {
+  saveAnalysis as saveToStorage,
+  updateAnalysisImageGeneration,
+  deleteAnalysisWithImages,
+  DeleteFailureCode,
+} from "@/lib/analytics-storage";
 import { getServerSupabase } from "@/lib/supabase";
 import {
   ImageGenerationDiagnostics,
@@ -56,7 +61,21 @@ export interface RegenerateImagesResponse {
   error?: string;
 }
 
+export interface DeleteAnalysisResponse {
+  success: boolean;
+  error?: string;
+}
+
 const MAX_IMAGES_PER_ANALYSIS = 20;
+
+// User-safe, secret-free messages for each internal delete failure code.
+// Full Supabase error detail is logged server-side only, inside deleteAnalysisWithImages.
+const DELETE_FAILURE_MESSAGES: Record<DeleteFailureCode, string> = {
+  not_found: "Analysis not found.",
+  forbidden: "Not authorized to delete this analysis.",
+  storage_failed: "Couldn't remove all images — please retry.",
+  db_failed: "Couldn't finish deleting — please retry.",
+};
 
 /**
  * Phase 1: Analyze text with Gemini
@@ -274,6 +293,43 @@ export async function regenerateImages(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to regenerate images.",
+    };
+  }
+}
+
+/**
+ * Delete an analysis and its generated images.
+ * Requires authenticated userId; ownership is re-verified server-side in
+ * deleteAnalysisWithImages (the service role client bypasses RLS).
+ */
+export async function deleteAnalysis(
+  analysisId: string,
+  userId: string
+): Promise<DeleteAnalysisResponse> {
+  try {
+    if (!userId) {
+      return { success: false, error: "User must be authenticated to delete analysis." };
+    }
+
+    if (!analysisId) {
+      return { success: false, error: "No analysis specified." };
+    }
+
+    const result = await deleteAnalysisWithImages(analysisId, userId);
+
+    if (result.success) {
+      return { success: true };
+    }
+
+    return {
+      success: false,
+      error: (result.code && DELETE_FAILURE_MESSAGES[result.code]) || "Failed to delete analysis.",
+    };
+  } catch (error) {
+    console.error("Delete analysis error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete analysis.",
     };
   }
 }

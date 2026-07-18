@@ -120,6 +120,91 @@ export async function uploadImagesToStorage(
 }
 
 
+export type DeleteFailureCode = "not_found" | "forbidden" | "storage_failed" | "db_failed";
+
+/**
+ * Union the analysis's recorded image_paths with the objects actually listed under
+ * `{analysisId}/` in storage, dedupe, and hard-scope the result to the analysis's own
+ * folder. This is the security control that prevents over-deletion across the shared
+ * bucket even if `imagePaths` is corrupt or contains foreign paths.
+ */
+export function resolveDeletionPaths(
+  analysisId: string,
+  imagePaths: string[] | null | undefined,
+  listedNames: string[]
+): string[] {
+  const prefix = `${analysisId}/`;
+  const fromListed = listedNames.map((name) => `${prefix}${name}`);
+  const union = new Set([...(imagePaths || []), ...fromListed]);
+
+  return Array.from(union)
+    .filter((path) => path.startsWith(prefix))
+    .sort();
+}
+
+/**
+ * Delete an analysis row and its owned storage objects.
+ * Ownership (`row.user_id === userId`) is verified before any deletion — the service
+ * role client bypasses RLS, so this check is the primary authorization guard.
+ * Deletion order is storage-first-then-row: if storage removal fails, the row is left
+ * intact so the delete is safe to retry (storage.remove is idempotent).
+ */
+export async function deleteAnalysisWithImages(
+  analysisId: string,
+  userId: string
+): Promise<{ success: boolean; code?: DeleteFailureCode; error?: string }> {
+  const supabase = getServerSupabase();
+
+  const { data: row, error: fetchError } = await supabase
+    .from("analyses")
+    .select("id, user_id, image_paths")
+    .eq("id", analysisId)
+    .single();
+
+  if (fetchError || !row) {
+    return { success: false, code: "not_found" };
+  }
+
+  if (row.user_id !== userId) {
+    return { success: false, code: "forbidden" };
+  }
+
+  let listedNames: string[] = [];
+  const { data: listData, error: listError } = await supabase.storage
+    .from(BUCKET_NAME)
+    .list(analysisId);
+
+  if (listError) {
+    // Best-effort sweep only — a missing sweep is recoverable on retry, an aborted
+    // delete strands the user. Fall back to the recorded image_paths.
+    console.error(`Failed to list storage objects for analysis ${analysisId}:`, listError);
+  } else {
+    listedNames = (listData || []).map((object) => object.name);
+  }
+
+  const paths = resolveDeletionPaths(analysisId, row.image_paths, listedNames);
+
+  if (paths.length > 0) {
+    const { error: removeError } = await supabase.storage.from(BUCKET_NAME).remove(paths);
+    if (removeError) {
+      console.error(`Failed to remove storage objects for analysis ${analysisId}:`, removeError);
+      return { success: false, code: "storage_failed" };
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("analyses")
+    .delete()
+    .eq("id", analysisId);
+
+  if (deleteError) {
+    console.error(`Failed to delete analysis row ${analysisId}:`, deleteError);
+    return { success: false, code: "db_failed" };
+  }
+
+  return { success: true };
+}
+
 /**
  * Append new image paths to an existing analysis's image_paths array.
  * Uses service role client (bypasses RLS).
