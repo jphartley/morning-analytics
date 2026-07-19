@@ -126,8 +126,7 @@ export async function analyzeText(
 export async function generateImages(
   imagePrompt: string,
   userId: string,
-  providerOverride?: string | null,
-  testMode: boolean = false
+  providerOverride?: string | null
 ): Promise<ImageGenerationResponse> {
   const analysisId = uuidv4();
 
@@ -150,7 +149,6 @@ export async function generateImages(
 
     const resolvedSelection = resolveImageGenerationSelection({
       override: providerOverride,
-      testMode,
     });
     const result = await executeImageGeneration({
       analysisId,
@@ -227,8 +225,7 @@ export async function saveAnalysis(
 export async function regenerateImages(
   analysisId: string,
   userId: string,
-  providerOverride?: string | null,
-  testMode: boolean = false
+  providerOverride?: string | null
 ): Promise<RegenerateImagesResponse> {
   try {
     if (!userId) {
@@ -257,7 +254,6 @@ export async function regenerateImages(
 
     const resolvedSelection = resolveImageGenerationSelection({
       override: providerOverride,
-      testMode,
     });
     const currentPaths: string[] = analysis.image_paths || [];
     const requiredCapacity = requiredImageCapacity(resolvedSelection.selection);

@@ -90,6 +90,10 @@ export function setStoredModel(modelId: string): void {
   writeStoredValue(MODEL_STORAGE_KEY, modelId);
 }
 
+// Restores the saved provider selection whenever it is available under the current
+// registry and client feature flags. Restoration is NOT scoped to any view-density
+// mode — the selection (including "dual") is honored in quiet, insight, or test view;
+// server-side flags remain the sole authorization for sending it as an override.
 export function getStoredImageProvider(
   defaultProvider: ImageProviderId,
   providerOverrideEnabled: boolean,

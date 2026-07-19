@@ -65,6 +65,10 @@ interface HistoryViewData {
 const MAX_IMAGES = 20;
 const providerOverrideEnabled = process.env.NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED === "true";
 const dualModeEnabled = process.env.NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED === "true";
+// NEXT_PUBLIC_CONFIGURED_IMAGE_PROVIDER is built in next.config.ts from the same
+// IMAGE_GENERATION_PROVIDER || NEXT_PUBLIC_IMAGE_PROVIDER || "midjourney" chain the
+// server uses (getDeploymentImageProviderId), so the client default mirrors the
+// server default. The override guard below relies on this agreement.
 const configuredProvider = process.env.NEXT_PUBLIC_CONFIGURED_IMAGE_PROVIDER;
 const defaultImageProvider: ImageProviderId = IMAGE_PROVIDER_IDS.includes(
   configuredProvider as ImageProviderId
@@ -226,10 +230,7 @@ export default function Home() {
         const imageResult = await generateImages(
           textResult.imagePrompt,
           user!.id,
-          viewMode === "test" && selectedImageProvider !== defaultImageProvider
-            ? selectedImageProvider
-            : null,
-          viewMode === "test"
+          selectedImageProvider !== defaultImageProvider ? selectedImageProvider : null
         );
         setImageGenerationStartedAt(null);
         setImageGenerationElapsedSeconds(null);
@@ -372,10 +373,7 @@ export default function Home() {
     const result = await regenerateImages(
       analysisId,
       user.id,
-      viewMode === "test" && selectedImageProvider !== defaultImageProvider
-        ? selectedImageProvider
-        : null,
-      viewMode === "test"
+      selectedImageProvider !== defaultImageProvider ? selectedImageProvider : null
     );
     setImageGenerationStartedAt(null);
     setImageGenerationElapsedSeconds(null);
@@ -506,7 +504,7 @@ export default function Home() {
                 {!isQuietMode && (
                   <ModelPicker value={selectedModel} onChange={handleModelChange} />
                 )}
-                {isTestMode && providerOverrideEnabled && (
+                {providerOverrideEnabled && (
                   <ImageProviderPicker
                     value={selectedImageProvider}
                     defaultProvider={defaultImageProvider}

@@ -23,14 +23,13 @@ describe("image provider resolution", () => {
     expect(() => resolveImageProvider()).toThrow(/Unsupported image provider/);
   });
 
-  it("requires both test mode and the server gate for an override", () => {
+  it("authorizes an override by the server gate alone, in any view mode", () => {
     vi.stubEnv("IMAGE_GENERATION_PROVIDER", "midjourney");
     vi.stubEnv("IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED", "false");
-    expect(() => resolveImageProvider({ override: "mock", testMode: true })).toThrow(/disabled/);
+    expect(() => resolveImageProvider({ override: "mock" })).toThrow(/disabled/);
 
     vi.stubEnv("IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED", "true");
-    expect(() => resolveImageProvider({ override: "mock", testMode: false })).toThrow(/test mode/);
-    expect(resolveImageProvider({ override: "mock", testMode: true }).id).toBe("mock");
+    expect(resolveImageProvider({ override: "mock" }).id).toBe("mock");
   });
 
   it("does not validate configuration belonging to an unselected provider", () => {
@@ -44,17 +43,23 @@ describe("image provider resolution", () => {
     vi.stubEnv("IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED", "true");
     vi.stubEnv("IMAGE_PROVIDER_DUAL_MODE_ENABLED", "false");
 
-    expect(() => resolveImageProvider({ override: "dual", testMode: true })).toThrow(/Unsupported/);
-    expect(() => resolveImageGenerationSelection({ override: "dual", testMode: true })).toThrow(/disabled/);
+    expect(() => resolveImageProvider({ override: "dual" })).toThrow(/Unsupported/);
+    expect(() => resolveImageGenerationSelection({ override: "dual" })).toThrow(/disabled/);
 
     vi.stubEnv("IMAGE_PROVIDER_DUAL_MODE_ENABLED", "true");
-    expect(() => resolveImageGenerationSelection({ override: "dual", testMode: false })).toThrow(/test mode/);
 
-    const resolved = resolveImageGenerationSelection({ override: "dual", testMode: true });
+    const resolved = resolveImageGenerationSelection({ override: "dual" });
     expect(resolved.selection).toBe("dual");
     expect(resolved.providers.map((provider) => provider.id)).toEqual([
       "black-forest-labs",
       "midjourney",
     ]);
+  });
+
+  it("still rejects an override when the server gate is off", () => {
+    vi.stubEnv("IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED", "false");
+    expect(() => resolveImageGenerationSelection({ override: "black-forest-labs" })).toThrow(
+      /disabled/
+    );
   });
 });

@@ -70,7 +70,7 @@ beforeEach(() => {
 
 describe("regenerateImages dual mode", () => {
   it("persists successful paths and every provider batch together", async () => {
-    const result = await regenerateImages("analysis-123", "user-123", "dual", true);
+    const result = await regenerateImages("analysis-123", "user-123", "dual");
 
     expect(result.success).toBe(true);
     expect(mocks.executeImageGeneration).toHaveBeenCalledWith(expect.objectContaining({
@@ -90,7 +90,7 @@ describe("regenerateImages dual mode", () => {
   it("rejects a dual round before provider calls when eight slots do not remain", async () => {
     analysisWithPaths(16);
 
-    const result = await regenerateImages("analysis-123", "user-123", "dual", true);
+    const result = await regenerateImages("analysis-123", "user-123", "dual");
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/Maximum of 20/);

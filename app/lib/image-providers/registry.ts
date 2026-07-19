@@ -12,7 +12,6 @@ const PROVIDERS: Record<ImageProviderId, ImageProvider> = {
 
 export interface ResolveImageProviderOptions {
   override?: string | null;
-  testMode?: boolean;
 }
 
 export interface ResolvedImageProvider {
@@ -53,13 +52,7 @@ export function resolveImageProvider(
     if (process.env.IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED !== "true") {
       throw new ImageProviderError(
         "configuration",
-        "Image provider test overrides are disabled on the server."
-      );
-    }
-    if (!options.testMode) {
-      throw new ImageProviderError(
-        "configuration",
-        "Image provider overrides are only allowed in test mode."
+        "Image provider overrides are disabled on the server."
       );
     }
     if (!isImageProviderId(override)) {
@@ -93,13 +86,7 @@ export function resolveImageGenerationSelection(
     if (process.env.IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED !== "true") {
       throw new ImageProviderError(
         "configuration",
-        "Image provider test overrides are disabled on the server."
-      );
-    }
-    if (!options.testMode) {
-      throw new ImageProviderError(
-        "configuration",
-        "Image provider overrides are only allowed in test mode."
+        "Image provider overrides are disabled on the server."
       );
     }
     if (process.env.IMAGE_PROVIDER_DUAL_MODE_ENABLED !== "true") {

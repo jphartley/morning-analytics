@@ -1,31 +1,4 @@
-# image-provider-selection Specification
-
-## Purpose
-Define strict, server-controlled selection and isolation of supported image-generation providers.
-## Requirements
-### Requirement: Resolve image generation through a strict provider registry
-The system SHALL resolve image generation through a registry containing exactly the supported provider identifiers `mock`, `midjourney`, and `black-forest-labs`.
-
-#### Scenario: Supported deployment provider is configured
-- **WHEN** the server starts an image generation attempt with a supported deployment-default provider
-- **THEN** the system SHALL resolve the matching provider adapter
-- **AND** the system SHALL record the resolved provider on the attempt diagnostics
-
-#### Scenario: Unsupported provider is configured
-- **WHEN** the configured provider identifier is not registered
-- **THEN** the system SHALL reject image generation with an actionable configuration error
-- **AND** the system SHALL NOT silently fall back to Midjourney, Black Forest Labs, or mock generation
-
-### Requirement: Keep the deployment default server-controlled
-The system SHALL select its deployment-default image provider using server-side configuration.
-
-#### Scenario: No request override is supplied
-- **WHEN** an initial generation or regeneration request does not contain an allowed provider override
-- **THEN** the system SHALL use the configured server-side deployment default
-
-#### Scenario: Provider secrets remain server-side
-- **WHEN** provider selection and configuration are returned to the browser
-- **THEN** the system SHALL NOT expose Discord tokens, the Black Forest Labs API key, or other provider secrets
+## ADDED Requirements
 
 ### Requirement: Allow explicitly gated provider overrides in any view mode
 The system SHALL allow a request-level provider override — including the dual-provider selection — whenever provider override support is explicitly enabled by server configuration, independent of the active view-density mode. Authorization for an override SHALL depend only on server-side feature flags, never on a client-supplied view-mode or test-mode signal.
@@ -53,42 +26,6 @@ The system SHALL allow a request-level provider override — including the dual-
 #### Scenario: Provider override control visibility
 - **WHEN** provider override support is enabled
 - **THEN** the system SHALL display the provider override control regardless of the active view-density mode
-
-### Requirement: Keep provider selection immutable within an attempt
-The system SHALL resolve the provider once when an image generation attempt begins and SHALL use that provider for the complete attempt.
-
-#### Scenario: Configuration changes during generation
-- **WHEN** deployment configuration changes after an attempt has started
-- **THEN** the running attempt SHALL continue with its originally resolved provider
-
-#### Scenario: Provider attempt is retried internally
-- **WHEN** a provider adapter performs a bounded retry for a transient error
-- **THEN** the retry SHALL use the same provider and model as the original attempt
-
-### Requirement: Isolate provider configuration
-The system SHALL validate only the configuration required by the provider selected for the current attempt.
-
-#### Scenario: Black Forest Labs is selected
-- **WHEN** Black Forest Labs is selected and its required API key is missing
-- **THEN** the attempt SHALL fail with a Black Forest Labs configuration error before submitting generation work
-- **AND** missing Discord configuration SHALL NOT affect this validation
-
-#### Scenario: Midjourney is selected
-- **WHEN** Midjourney is selected and its required Discord configuration is present
-- **THEN** missing Black Forest Labs configuration SHALL NOT prevent the Midjourney attempt
-
-### Requirement: Do not perform implicit cross-provider fallback
-The system SHALL NOT automatically submit an attempt to another provider after the resolved provider fails.
-
-#### Scenario: Midjourney capture fails
-- **WHEN** a Midjourney attempt fails after Discord accepts the prompt
-- **THEN** the system SHALL report the Midjourney failure
-- **AND** the system SHALL NOT automatically create Black Forest Labs requests
-
-#### Scenario: Black Forest Labs generation fails
-- **WHEN** a Black Forest Labs attempt reaches a terminal failure
-- **THEN** the system SHALL report the Black Forest Labs failure
-- **AND** the system SHALL NOT automatically trigger Midjourney
 
 ### Requirement: Persist and restore provider selections independent of view mode
 The system SHALL save the user's image-provider picker selection to browser localStorage and SHALL restore it whenever that selection is registered and available under the current provider registry and client feature flags. Restoration SHALL NOT be conditioned on the active view-density mode, and this preference SHALL NOT bypass the existing server-controlled provider override authorization.
@@ -136,3 +73,12 @@ The system SHALL derive the client-side default-provider indicator from the same
 - **AND** a selection equal to the server deployment default SHALL NOT be misclassified as an override
 - **AND** a selection differing from the server deployment default SHALL be forwarded as an override when override support is enabled
 
+## REMOVED Requirements
+
+### Requirement: Allow explicitly gated test-mode provider overrides
+**Reason**: Overrides are no longer scoped to test view. Authorization now depends solely on server feature flags in any view mode, so the test-mode-scoped requirement (including its "quiet or insight mode hides the control" scenario) is replaced by "Allow explicitly gated provider overrides in any view mode".
+**Migration**: No data migration. Behavior change only: the provider picker is now shown, and a selected override forwarded, whenever `IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED` (and `IMAGE_PROVIDER_DUAL_MODE_ENABLED` for dual) are set on the server, regardless of view-density mode.
+
+### Requirement: Persist only currently available test-mode provider selections
+**Reason**: Persistence and restoration are no longer conditioned on test mode; the replacement requirement "Persist and restore provider selections independent of view mode" restores a saved selection in any view mode.
+**Migration**: No data migration. Existing saved selections in localStorage remain valid and are now restored regardless of view-density mode, subject to registry validity and client feature flags.
