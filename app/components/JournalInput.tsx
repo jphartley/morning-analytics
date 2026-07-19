@@ -4,6 +4,10 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useMemo, useRef } from "react";
+import {
+  countJournalWords,
+  shouldAutoAnalyzePastedJournal,
+} from "@/lib/journal-submission";
 
 interface JournalInputProps {
   value: string;
@@ -66,11 +70,8 @@ export function JournalInput({
 
       const wasPaste = pasteDetected.current;
       pasteDetected.current = false;
-      if (wasPaste && !disabled) {
-        const wordCount = md.split(/\s+/).filter(Boolean).length;
-        if (wordCount >= 300) {
-          shouldAutoAnalyze.current = true;
-        }
+      if (wasPaste && shouldAutoAnalyzePastedJournal(md, disabled)) {
+        shouldAutoAnalyze.current = true;
       }
     },
     editorProps: {
@@ -112,7 +113,7 @@ export function JournalInput({
   }, [disabled, editor]);
 
   const wordCount = useMemo(
-    () => value.split(/\s+/).filter(Boolean).length,
+    () => countJournalWords(value),
     [value]
   );
 

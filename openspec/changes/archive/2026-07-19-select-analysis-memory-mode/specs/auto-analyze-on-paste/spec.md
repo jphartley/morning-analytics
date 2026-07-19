@@ -1,11 +1,6 @@
-## Purpose
-
-Define automatic analysis behavior when pasted journal content reaches the configured word-count threshold.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Auto-trigger analysis on paste of 300+ words
-
 The system SHALL automatically submit the journal entry through the effective analysis memory mode when a paste event results in the journal input containing 300 or more words.
 
 #### Scenario: Paste triggers No memory mode
@@ -39,24 +34,3 @@ The system SHALL automatically submit the journal entry through the effective an
 #### Scenario: Analysis is already in progress
 - **WHEN** the user pastes text while the editor is disabled
 - **THEN** the system SHALL NOT trigger a second analysis
-
-### Requirement: Scroll to top when analysis starts
-
-The system SHALL scroll the page to the top when analysis is triggered, whether by auto-paste or manual button click.
-
-#### Scenario: Auto-triggered analysis scrolls to top
-- **WHEN** analysis is auto-triggered by a paste event
-- **THEN** the page SHALL smoothly scroll to the top so the loading state is visible
-
-#### Scenario: Manual analysis scrolls to top
-- **WHEN** user clicks the "Analyze" button manually
-- **THEN** the page SHALL smoothly scroll to the top
-
-### Requirement: Manual analyze button remains functional
-
-The "Analyze" button SHALL continue to work as before for all input methods and word counts.
-
-#### Scenario: Manual analyze with fewer than 300 words
-- **WHEN** user has typed or pasted fewer than 300 words
-- **AND** user clicks the "Analyze" button
-- **THEN** the system SHALL trigger analysis normally

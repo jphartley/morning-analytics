@@ -5,6 +5,7 @@ import { analyzeText, compareTextAnalyses, generateImages, saveAnalysis, regener
 import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { selectNeighborId } from "@/lib/history-neighbor";
 import { JournalInput } from "@/components/JournalInput";
+import { AnalysisMemoryModeControl } from "@/components/AnalysisMemoryModeControl";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { ProviderImageGroups } from "@/components/ProviderImageGroups";
 import { ImagePromptDisclosure } from "@/components/ImagePromptDisclosure";
@@ -44,6 +45,13 @@ import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { IMAGE_PROVIDER_IDS } from "@/lib/image-providers/types";
 import type { ImageProviderId } from "@/lib/image-providers/types";
 import type { MemoryContextItem } from "@/lib/memory-types";
+import {
+  DEFAULT_ANALYSIS_MEMORY_MODE,
+  dispatchAnalysisMemoryMode,
+  getEffectiveAnalysisMemoryMode,
+  type AnalysisMemoryMode,
+  type SingleAnalysisMemoryMode,
+} from "@/lib/analysis-memory-mode";
 import {
   ImageDisplayGroup,
   ImageGenerationBatch,
@@ -94,6 +102,9 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
   const [selectedPersona, setSelectedPersona] = useState<AnalystPersona>(DEFAULT_ANALYST_PERSONA);
   const [viewMode, setViewMode] = useState<ViewDensityMode>(DEFAULT_VIEW_DENSITY_MODE);
+  const [analysisMemoryMode, setAnalysisMemoryMode] = useState<AnalysisMemoryMode>(
+    DEFAULT_ANALYSIS_MEMORY_MODE
+  );
   const [selectedImageProvider, setSelectedImageProvider] = useState<ImageGenerationSelection>(defaultImageProvider);
   const [isPending, startTransition] = useTransition();
 
@@ -290,11 +301,17 @@ export default function Home() {
     }
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = (memoryMode: SingleAnalysisMemoryMode) => {
     prepareAnalysisRun();
 
     startTransition(async () => {
-      const textResult = await analyzeText(journalText, user!.id, selectedModel, selectedPersona);
+      const textResult = await analyzeText(
+        journalText,
+        user!.id,
+        selectedModel,
+        selectedPersona,
+        memoryMode
+      );
       if (!textResult.success) {
         setError(textResult.error || "Failed to analyze text.");
         setState("error");
@@ -315,6 +332,19 @@ export default function Home() {
       }
       setBlindOptions(assignBlindOptions(result.withMemory, result.withoutMemory));
       setState("comparison-ready");
+    });
+  };
+
+  const handleAnalysisSubmit = () => {
+    const effectiveMode = getEffectiveAnalysisMemoryMode(
+      viewMode,
+      testViewEnabled,
+      analysisMemoryMode
+    );
+
+    dispatchAnalysisMemoryMode(effectiveMode, {
+      runSingle: handleAnalyze,
+      runBlindComparison: handleBlindCompare,
     });
   };
 
@@ -571,24 +601,21 @@ export default function Home() {
           </header>
 
           {state === "idle" && (
-            <div>
+            <div className="space-y-4">
+              {isTestMode && testViewEnabled && (
+                <AnalysisMemoryModeControl
+                  value={analysisMemoryMode}
+                  onChange={setAnalysisMemoryMode}
+                  disabled={isPending}
+                />
+              )}
               <JournalInput
                 value={journalText}
                 onChange={setJournalText}
-                onAnalyze={handleAnalyze}
+                onAnalyze={handleAnalysisSubmit}
                 disabled={isPending}
                 showWritingStats={isInsightOrTestMode}
               />
-              {isTestMode && testViewEnabled && (
-                <button
-                  type="button"
-                  onClick={handleBlindCompare}
-                  disabled={isPending || !journalText.trim()}
-                  className="mt-3 w-full rounded-lg border border-outline bg-surface px-4 py-2 text-sm font-medium text-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Run blind memory comparison
-                </button>
-              )}
             </div>
           )}
 

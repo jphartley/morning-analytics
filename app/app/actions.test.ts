@@ -109,7 +109,13 @@ describe("contextual memory orchestration", () => {
     }];
     mocks.selectMemoryContext.mockResolvedValue({ context });
 
-    const result = await analyzeText("I feel nervous about the holiday.", "user-123", "model", "jungian");
+    const result = await analyzeText(
+      "I feel nervous about the holiday.",
+      "user-123",
+      "model",
+      "jungian",
+      "with-memory"
+    );
 
     expect(result).toMatchObject({ success: true, memoryContext: context });
     expect(mocks.analyzeWithGemini).toHaveBeenCalledWith(
@@ -117,6 +123,30 @@ describe("contextual memory orchestration", () => {
       "model",
       "jungian",
       context
+    );
+    expect(mocks.selectMemoryContext).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips memory selection and returns an empty snapshot in no-memory mode", async () => {
+    const result = await analyzeText(
+      "I feel nervous about the holiday.",
+      "user-123",
+      "model",
+      "jungian",
+      "without-memory"
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      memoryContext: [],
+    });
+    expect(result.memoryWarning).toBeUndefined();
+    expect(mocks.selectMemoryContext).not.toHaveBeenCalled();
+    expect(mocks.analyzeWithGemini).toHaveBeenCalledWith(
+      "I feel nervous about the holiday.",
+      "model",
+      "jungian",
+      []
     );
   });
 

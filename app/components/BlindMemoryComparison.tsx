@@ -25,7 +25,12 @@ interface BlindMemoryComparisonProps {
   onCancel: () => void;
 }
 
-type Preference = "a" | "b" | "tie" | null;
+export type BlindComparisonPreference = "a" | "b" | "tie" | null;
+
+interface BlindMemoryComparisonViewProps extends BlindMemoryComparisonProps {
+  preference: BlindComparisonPreference;
+  onPreference: (preference: Exclude<BlindComparisonPreference, null>) => void;
+}
 
 function ConditionLabel({ option }: { option: BlindComparisonOption }) {
   return (
@@ -44,12 +49,13 @@ function ConditionLabel({ option }: { option: BlindComparisonOption }) {
   );
 }
 
-export function BlindMemoryComparison({
+export function BlindMemoryComparisonView({
   options,
   onContinue,
   onCancel,
-}: BlindMemoryComparisonProps) {
-  const [preference, setPreference] = useState<Preference>(null);
+  preference,
+  onPreference,
+}: BlindMemoryComparisonViewProps) {
   const revealed = preference !== null;
 
   return (
@@ -61,9 +67,9 @@ export function BlindMemoryComparison({
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-6" data-testid="blind-comparison-results">
         {(["a", "b"] as const).map((key) => (
-          <section key={key} className="rounded-lg border border-outline bg-page p-4">
+          <section key={key} className="w-full rounded-lg border border-outline bg-page p-4">
             <h3 className="mb-3 text-lg font-semibold text-ink">Analysis {key.toUpperCase()}</h3>
             <AnalysisPanel analysisText={options[key].analysisText || ""} showReadingMetadata={false} />
             {revealed && <ConditionLabel option={options[key]} />}
@@ -73,9 +79,9 @@ export function BlindMemoryComparison({
 
       {!revealed ? (
         <div className="flex flex-wrap justify-center gap-3">
-          <button type="button" onClick={() => setPreference("a")} className="rounded-md bg-accent px-4 py-2 font-medium text-white">A is better</button>
-          <button type="button" onClick={() => setPreference("b")} className="rounded-md bg-accent px-4 py-2 font-medium text-white">B is better</button>
-          <button type="button" onClick={() => setPreference("tie")} className="rounded-md border border-outline bg-surface px-4 py-2 text-ink">No meaningful difference</button>
+          <button type="button" onClick={() => onPreference("a")} className="rounded-md bg-accent px-4 py-2 font-medium text-white">A is better</button>
+          <button type="button" onClick={() => onPreference("b")} className="rounded-md bg-accent px-4 py-2 font-medium text-white">B is better</button>
+          <button type="button" onClick={() => onPreference("tie")} className="rounded-md border border-outline bg-surface px-4 py-2 text-ink">No meaningful difference</button>
         </div>
       ) : (
         <div className="flex flex-wrap justify-center gap-3">
@@ -91,5 +97,17 @@ export function BlindMemoryComparison({
         </div>
       )}
     </div>
+  );
+}
+
+export function BlindMemoryComparison(props: BlindMemoryComparisonProps) {
+  const [preference, setPreference] = useState<BlindComparisonPreference>(null);
+
+  return (
+    <BlindMemoryComparisonView
+      {...props}
+      preference={preference}
+      onPreference={setPreference}
+    />
   );
 }

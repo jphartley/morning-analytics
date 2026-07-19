@@ -38,6 +38,7 @@ import {
   getMemoryRebuildFailure,
 } from "@/lib/memory-errors";
 import type { MemoryRebuildFailureDetail } from "@/lib/memory-errors";
+import type { SingleAnalysisMemoryMode } from "@/lib/analysis-memory-mode";
 
 assertServerSupabaseEnv();
 
@@ -156,7 +157,8 @@ export async function analyzeText(
   journalText: string,
   userId: string,
   modelId?: string,
-  persona: string = "jungian"
+  persona: string = "jungian",
+  memoryMode: SingleAnalysisMemoryMode = "with-memory"
 ): Promise<TextAnalysisResponse> {
   try {
     if (!userId) {
@@ -173,7 +175,9 @@ export async function analyzeText(
       };
     }
 
-    const memorySelection = await selectMemoryContext(journalText, userId, modelId);
+    const memorySelection = memoryMode === "with-memory"
+      ? await selectMemoryContext(journalText, userId, modelId)
+      : { context: [] as MemoryContextItem[] };
     const geminiResult = await analyzeWithGemini(
       journalText,
       modelId,
