@@ -42,4 +42,14 @@ describe("controlled top bar pickers", () => {
 
     expect(html).toMatch(/aria-checked="true"[^>]*aria-label="Test view"/);
   });
+
+  it("omits Test view when its build-time configuration is disabled", () => {
+    const html = renderToStaticMarkup(
+      <ViewDensityControl value="insight" onChange={() => undefined} testViewEnabled={false} />
+    );
+
+    expect(html).toMatch(/aria-label="Quiet view"/);
+    expect(html).toMatch(/aria-label="Insight view"/);
+    expect(html).not.toMatch(/aria-label="Test view"/);
+  });
 });

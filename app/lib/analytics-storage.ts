@@ -7,6 +7,7 @@ import {
   ImageGenerationBatch,
   parseImageGenerationBatches,
 } from "./image-generation-types";
+import type { MemoryContextItem } from "./memory-types";
 
 const BUCKET_NAME = "analysis-images";
 
@@ -277,7 +278,8 @@ export async function saveAnalysis(
   analysisId: string | undefined,
   analystPersona: string = "jungian",
   userId: string,
-  imageGenerationBatches: ImageGenerationBatch[] = []
+  imageGenerationBatches: ImageGenerationBatch[] = [],
+  memoryContext: MemoryContextItem[] = []
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   const supabase = getServerSupabase();
 
@@ -289,6 +291,7 @@ export async function saveAnalysis(
     model_id: modelId,
     image_paths: imagePaths.length > 0 ? imagePaths : null,
     image_generation_batches: imageGenerationBatches,
+    memory_context: memoryContext.length > 0 ? memoryContext : null,
     analyst_persona: analystPersona,
     ...(analysisId ? { id: analysisId } : {}),
   };

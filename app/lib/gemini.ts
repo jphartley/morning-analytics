@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 import { DEFAULT_MODEL_ID, getSupportedGeminiModel } from "./models";
+import type { MemoryContextItem } from "./memory-types";
 
 type AppThinkingLevel = NonNullable<
   ReturnType<typeof getSupportedGeminiModel>["thinking"]
@@ -98,10 +99,21 @@ function toGenAIThinkingLevel(level: AppThinkingLevel): ThinkingLevel {
   }
 }
 
+export function buildAnalysisSystemInstruction(
+  personaPrompt: string,
+  memoryContext: MemoryContextItem[]
+): string {
+  if (memoryContext.length === 0) return personaPrompt;
+  return `${personaPrompt}\n\nCONTEXTUAL MEMORY\nUse this only as potentially uncertain background that may resolve references in today's writing. Today's writing is primary. Do not mention that a memory system exists, do not quote this section, and do not present subjective memories as objective facts.\n${memoryContext
+    .map((memory) => `- ${memory.title}: ${memory.summary}`)
+    .join("\n")}`;
+}
+
 export async function analyzeWithGemini(
   journalText: string,
   modelId?: string,
-  persona: string = "jungian"
+  persona: string = "jungian",
+  memoryContext: MemoryContextItem[] = []
 ): Promise<AnalysisResult> {
   const useMocks = process.env.USE_AI_MOCKS === "true";
 
@@ -131,12 +143,13 @@ export async function analyzeWithGemini(
   }
 
   const systemPrompt = getPromptForPersona(persona);
+  const analysisSystemInstruction = buildAnalysisSystemInstruction(systemPrompt, memoryContext);
 
   const result = await genAI.models.generateContent({
     model: effectiveModel.id,
     contents: journalText,
     config: {
-      systemInstruction: systemPrompt,
+      systemInstruction: analysisSystemInstruction,
       ...(effectiveModel.thinking?.supported && effectiveModel.thinking.level
         ? {
             thinkingConfig: {

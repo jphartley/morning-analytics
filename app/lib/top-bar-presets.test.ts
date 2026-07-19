@@ -12,6 +12,7 @@ import {
   getStoredModel,
   getStoredTopBarPresets,
   getStoredViewDensityMode,
+  getAvailableViewDensityModes,
   setStoredAnalystPersona,
   setStoredImageProvider,
   setStoredModel,
@@ -112,5 +113,21 @@ describe("top bar preset storage", () => {
     expect(() => setStoredModel("gemini-3.5-flash")).not.toThrow();
     expect(() => setStoredImageProvider("mock")).not.toThrow();
     expect(() => setStoredViewDensityMode("quiet")).not.toThrow();
+  });
+
+  it("hides Test view and falls back from a stored Test preference when disabled", () => {
+    installLocalStorage(createLocalStorage({
+      [VIEW_DENSITY_STORAGE_KEY]: "test",
+    }));
+
+    expect(getAvailableViewDensityModes(false)).toEqual(["quiet", "insight"]);
+    expect(getStoredViewDensityMode(false)).toBe("insight");
+    expect(getStoredTopBarPresets("midjourney", true, true, false).viewDensityMode)
+      .toBe("insight");
+  });
+
+  it("keeps Test view available when enabled or omitted", () => {
+    expect(getAvailableViewDensityModes(true)).toEqual(["quiet", "insight", "test"]);
+    expect(getStoredViewDensityMode()).toBe("insight");
   });
 });

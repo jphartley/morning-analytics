@@ -20,6 +20,24 @@ import {
   requiredImageCapacity,
 } from "@/lib/image-generation-types";
 import { resolveImageGenerationSelection } from "@/lib/image-providers/registry";
+import { selectMemoryContext, updateMemoryForSavedAnalysis } from "@/lib/memory-service";
+import type { MemoryContextItem } from "@/lib/memory-types";
+import {
+  getNewestEntriesForReplay,
+  listMemoriesWithEvidence,
+  resetMemoryStore,
+} from "@/lib/memory-storage";
+import type { MemoryWithEvidence } from "@/lib/memory-types";
+import {
+  normalizeMemoryRebuildCount,
+  rebuildMemoryStore,
+} from "@/lib/memory-rebuild";
+import type { MemoryRebuildFailure } from "@/lib/memory-rebuild";
+import {
+  getMemoryActionErrorMessage,
+  getMemoryRebuildFailure,
+} from "@/lib/memory-errors";
+import type { MemoryRebuildFailureDetail } from "@/lib/memory-errors";
 
 assertServerSupabaseEnv();
 
@@ -28,6 +46,19 @@ export interface TextAnalysisResponse {
   success: boolean;
   analysisText?: string;
   imagePrompt?: string;
+  memoryContext?: MemoryContextItem[];
+  memoryWarning?: string;
+  error?: string;
+}
+
+export interface BlindComparisonOption extends TextAnalysisResponse {
+  usesMemory: boolean;
+}
+
+export interface BlindComparisonResponse {
+  success: boolean;
+  withMemory?: BlindComparisonOption;
+  withoutMemory?: BlindComparisonOption;
   error?: string;
 }
 
@@ -47,6 +78,45 @@ export interface ImageGenerationResponse {
 export interface SaveAnalysisResponse {
   success: boolean;
   id?: string;
+  error?: string;
+}
+
+export interface MemoryUpdateResponse {
+  success: boolean;
+  changedCount?: number;
+  error?: string;
+}
+
+export interface MemoryStoreResponse {
+  success: boolean;
+  memories?: MemoryWithEvidence[];
+  error?: string;
+}
+
+export interface MemoryRebuildResponse {
+  success: boolean;
+  attempted: number;
+  succeeded: number;
+  skipped: number;
+  total: number;
+  failures: MemoryRebuildFailure[];
+  error?: string;
+}
+
+export interface MemoryRebuildEntryReference {
+  analysisId: string;
+  createdAt: string;
+}
+
+export interface MemoryRebuildPreparationResponse {
+  success: boolean;
+  entries: MemoryRebuildEntryReference[];
+  error?: string;
+}
+
+export interface MemoryRebuildEntryResponse {
+  success: boolean;
+  failure?: MemoryRebuildFailureDetail;
   error?: string;
 }
 
@@ -103,18 +173,71 @@ export async function analyzeText(
       };
     }
 
-    const geminiResult = await analyzeWithGemini(journalText, modelId, persona);
+    const memorySelection = await selectMemoryContext(journalText, userId, modelId);
+    const geminiResult = await analyzeWithGemini(
+      journalText,
+      modelId,
+      persona,
+      memorySelection.context
+    );
 
     return {
       success: true,
       analysisText: geminiResult.analysisText,
       imagePrompt: geminiResult.imagePrompt || undefined,
+      memoryContext: memorySelection.context,
+      memoryWarning: memorySelection.warning,
     };
   } catch (error) {
     console.error("Text analysis error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to analyze text.",
+    };
+  }
+}
+
+export async function compareTextAnalyses(
+  journalText: string,
+  userId: string,
+  modelId?: string,
+  persona: string = "jungian"
+): Promise<BlindComparisonResponse> {
+  try {
+    if (!userId) return { success: false, error: "User must be authenticated to compare analyses." };
+    if (!journalText || !journalText.trim()) {
+      return { success: false, error: "Please enter some text to analyze." };
+    }
+
+    const memorySelection = await selectMemoryContext(journalText, userId, modelId);
+    const [withMemoryResult, withoutMemoryResult] = await Promise.all([
+      analyzeWithGemini(journalText, modelId, persona, memorySelection.context),
+      analyzeWithGemini(journalText, modelId, persona, []),
+    ]);
+
+    return {
+      success: true,
+      withMemory: {
+        success: true,
+        usesMemory: true,
+        analysisText: withMemoryResult.analysisText,
+        imagePrompt: withMemoryResult.imagePrompt || undefined,
+        memoryContext: memorySelection.context,
+        memoryWarning: memorySelection.warning,
+      },
+      withoutMemory: {
+        success: true,
+        usesMemory: false,
+        analysisText: withoutMemoryResult.analysisText,
+        imagePrompt: withoutMemoryResult.imagePrompt || undefined,
+        memoryContext: [],
+      },
+    };
+  } catch (error) {
+    console.error("Blind comparison error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to compare analyses.",
     };
   }
 }
@@ -187,7 +310,8 @@ export async function saveAnalysis(
   userId: string,
   analysisId?: string,
   analystPersona: string = "jungian",
-  imageGenerationBatches: ImageGenerationBatch[] = []
+  imageGenerationBatches: ImageGenerationBatch[] = [],
+  memoryContext: MemoryContextItem[] = []
 ): Promise<SaveAnalysisResponse> {
   try {
     if (!userId) {
@@ -206,7 +330,8 @@ export async function saveAnalysis(
       analysisId,
       analystPersona,
       userId,
-      imageGenerationBatches
+      imageGenerationBatches,
+      memoryContext
     );
     return result;
   } catch (error) {
@@ -214,6 +339,135 @@ export async function saveAnalysis(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to save analysis.",
+    };
+  }
+}
+
+export async function updateMemory(
+  analysisId: string,
+  userId: string,
+  modelId?: string
+): Promise<MemoryUpdateResponse> {
+  try {
+    if (!userId || !analysisId) {
+      return { success: false, error: "A saved analysis is required to update memory." };
+    }
+
+    const changedCount = await updateMemoryForSavedAnalysis(analysisId, userId, modelId);
+    return { success: true, changedCount };
+  } catch (error) {
+    console.error("Memory update error:", error);
+    return {
+      success: false,
+      error: getMemoryActionErrorMessage(
+        error,
+        "Analysis saved, but contextual memory could not be updated."
+      ),
+    };
+  }
+}
+
+export async function getMemoryStore(userId: string): Promise<MemoryStoreResponse> {
+  try {
+    if (!userId) return { success: false, error: "Authentication is required." };
+    return { success: true, memories: await listMemoriesWithEvidence(userId) };
+  } catch (error) {
+    console.error("Memory store read error:", error);
+    return {
+      success: false,
+      error: getMemoryActionErrorMessage(error, "Contextual memory could not be loaded."),
+    };
+  }
+}
+
+export async function resetMemory(userId: string): Promise<MemoryStoreResponse> {
+  try {
+    if (!userId) return { success: false, error: "Authentication is required." };
+    await resetMemoryStore(userId);
+    return { success: true, memories: [] };
+  } catch (error) {
+    console.error("Memory reset error:", error);
+    return {
+      success: false,
+      error: getMemoryActionErrorMessage(error, "Contextual memory could not be reset."),
+    };
+  }
+}
+
+export async function prepareMemoryRebuild(
+  userId: string,
+  count: number
+): Promise<MemoryRebuildPreparationResponse> {
+  try {
+    if (!userId) return { success: false, entries: [], error: "Authentication is required." };
+    const normalizedCount = normalizeMemoryRebuildCount(count);
+    if (normalizedCount === null) {
+      return { success: false, entries: [], error: "Enter a valid number of entries to rebuild." };
+    }
+
+    const entries = await getNewestEntriesForReplay(userId, normalizedCount);
+    await resetMemoryStore(userId);
+    return {
+      success: true,
+      entries: entries.map((entry) => ({ analysisId: entry.id, createdAt: entry.createdAt })),
+    };
+  } catch (error) {
+    console.error("Memory rebuild preparation error:", error);
+    return {
+      success: false,
+      entries: [],
+      error: getMemoryActionErrorMessage(error, "Contextual memory rebuild could not be prepared."),
+    };
+  }
+}
+
+export async function rebuildMemoryEntry(
+  analysisId: string,
+  userId: string,
+  modelId?: string
+): Promise<MemoryRebuildEntryResponse> {
+  try {
+    if (!analysisId || !userId) {
+      return { success: false, error: "A saved journal entry is required." };
+    }
+    await updateMemoryForSavedAnalysis(analysisId, userId, modelId);
+    return { success: true };
+  } catch (error) {
+    console.error("Memory rebuild entry error:", error);
+    const failure = getMemoryRebuildFailure(error);
+    return { success: false, failure, error: failure.message };
+  }
+}
+
+export async function rebuildMemory(
+  userId: string,
+  count: number,
+  modelId?: string
+): Promise<MemoryRebuildResponse> {
+  try {
+    if (!userId) {
+      return {
+        success: false,
+        attempted: 0,
+        succeeded: 0,
+        skipped: 0,
+        total: 0,
+        failures: [],
+        error: "Authentication is required.",
+      };
+    }
+    const result = await rebuildMemoryStore(userId, count, modelId);
+    return { success: true, ...result };
+  } catch (error) {
+    console.error("Memory rebuild error:", error);
+    return {
+      success: false,
+      attempted: 0,
+      succeeded: 0,
+      skipped: 0,
+      total: 0,
+      failures: [],
+      error: getMemoryActionErrorMessage(error, "Contextual memory could not be rebuilt."),
     };
   }
 }

@@ -32,6 +32,10 @@ export type ViewDensityMode = "quiet" | "insight" | "test";
 export const DEFAULT_VIEW_DENSITY_MODE: ViewDensityMode = "insight";
 export const VIEW_DENSITY_MODES: ViewDensityMode[] = ["quiet", "insight", "test"];
 
+export function getAvailableViewDensityModes(testViewEnabled: boolean): ViewDensityMode[] {
+  return testViewEnabled ? VIEW_DENSITY_MODES : ["quiet", "insight"];
+}
+
 export const ANALYST_PERSONA_STORAGE_KEY = "morning-analytics-analyst-persona";
 export const MODEL_STORAGE_KEY = "gemini-model";
 export const IMAGE_PROVIDER_STORAGE_KEY = "morning-analytics-image-provider";
@@ -119,9 +123,11 @@ export function isViewDensityMode(value: string | null): value is ViewDensityMod
   return value === "quiet" || value === "insight" || value === "test";
 }
 
-export function getStoredViewDensityMode(): ViewDensityMode {
+export function getStoredViewDensityMode(testViewEnabled: boolean = true): ViewDensityMode {
   const stored = readStoredValue(VIEW_DENSITY_STORAGE_KEY);
-  return isViewDensityMode(stored) ? stored : DEFAULT_VIEW_DENSITY_MODE;
+  return isViewDensityMode(stored) && getAvailableViewDensityModes(testViewEnabled).includes(stored)
+    ? stored
+    : DEFAULT_VIEW_DENSITY_MODE;
 }
 
 export function setStoredViewDensityMode(mode: ViewDensityMode): void {
@@ -131,7 +137,8 @@ export function setStoredViewDensityMode(mode: ViewDensityMode): void {
 export function getStoredTopBarPresets(
   defaultProvider: ImageProviderId,
   providerOverrideEnabled: boolean,
-  dualModeEnabled: boolean
+  dualModeEnabled: boolean,
+  testViewEnabled: boolean = true
 ): TopBarPresets {
   return {
     analystPersona: getStoredAnalystPersona(),
@@ -141,6 +148,6 @@ export function getStoredTopBarPresets(
       providerOverrideEnabled,
       dualModeEnabled
     ),
-    viewDensityMode: getStoredViewDensityMode(),
+    viewDensityMode: getStoredViewDensityMode(testViewEnabled),
   };
 }

@@ -4,6 +4,7 @@ import {
   imageProviderLabel,
   parseImageGenerationBatches,
 } from "./image-generation-types";
+import { parseMemoryContext } from "./memory-types";
 
 const BUCKET_NAME = "analysis-images";
 
@@ -137,6 +138,7 @@ export async function getAnalysisById(
       data: {
         ...data,
         image_generation_batches: batches,
+        memory_context: parseMemoryContext(data.memory_context),
         imageUrls,
         imageGroups,
       },

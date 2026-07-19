@@ -1,10 +1,11 @@
 "use client";
 
-import { ViewDensityMode, VIEW_DENSITY_MODES } from "@/lib/view-density";
+import { ViewDensityMode, getAvailableViewDensityModes } from "@/lib/view-density";
 
 interface ViewDensityControlProps {
   value: ViewDensityMode;
   onChange: (mode: ViewDensityMode) => void;
+  testViewEnabled?: boolean;
 }
 
 const MODE_LABELS: Record<ViewDensityMode, string> = {
@@ -53,14 +54,19 @@ function ModeIcon({ mode }: { mode: ViewDensityMode }) {
   );
 }
 
-export function ViewDensityControl({ value, onChange }: ViewDensityControlProps) {
+export function ViewDensityControl({
+  value,
+  onChange,
+  testViewEnabled = true,
+}: ViewDensityControlProps) {
+  const availableModes = getAvailableViewDensityModes(testViewEnabled);
   return (
     <div
       className="inline-flex rounded-lg border border-outline bg-surface p-1 shadow-sm"
       role="radiogroup"
       aria-label="View density"
     >
-      {VIEW_DENSITY_MODES.map((mode) => {
+      {availableModes.map((mode) => {
         const active = mode === value;
         const label = MODE_LABELS[mode];
 

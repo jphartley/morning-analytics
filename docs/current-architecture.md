@@ -2,11 +2,16 @@
 
 ## Overview
 
-Morning Analytics follows a two-phase processing model:
-1. **Phase 1 (≈2s)**: Gemini analyzes text and generates an image prompt
-2. **Phase 2**: The configured image provider returns exactly four normalized images
+Morning Analytics follows a memory-assisted processing model:
+1. **Memory selection**: Gemini fuzzily selects relevant compact memories for the original journal text.
+2. **Phase 1 analysis**: Gemini analyzes text with at most five memories / 150 words and generates an image prompt.
+3. **Phase 2 images**: The configured image provider returns normalized images.
+4. **Post-save memory update**: The server divides the original writing into exact source blocks; Gemini returns create/update operations that reference block IDs, and the server copies the selected block text into user-scoped memory evidence.
 
 Results are stored in Supabase for historical browsing.
+
+Memory selection degrades to a memory-free analysis when unavailable. Post-save
+memory update failures do not invalidate the readable or saved analysis.
 
 For the Midjourney/Discord failure investigation, architectural conclusions, rejected approaches, and recommended direct-provider job architecture, see `docs/image-generation-architecture.md`.
 
@@ -101,6 +106,55 @@ User Input
 - **`lib/image-splitter.ts`**: Uses Sharp to split 2x2 grid into 4 quadrants.
 - **`lib/analytics-storage.ts`**: Supabase client for reading history.
 - **`lib/analytics-storage-client.ts`**: Supabase anon client for browser reads.
+- **`lib/memory-ai.ts`**: Structured Gemini relevance selection and block-ID memory-update inference.
+- **`lib/memory-service.ts`**: User-scoped selection and post-save update orchestration.
+- **`lib/memory-source-blocks.ts`**: Deterministic exact-text journal segmentation and block-ID evidence resolution.
+- **`lib/memory-storage.ts`**: Consolidated memory, evidence, reset, and newest-entry persistence operations.
+- **`lib/memory-rebuild.ts`**: Test-only bounded sequential rebuild orchestration.
+
+---
+
+## Contextual Memory Flow
+
+```text
+Original journal entry + compact memory catalog
+                    ↓
+          AI relevance selector
+                    ↓
+      Server validates IDs and applies
+         maximum 5 / 150-word bound
+                    ↓
+       Persona analysis + image prompt
+                    ↓
+       Image generation and History save
+                    ↓
+ Server creates exact blocks b1, b2, ...
+                    ↓
+ Gemini returns separate creates and updates
+      referencing one evidence block ID each
+                    ↓
+ Server resolves IDs to exact original evidence
+```
+
+Memories are persona-independent and active in Quiet, Insight, and Test views.
+The Test-only diagnostic drawer displays the complete read-only store, dated
+evidence, confidence, temporal state, and the memory snapshot used by a saved
+analysis. It also provides reset, newest-N rebuild (default 7), and ephemeral
+blind memory-on/off comparison controls.
+
+All source blocks for one journal entry are sent together in one memory inference
+call. Entries remain separate calls. Gemini never reproduces evidence quotations;
+it selects a block ID, which the server validates and resolves to exact source
+text before persistence.
+
+Rebuild selects the newest N entries first, then replays only that window
+oldest-to-newest so the newest evidence is applied last. An entry-local failure
+is skipped rather than stopping the run. Progress distinguishes attempted,
+succeeded, and skipped entries, and the drawer retains a journal-text-free bug
+report with the model, entry date, analysis ID, failure category, and safe
+diagnostic message. The initial selector uses the compact consolidated catalog
+directly; semantic/vector pre-filtering is deferred until catalog growth
+demonstrates a need.
 
 ---
 
@@ -138,6 +192,7 @@ The current prompt instructs Gemini to adopt a **Jungian analyst** persona and p
 - `DISCORD_USER_TOKEN`, `DISCORD_BOT_TOKEN`: Enable Midjourney generation
 - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: Enable history storage
 - `USE_AI_MOCKS=true`: Bypasses Gemini + Discord, uses mock responses
+- `NEXT_PUBLIC_TEST_VIEW_ENABLED`: Optional build-time visibility for Test view; false hides Test diagnostics while memory continues in other views
 - `NEXT_PUBLIC_IMAGE_PROVIDER=mock`: Uses local images from `app/public/mock-images`
 
 `NEXT_PUBLIC_IMAGE_PROVIDER` remains a compatibility fallback only. In Test view, a provider menu is visible only when `NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED=true`; the server independently requires `IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED=true` before accepting that override.
@@ -157,6 +212,17 @@ The current prompt instructs Gemini to adopt a **Jungian analyst** persona and p
 | model_id | TEXT | Which Gemini model was used |
 | image_paths | JSONB | Array of storage paths for 4 quadrant images |
 | created_at | TIMESTAMP | When analysis was created |
+| memory_context | JSONB | Immutable IDs, versions, titles, and summaries supplied to the analysis |
+
+### `memories` table (Supabase)
+
+Stores consolidated, user-scoped summaries with retrieval terms, confidence,
+significance, temporal state, version, and first/last observation dates.
+
+### `memory_evidence` table (Supabase)
+
+Stores dated exact source blocks from original journal entries. Evidence supports
+inspection and future features but is never injected into daily analysis context.
 
 ### `analysis-images` storage bucket
 Stores 4 image files per analysis:

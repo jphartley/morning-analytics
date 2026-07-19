@@ -36,6 +36,11 @@ This document tracks technical decisions deferred from MVP and features planned 
 
 - [ ] **Auth metrics**: Track signup rate, signin failures, auth errors, session timeout events. Useful for debugging production issues and understanding user behavior.
 
+## Contextual Memory
+
+- [ ] **Add scalable memory pre-filtering when measured catalog growth warrants it**: `add-contextual-memory` deliberately sends the compact consolidated catalog directly to the AI relevance selector for the initial single-user experiment. If observed catalog size causes latency, cost, or selection-quality problems, add lexical/entity recall and/or vector similarity before AI reranking. Medium effort because it adds indexing, backfill, and retrieval evaluation.
+- [ ] **Move rebuild to durable work if request limits become a problem**: The Test-view rebuild deliberately processes the newest bounded entry window sequentially in one server action. If real rebuilds approach hosting request limits, move replay to a resumable job with progress polling. Deferred because rebuild is an occasional personal experiment control. Medium effort.
+
 ## Image Provider Compatibility Phase
 
 - [ ] **Remove the legacy public provider fallback**: `NEXT_PUBLIC_IMAGE_PROVIDER` is still accepted when `IMAGE_GENERATION_PROVIDER` is unset so existing deployments continue to work. Remove the fallback after every environment has migrated to the server-only setting. Origin: `add-switchable-image-providers`; small effort after deployment audit.

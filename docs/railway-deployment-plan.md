@@ -34,6 +34,7 @@ IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED
 NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED
 IMAGE_PROVIDER_DUAL_MODE_ENABLED
 NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED
+NEXT_PUBLIC_TEST_VIEW_ENABLED
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
@@ -60,6 +61,22 @@ click **Deploy** before treating them as active. Always deploy or redeploy after
 any variable change. `NEXT_PUBLIC_*` values are compiled into the Next.js client
 bundle and specifically require a rebuild/redeploy before browsers can see the
 new picker option.
+
+### Contextual memory and Test view
+
+Deploy the Supabase migration adding `memories`, `memory_evidence`, and
+`analyses.memory_context` before deploying the contextual-memory application
+release. Set the following in the `morning-analytics` service's **production**
+environment:
+
+```text
+NEXT_PUBLIC_TEST_VIEW_ENABLED=true
+```
+
+Use `false` to hide Test view and its memory diagnostics. Contextual-memory
+selection and update continue in Quiet and Insight views. Railway variable edits
+are staged: review them, click **Deploy**, and redeploy after every change because
+this public value is compiled into the client bundle.
 
 ---
 
@@ -135,6 +152,8 @@ Full end-to-end test on the live domain:
 | App loads but analysis fails | Missing `GEMINI_API_KEY` | Check Variables tab |
 | Images don't generate | Missing Discord env vars | Check all `DISCORD_*` vars |
 | Dual mode is missing | One of the four Test/Dual flags is disabled or was not rebuilt into the client | Check production Variables, deploy staged changes, and redeploy |
+| Test view is missing | `NEXT_PUBLIC_TEST_VIEW_ENABLED=false` was compiled into the client | Set the intended production value, review staged changes, and redeploy |
+| Memory diagnostics fail | Contextual-memory migration is missing or Supabase policies are not deployed | Apply the migration before the compatible app release |
 | Images 403 Forbidden | Supabase bucket not public | Enable public read on `analysis-images` bucket |
 | Custom domain not resolving | Missing/mismatched Railway verification record | Ensure both app routing record and `_railway-verify` TXT record match Railway exactly |
 | HTTPS not working | SSL not provisioned yet | Railway does this automatically, wait a few minutes |

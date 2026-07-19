@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useCallback, useEffect, useRef } from "react";
-import { analyzeText, generateImages, saveAnalysis, regenerateImages, deleteAnalysis, TextAnalysisResponse } from "./actions";
+import { analyzeText, compareTextAnalyses, generateImages, saveAnalysis, regenerateImages, deleteAnalysis, updateMemory, TextAnalysisResponse, type BlindComparisonOption } from "./actions";
 import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { selectNeighborId } from "@/lib/history-neighbor";
 import { JournalInput } from "@/components/JournalInput";
@@ -23,6 +23,8 @@ import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar, HistoryEntry, formatDateTime } from "@/components/HistorySidebar";
 import { AppHeader } from "@/components/AppHeader";
 import { WelcomeEmptyState } from "@/components/WelcomeEmptyState";
+import { MemoryDiagnosticsDrawer } from "@/components/MemoryDiagnosticsDrawer";
+import { assignBlindOptions, BlindMemoryComparison, type AssignedBlindOptions } from "@/components/BlindMemoryComparison";
 import { ViewDensityControl } from "@/components/ViewDensityControl";
 import { ImageProviderPicker } from "@/components/ImageProviderPicker";
 import { useAuth } from "@/lib/useAuth";
@@ -41,6 +43,7 @@ import {
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { IMAGE_PROVIDER_IDS } from "@/lib/image-providers/types";
 import type { ImageProviderId } from "@/lib/image-providers/types";
+import type { MemoryContextItem } from "@/lib/memory-types";
 import {
   ImageDisplayGroup,
   ImageGenerationBatch,
@@ -50,7 +53,7 @@ import {
   requiredImageCapacity,
 } from "@/lib/image-generation-types";
 
-type AppState = "idle" | "analyzing" | "text-ready" | "complete" | "error" | "viewing-history";
+type AppState = "idle" | "analyzing" | "comparison-ready" | "text-ready" | "complete" | "error" | "viewing-history";
 
 interface HistoryViewData {
   id: string;
@@ -60,11 +63,13 @@ interface HistoryViewData {
   imagePrompt?: string | null;
   analystPersona?: string | null;
   createdAt?: string | null;
+  memoryContext: MemoryContextItem[];
 }
 
 const MAX_IMAGES = 20;
 const providerOverrideEnabled = process.env.NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED === "true";
 const dualModeEnabled = process.env.NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED === "true";
+const testViewEnabled = process.env.NEXT_PUBLIC_TEST_VIEW_ENABLED !== "false";
 // NEXT_PUBLIC_CONFIGURED_IMAGE_PROVIDER is built in next.config.ts from the same
 // IMAGE_GENERATION_PROVIDER || NEXT_PUBLIC_IMAGE_PROVIDER || "midjourney" chain the
 // server uses (getDeploymentImageProviderId), so the client default mirrors the
@@ -81,6 +86,7 @@ export default function Home() {
   const [state, setState] = useState<AppState>("idle");
   const [journalText, setJournalText] = useState("");
   const [analysisResult, setAnalysisResult] = useState<TextAnalysisResponse | null>(null);
+  const [blindOptions, setBlindOptions] = useState<AssignedBlindOptions | null>(null);
   const [imageGroups, setImageGroups] = useState<ImageDisplayGroup[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -120,7 +126,8 @@ export default function Home() {
       const storedPresets = getStoredTopBarPresets(
         defaultImageProvider,
         providerOverrideEnabled,
-        dualModeEnabled
+        dualModeEnabled,
+        testViewEnabled
       );
 
       setSelectedModel(storedPresets.modelId);
@@ -189,7 +196,7 @@ export default function Home() {
     []
   );
 
-  const handleAnalyze = () => {
+  const prepareAnalysisRun = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     setState("analyzing");
     setError(null);
@@ -201,101 +208,132 @@ export default function Home() {
     setImageGenerationElapsedSeconds(null);
     setSelectedHistoryId(null);
     setHistoryViewData(null);
+    setBlindOptions(null);
+  };
+
+  const completeChosenAnalysis = async (textResult: TextAnalysisResponse) => {
+    setAnalysisResult(textResult);
+    if (textResult.memoryWarning) {
+      setSaveError(textResult.memoryWarning);
+    }
+    setCurrentImagePrompt(textResult.imagePrompt || null);
+    setState("text-ready");
+
+    let imagePaths: string[] = [];
+    let imageGenerationBatches: ImageGenerationBatch[] = [];
+    let uploadErrorMessage: string | null = null;
+    let imageGenerationErrorMessage: string | null = null;
+    let analysisId: string | undefined;
+    if (textResult.imagePrompt) {
+      setImageGenerationStatus("Image generation request is still running.");
+      setImageGenerationStartedAt(Date.now());
+      setImageGenerationElapsedSeconds(0);
+      const imageResult = await generateImages(
+        textResult.imagePrompt,
+        user!.id,
+        selectedImageProvider !== defaultImageProvider ? selectedImageProvider : null
+      );
+      setImageGenerationStartedAt(null);
+      setImageGenerationElapsedSeconds(null);
+      setImageGenerationDiagnostics(imageResult.diagnostics || []);
+      if (imageResult.groups) {
+        setImageGroups(imageResult.groups.map(providerResultGroupToDisplayGroup));
+      }
+
+      if (imageResult.success && imageResult.imageUrls) {
+        imagePaths = imageResult.imagePaths || [];
+        imageGenerationBatches = imageResult.batches || [];
+        analysisId = imageResult.analysisId;
+        setImageGenerationStatus(imageResult.partial
+          ? "One provider succeeded and one provider failed."
+          : imageResult.uploadError
+            ? "Images generated, but storage upload needs attention."
+            : "Images generated successfully.");
+        if (imageResult.uploadError) uploadErrorMessage = imageResult.uploadError;
+      } else if (!imageResult.success) {
+        imageGenerationErrorMessage = imageResult.error || "Failed to generate images";
+        imageGenerationBatches = imageResult.batches || [];
+        analysisId = imageResult.analysisId;
+        setImageGenerationStatus(imageGenerationErrorMessage);
+      }
+    } else {
+      setImageGenerationStartedAt(null);
+      setImageGenerationElapsedSeconds(null);
+    }
+
+    setState("complete");
+    const saveResult = await saveAnalysis(
+      journalText,
+      textResult.analysisText || "",
+      textResult.imagePrompt || null,
+      selectedModel,
+      imagePaths,
+      user!.id,
+      analysisId,
+      selectedPersona,
+      imageGenerationBatches,
+      textResult.memoryContext || []
+    );
+
+    const nonBlockingErrorMessage = imageGenerationErrorMessage || uploadErrorMessage;
+    if (saveResult.success && saveResult.id) {
+      setHistoryRefreshTrigger((prev) => prev + 1);
+      setSelectedHistoryId(saveResult.id);
+      setCurrentAnalysisId(saveResult.id);
+      const memoryResult = await updateMemory(saveResult.id, user!.id, selectedModel);
+      if (!memoryResult.success) {
+        setSaveError(memoryResult.error || "Analysis saved, but contextual memory could not be updated.");
+      }
+      if (nonBlockingErrorMessage) setSaveError(nonBlockingErrorMessage);
+    } else if (!saveResult.success) {
+      setSaveError(saveResult.error || "Failed to save analysis");
+    }
+  };
+
+  const handleAnalyze = () => {
+    prepareAnalysisRun();
 
     startTransition(async () => {
-      // Phase 1: Get text analysis
       const textResult = await analyzeText(journalText, user!.id, selectedModel, selectedPersona);
-
       if (!textResult.success) {
         setError(textResult.error || "Failed to analyze text.");
         setState("error");
         return;
       }
-
-      // Show text immediately
-      setAnalysisResult(textResult);
-      setCurrentImagePrompt(textResult.imagePrompt || null);
-      setState("text-ready");
-
-      // Phase 2: Generate images in background
-      let imagePaths: string[] = [];
-      let imageGenerationBatches: ImageGenerationBatch[] = [];
-      let uploadErrorMessage: string | null = null;
-      let imageGenerationErrorMessage: string | null = null;
-      let analysisId: string | undefined;
-      if (textResult.imagePrompt) {
-        setImageGenerationStatus("Image generation request is still running.");
-        setImageGenerationStartedAt(Date.now());
-        setImageGenerationElapsedSeconds(0);
-        const imageResult = await generateImages(
-          textResult.imagePrompt,
-          user!.id,
-          selectedImageProvider !== defaultImageProvider ? selectedImageProvider : null
-        );
-        setImageGenerationStartedAt(null);
-        setImageGenerationElapsedSeconds(null);
-        setImageGenerationDiagnostics(imageResult.diagnostics || []);
-        if (imageResult.groups) {
-          setImageGroups(imageResult.groups.map(providerResultGroupToDisplayGroup));
-        }
-
-        if (imageResult.success && imageResult.imageUrls) {
-          imagePaths = imageResult.imagePaths || [];
-          imageGenerationBatches = imageResult.batches || [];
-          analysisId = imageResult.analysisId;
-          setImageGenerationStatus(imageResult.partial
-            ? "One provider succeeded and one provider failed."
-            : imageResult.uploadError
-              ? "Images generated, but storage upload needs attention."
-              : "Images generated successfully.");
-          if (imageResult.uploadError) {
-            uploadErrorMessage = imageResult.uploadError;
-          }
-        } else if (!imageResult.success) {
-          imageGenerationErrorMessage = imageResult.error || "Failed to generate images";
-          imageGenerationBatches = imageResult.batches || [];
-          analysisId = imageResult.analysisId;
-          setImageGenerationStatus(imageGenerationErrorMessage);
-        }
-      } else {
-        setImageGenerationStartedAt(null);
-        setImageGenerationElapsedSeconds(null);
-      }
-
-      setState("complete");
-
-      // Phase 3: Save to history (uses storage paths, not base64)
-      const saveResult = await saveAnalysis(
-        journalText,
-        textResult.analysisText || "",
-        textResult.imagePrompt || null,
-        selectedModel,
-        imagePaths,
-        user!.id,
-        analysisId,
-        selectedPersona,
-        imageGenerationBatches
-      );
-
-      const nonBlockingErrorMessage = imageGenerationErrorMessage || uploadErrorMessage;
-
-      if (saveResult.success && saveResult.id) {
-        // Refresh history and select the new entry
-        setHistoryRefreshTrigger((prev) => prev + 1);
-        setSelectedHistoryId(saveResult.id);
-        setCurrentAnalysisId(saveResult.id);
-        if (nonBlockingErrorMessage) {
-          setSaveError(nonBlockingErrorMessage);
-        }
-      } else if (!saveResult.success) {
-        setSaveError(saveResult.error || "Failed to save analysis");
-      }
+      await completeChosenAnalysis(textResult);
     });
+  };
+
+  const handleBlindCompare = () => {
+    prepareAnalysisRun();
+    startTransition(async () => {
+      const result = await compareTextAnalyses(journalText, user!.id, selectedModel, selectedPersona);
+      if (!result.success || !result.withMemory || !result.withoutMemory) {
+        setError(result.error || "Failed to compare analyses.");
+        setState("error");
+        return;
+      }
+      setBlindOptions(assignBlindOptions(result.withMemory, result.withoutMemory));
+      setState("comparison-ready");
+    });
+  };
+
+  const handleComparisonContinue = (option: BlindComparisonOption) => {
+    setBlindOptions(null);
+    startTransition(async () => {
+      await completeChosenAnalysis(option);
+    });
+  };
+
+  const handleComparisonCancel = () => {
+    setBlindOptions(null);
+    setState("idle");
   };
 
   const handleRetry = () => {
     setState("idle");
     setAnalysisResult(null);
+    setBlindOptions(null);
     setImageGroups([]);
     setError(null);
     setSaveError(null);
@@ -309,6 +347,7 @@ export default function Home() {
     setState("idle");
     setJournalText("");
     setAnalysisResult(null);
+    setBlindOptions(null);
     setImageGroups([]);
     setError(null);
     setSaveError(null);
@@ -342,6 +381,7 @@ export default function Home() {
         imagePrompt: result.data.image_prompt,
         analystPersona: result.data.analyst_persona,
         createdAt: result.data.created_at,
+        memoryContext: result.data.memory_context || [],
       });
     } else {
       setError(result.error || "Failed to load analysis");
@@ -512,7 +552,7 @@ export default function Home() {
                     onChange={handleImageProviderChange}
                   />
                 )}
-                <ViewDensityControl value={viewMode} onChange={handleViewModeChange} />
+                <ViewDensityControl value={viewMode} onChange={handleViewModeChange} testViewEnabled={testViewEnabled} />
               </div>
             </div>
             <div className="text-center">
@@ -531,13 +571,25 @@ export default function Home() {
           </header>
 
           {state === "idle" && (
-            <JournalInput
-              value={journalText}
-              onChange={setJournalText}
-              onAnalyze={handleAnalyze}
-              disabled={isPending}
-              showWritingStats={isInsightOrTestMode}
-            />
+            <div>
+              <JournalInput
+                value={journalText}
+                onChange={setJournalText}
+                onAnalyze={handleAnalyze}
+                disabled={isPending}
+                showWritingStats={isInsightOrTestMode}
+              />
+              {isTestMode && testViewEnabled && (
+                <button
+                  type="button"
+                  onClick={handleBlindCompare}
+                  disabled={isPending || !journalText.trim()}
+                  className="mt-3 w-full rounded-lg border border-outline bg-surface px-4 py-2 text-sm font-medium text-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Run blind memory comparison
+                </button>
+              )}
+            </div>
           )}
 
           {state === "analyzing" && (
@@ -552,6 +604,14 @@ export default function Home() {
             <ErrorState
               message={error}
               onRetry={handleRetry}
+            />
+          )}
+
+          {state === "comparison-ready" && blindOptions && (
+            <BlindMemoryComparison
+              options={blindOptions}
+              onContinue={handleComparisonContinue}
+              onCancel={handleComparisonCancel}
             />
           )}
 
@@ -690,6 +750,16 @@ export default function Home() {
           imageUrls={state === "viewing-history" && historyViewData ? historyImageUrls : currentImageUrls}
           initialIndex={lightboxIndex}
           onClose={handleCloseLightbox}
+        />
+      )}
+
+      {isTestMode && testViewEnabled && user && (
+        <MemoryDiagnosticsDrawer
+          userId={user.id}
+          modelId={selectedModel}
+          usedMemoryContext={state === "viewing-history"
+            ? historyViewData?.memoryContext || []
+            : analysisResult?.memoryContext || []}
         />
       )}
 
