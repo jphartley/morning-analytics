@@ -1,13 +1,10 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { readFileSync } from "fs";
 import { join } from "path";
 
 import { DEFAULT_MODEL_ID, getSupportedGeminiModel } from "./models";
+import { getGeminiThinkingConfig } from "./gemini-request-config";
 import type { MemoryContextItem } from "./memory-types";
-
-type AppThinkingLevel = NonNullable<
-  ReturnType<typeof getSupportedGeminiModel>["thinking"]
->["level"];
 
 export interface AnalysisResult {
   analysisText: string;
@@ -84,21 +81,6 @@ function getPromptForPersona(persona: string = "jungian"): string {
   return personas[persona];
 }
 
-function toGenAIThinkingLevel(level: AppThinkingLevel): ThinkingLevel {
-  switch (level) {
-    case "minimal":
-      return ThinkingLevel.MINIMAL;
-    case "low":
-      return ThinkingLevel.LOW;
-    case "medium":
-      return ThinkingLevel.MEDIUM;
-    case "high":
-      return ThinkingLevel.HIGH;
-    default:
-      return ThinkingLevel.THINKING_LEVEL_UNSPECIFIED;
-  }
-}
-
 export function buildAnalysisSystemInstruction(
   personaPrompt: string,
   memoryContext: MemoryContextItem[]
@@ -150,13 +132,7 @@ export async function analyzeWithGemini(
     contents: journalText,
     config: {
       systemInstruction: analysisSystemInstruction,
-      ...(effectiveModel.thinking?.supported && effectiveModel.thinking.level
-        ? {
-            thinkingConfig: {
-              thinkingLevel: toGenAIThinkingLevel(effectiveModel.thinking.level),
-            },
-          }
-        : {}),
+      ...getGeminiThinkingConfig(effectiveModel),
     },
   });
 

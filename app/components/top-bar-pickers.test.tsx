@@ -19,7 +19,7 @@ describe("controlled top bar pickers", () => {
       <ModelPicker value="gemini-3.1-pro-preview" onChange={() => undefined} />
     );
 
-    expect(html).toContain("Gemini 3.1 Pro");
+    expect(html).toContain("Gemini 3.1 Pro Preview");
   });
 
   it("renders an available saved provider as the selected option", () => {

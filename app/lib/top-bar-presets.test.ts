@@ -85,6 +85,16 @@ describe("top bar preset storage", () => {
     expect(getStoredViewDensityMode()).toBe(DEFAULT_VIEW_DENSITY_MODE);
   });
 
+  it("falls back from removed model IDs", () => {
+    for (const modelId of ["gemini-3.1-flash-lite", "gemini-3.5-flash"]) {
+      installLocalStorage(createLocalStorage({
+        [MODEL_STORAGE_KEY]: modelId,
+      }));
+
+      expect(getStoredModel()).toBe(DEFAULT_MODEL_ID);
+    }
+  });
+
   it("does not restore provider selections that current flags make unavailable", () => {
     installLocalStorage(createLocalStorage({
       [IMAGE_PROVIDER_STORAGE_KEY]: "dual",
@@ -110,7 +120,7 @@ describe("top bar preset storage", () => {
     expect(getStoredImageProvider("midjourney", true, true)).toBe("midjourney");
     expect(getStoredViewDensityMode()).toBe(DEFAULT_VIEW_DENSITY_MODE);
     expect(() => setStoredAnalystPersona("loving-parent")).not.toThrow();
-    expect(() => setStoredModel("gemini-3.5-flash")).not.toThrow();
+    expect(() => setStoredModel("gemini-3.6-flash")).not.toThrow();
     expect(() => setStoredImageProvider("mock")).not.toThrow();
     expect(() => setStoredViewDensityMode("quiet")).not.toThrow();
   });

@@ -4,32 +4,35 @@ export interface GeminiModel {
   description: string;
   thinking?: {
     supported: boolean;
-    level?: "minimal" | "low" | "medium" | "high";
+    level?: GeminiThinkingLevel;
   };
 }
 
+export type GeminiThinkingLevel = "minimal" | "low" | "medium" | "high";
+
 export const GEMINI_MODELS: GeminiModel[] = [
   {
-    id: "gemini-3.1-flash-lite",
-    displayName: "Gemini 3.1 Flash-Lite",
-    description: "Fastest answers",
+    id: "gemini-3.6-flash",
+    displayName: "Gemini 3.6 Flash",
+    description: "Strong, efficient analysis",
     thinking: {
-      supported: false,
+      supported: true,
+      level: "medium",
     },
   },
   {
-    id: "gemini-3.5-flash",
-    displayName: "Gemini 3.5 Flash",
-    description: "All-around help",
+    id: "gemini-3.5-flash-lite",
+    displayName: "Gemini 3.5 Flash-Lite",
+    description: "Fastest, lowest-cost answers",
     thinking: {
       supported: true,
-      level: "high",
+      level: "minimal",
     },
   },
   {
     id: "gemini-3.1-pro-preview",
-    displayName: "Gemini 3.1 Pro",
-    description: "Advanced analysis and reasoning",
+    displayName: "Gemini 3.1 Pro Preview",
+    description: "Most advanced reasoning; default",
     thinking: {
       supported: true,
       level: "high",
@@ -37,7 +40,7 @@ export const GEMINI_MODELS: GeminiModel[] = [
   },
 ];
 
-export const DEFAULT_MODEL_ID = "gemini-3.5-flash";
+export const DEFAULT_MODEL_ID = "gemini-3.1-pro-preview";
 
 export function getGeminiModelById(modelId?: string): GeminiModel | null {
   if (!modelId) {

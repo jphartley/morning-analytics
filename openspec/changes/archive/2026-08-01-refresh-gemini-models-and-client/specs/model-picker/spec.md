@@ -1,8 +1,4 @@
-## Purpose
-
-Enable users to choose which supported Gemini model powers journal analysis.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Display model selection options
 
@@ -25,49 +21,6 @@ The system SHALL display a model picker with three current Gemini text-model opt
 - **THEN** system hides the model picker
 - **AND** system preserves the currently selected model for future analysis
 
-### Requirement: Default model selection
-
-The system SHALL use `gemini-3.1-pro-preview` as the default model when no selection has been saved.
-
-#### Scenario: First-time user sees default
-- **WHEN** user loads the app with no saved model preference
-- **THEN** system displays "Gemini 3.1 Pro Preview" as the selected model
-
-### Requirement: Persist model selection
-
-The system SHALL save the user's model selection to localStorage under the key `gemini-model`.
-
-#### Scenario: User changes model selection
-- **WHEN** user selects a different model from the picker
-- **THEN** system saves the model ID to localStorage key `gemini-model`
-
-#### Scenario: User returns to app
-- **WHEN** user loads the app with a previously saved model preference for a currently supported model
-- **THEN** system displays the saved model as selected
-
-### Requirement: Graceful fallback when localStorage unavailable
-
-The system SHALL fall back to `gemini-3.1-pro-preview` without error when localStorage is unavailable or when localStorage contains a model ID that is no longer supported.
-
-#### Scenario: localStorage unavailable
-- **WHEN** localStorage is unavailable (SSR, private browsing, or disabled)
-- **THEN** system uses `gemini-3.1-pro-preview` as the model
-- **AND** system does not throw an error or crash
-
-#### Scenario: Saved model is no longer supported
-- **WHEN** localStorage contains a model ID that is not one of the currently supported model picker options
-- **THEN** system uses `gemini-3.1-pro-preview` as the model
-- **AND** system does not throw an error or crash
-
-### Requirement: Pass model selection to analysis
-
-The system SHALL pass the selected model ID to the `analyzeText` server action when analyzing journal text.
-
-#### Scenario: Analysis uses selected model
-- **WHEN** user submits journal text for analysis
-- **THEN** system calls `analyzeText` with the currently selected model ID
-- **AND** the Gemini API call uses that model ID
-
 ### Requirement: Configure extended thinking for supported models
 
 The system SHALL request each selected model's configured Gemini 3 thinking level through the supported `thinkingConfig` request field.
@@ -85,6 +38,28 @@ The system SHALL request each selected model's configured Gemini 3 thinking leve
 - **WHEN** user submits journal text with `gemini-3.1-pro-preview` selected
 - **THEN** the Gemini request includes `thinkingConfig.thinkingLevel` set to `high`
 - **AND** the request does not enable thought summaries
+
+### Requirement: Default model selection
+
+The system SHALL use `gemini-3.1-pro-preview` as the default model when no selection has been saved.
+
+#### Scenario: First-time user sees default
+- **WHEN** user loads the app with no saved model preference
+- **THEN** system displays "Gemini 3.1 Pro Preview" as the selected model
+
+### Requirement: Graceful fallback when localStorage is unavailable
+
+The system SHALL fall back to `gemini-3.1-pro-preview` without error when localStorage is unavailable or when localStorage contains a model ID that is no longer supported.
+
+#### Scenario: localStorage unavailable
+- **WHEN** localStorage is unavailable (SSR, private browsing, or disabled)
+- **THEN** system uses `gemini-3.1-pro-preview` as the model
+- **AND** system does not throw an error or crash
+
+#### Scenario: Saved model is no longer supported
+- **WHEN** localStorage contains a model ID that is not one of the currently supported model picker options
+- **THEN** system uses `gemini-3.1-pro-preview` as the model
+- **AND** system does not throw an error or crash
 
 ### Requirement: Reject removed model IDs from the current picker catalog
 

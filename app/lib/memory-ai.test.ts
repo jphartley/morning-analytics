@@ -6,6 +6,13 @@ vi.mock("@google/genai", () => ({
   GoogleGenAI: class {
     models = { generateContent: aiMocks.generateContent };
   },
+  ThinkingLevel: {
+    MINIMAL: "MINIMAL",
+    LOW: "LOW",
+    MEDIUM: "MEDIUM",
+    HIGH: "HIGH",
+    THINKING_LEVEL_UNSPECIFIED: "THINKING_LEVEL_UNSPECIFIED",
+  },
 }));
 
 import { inferMemoryUpdates, selectRelevantMemoryIds } from "./memory-ai";
@@ -93,6 +100,8 @@ describe("real memory AI structured output", () => {
     )).resolves.toMatchObject([{ action: "create", title: "Holiday nerves" }]);
 
     expect(aiMocks.generateContent).toHaveBeenCalledTimes(2);
+    expect(aiMocks.generateContent.mock.calls[0][0].config.thinkingConfig)
+      .toEqual({ thinkingLevel: "HIGH" });
     expect(aiMocks.generateContent.mock.calls[1][0].config.systemInstruction)
       .toContain("previous response failed strict validation");
   });
@@ -111,6 +120,8 @@ describe("real memory AI structured output", () => {
     );
     expect(request.sourceBlocks).toEqual(blocks.map(({ id, text }) => ({ id, text })));
     expect(request).not.toHaveProperty("journalText");
+    expect(aiMocks.generateContent.mock.calls[0][0].config.thinkingConfig)
+      .toEqual({ thinkingLevel: "HIGH" });
     expect(responseSchema).not.toContain("minLength");
     expect(responseSchema).not.toContain("maxLength");
   });

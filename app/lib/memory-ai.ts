@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { DEFAULT_MODEL_ID, getSupportedGeminiModel } from "./models";
+import { getGeminiThinkingConfig } from "./gemini-request-config";
 import {
   MAX_SELECTED_MEMORIES,
   parseMemorySelectionOutput,
@@ -125,6 +126,7 @@ export async function selectRelevantMemoryIds(
     contents: JSON.stringify({ journalText, memories: catalog }),
     config: {
       systemInstruction: MEMORY_SELECTOR_INSTRUCTION,
+      ...getGeminiThinkingConfig(model),
       responseMimeType: "application/json",
       responseJsonSchema: {
         type: "object",
@@ -168,6 +170,7 @@ export async function inferMemoryUpdates(
         systemInstruction: attempt === 0
           ? MEMORY_UPDATER_BLOCK_INSTRUCTION
           : MEMORY_UPDATER_RETRY_INSTRUCTION,
+        ...getGeminiThinkingConfig(model),
         responseMimeType: "application/json",
         responseJsonSchema: {
           type: "object",
