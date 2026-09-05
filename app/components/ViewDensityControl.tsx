@@ -6,6 +6,7 @@ interface ViewDensityControlProps {
   value: ViewDensityMode;
   onChange: (mode: ViewDensityMode) => void;
   testViewEnabled?: boolean;
+  availableModes?: ViewDensityMode[];
 }
 
 const MODE_LABELS: Record<ViewDensityMode, string> = {
@@ -58,15 +59,16 @@ export function ViewDensityControl({
   value,
   onChange,
   testViewEnabled = true,
+  availableModes,
 }: ViewDensityControlProps) {
-  const availableModes = getAvailableViewDensityModes(testViewEnabled);
+  const modes = availableModes || getAvailableViewDensityModes(testViewEnabled);
   return (
     <div
       className="inline-flex rounded-lg border border-outline bg-surface p-1 shadow-sm"
       role="radiogroup"
       aria-label="View density"
     >
-      {availableModes.map((mode) => {
+      {modes.map((mode) => {
         const active = mode === value;
         const label = MODE_LABELS[mode];
 

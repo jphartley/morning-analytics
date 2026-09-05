@@ -20,6 +20,13 @@ describe("analysis memory mode workflow", () => {
       .toBe("blind-comparison");
   });
 
+  it("forces every normal-user submission onto the memory-free path", () => {
+    expect(getEffectiveAnalysisMemoryMode("quiet", true, "with-memory", false))
+      .toBe("without-memory");
+    expect(getEffectiveAnalysisMemoryMode("insight", true, "blind-comparison", false))
+      .toBe("without-memory");
+  });
+
   it.each([
     ["without-memory", "without-memory"],
     ["with-memory", "with-memory"],

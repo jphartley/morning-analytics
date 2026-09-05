@@ -29,6 +29,18 @@ From `validation/`:
 From repo root:
 - `node scripts/cleanup-history.js --keep 5` (deletes older analyses after confirmation).
 
+For Supabase schema changes, read `docs/supabase-cli-runbook.md` before giving
+deployment instructions. It is the repository's production migration workflow,
+including dry-run review and known VPN/pooler connection recovery.
+
+For new-Mac Node setup or Node 22 verification, read
+`docs/node-runtime-runbook.md` before giving runtime instructions. It is the
+repository's canonical local `nvm`, dependency-install, build, and environment
+readiness workflow.
+
+Before committing or pushing a change, read `docs/gitleaks-runbook.md` and run
+the applicable secret scan. Do not expose finding values in diagnostics or chat.
+
 ## Registry-Safe Workflow (Local vs Railway)
 Local development may require a private npm registry (for example via `~/.npmrc`), while Railway must build from public npm.
 

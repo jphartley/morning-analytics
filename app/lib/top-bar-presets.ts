@@ -4,6 +4,7 @@ import {
   type ImageGenerationSelection,
 } from "@/lib/image-generation-types";
 import type { ImageProviderId } from "@/lib/image-providers/types";
+import type { RoleCapabilities } from "@/lib/role-capabilities";
 
 export const ANALYST_PERSONAS = [
   {
@@ -149,5 +150,32 @@ export function getStoredTopBarPresets(
       dualModeEnabled
     ),
     viewDensityMode: getStoredViewDensityMode(testViewEnabled),
+  };
+}
+
+/**
+ * Applies the resolved role before restoring capability-sensitive browser
+ * preferences. Stored values remain intact so an administrator's preferences
+ * are available again if their role changes back.
+ */
+export function getRoleAwareTopBarPresets(
+  defaultProvider: ImageProviderId,
+  providerOverrideEnabled: boolean,
+  dualModeEnabled: boolean,
+  capabilities: RoleCapabilities
+): TopBarPresets {
+  const storedView = readStoredValue(VIEW_DENSITY_STORAGE_KEY);
+  const viewDensityMode = isViewDensityMode(storedView)
+    && capabilities.availableViewModes.includes(storedView)
+    ? storedView
+    : capabilities.defaultViewMode;
+
+  return {
+    analystPersona: getStoredAnalystPersona(),
+    modelId: capabilities.canSelectModel ? getStoredModel() : capabilities.modelId,
+    imageProvider: capabilities.canUseProviderOverrides
+      ? getStoredImageProvider(defaultProvider, providerOverrideEnabled, dualModeEnabled)
+      : defaultProvider,
+    viewDensityMode,
   };
 }

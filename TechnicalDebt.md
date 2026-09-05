@@ -24,6 +24,8 @@ This document tracks technical decisions deferred from MVP and features planned 
 
   **Fix for production:** Implement `@supabase/ssr` with cookie-based sessions so that server actions can independently verify the authenticated user via `supabase.auth.getSession()` reading from HTTP-only cookies. This eliminates trust in client-provided userId entirely. This item and the middleware item above should be implemented together as they share the same underlying infrastructure (`@supabase/ssr` cookie-based sessions).
 
+  **Role-aware UI note:** `add-admin-user-modes` adds a browser-resolved `user`/`admin` product boundary for the trusted-friends release. It deliberately does not enforce that role in server actions; complete this hardening before relying on roles for sensitive server-side authorization.
+
 ## Deployment & Infrastructure
 
 - [ ] **Next.js standalone output mode**: Currently using default Next.js output. For leaner Railway deployments, switch to `output: "standalone"` in `next.config.ts`. This produces a self-contained `.next/standalone/` directory with only the files needed to run. Requires ensuring non-code assets (e.g., prompt files in `/app/prompts/`) are copied into the standalone output via `outputFileTracingIncludes`. Deferred during Railway prep to keep initial deployment simple.

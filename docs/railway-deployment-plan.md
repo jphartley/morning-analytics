@@ -78,6 +78,33 @@ selection and update continue in Quiet and Insight views. Railway variable edits
 are staged: review them, click **Deploy**, and redeploy after every change because
 this public value is compiled into the client bundle.
 
+### Role-aware friends trial
+
+Apply `supabase/migrations/20260905090000_add_profiles_roles.sql` before the
+compatible application release. It creates one `profiles` row per authenticated
+account, defaults every account to `user`, and adds an owner-only profile read
+policy. Promote designated existing accounts using the operator procedure in
+[`docs/admin-user-modes.md`](admin-user-modes.md); this Supabase data change does
+not itself need an app deployment.
+
+For the `morning-analytics` service's **production** environment, review this
+existing variable and set its value for the normal-user release:
+
+```text
+IMAGE_GENERATION_PROVIDER=midjourney
+```
+
+Do not enable the optional provider-override flags unless administrator
+Test/Debug experimentation is intended. Railway does not read local `.env`
+files. Review the staged production variable changes and deploy/redeploy after
+any variable change. This is required even for server-only values; every
+`NEXT_PUBLIC_*` value is compiled into the Next.js browser bundle and therefore
+specifically needs a rebuild/redeploy.
+
+For future production schema changes, use the reviewed CLI workflow in
+[`supabase-cli-runbook.md`](supabase-cli-runbook.md). It includes the required
+dry-run review and the VPN/pooler troubleshooting that applies to this project.
+
 ---
 
 ## Phase 3: Build & Deploy ✅ BUILD FIXED
@@ -162,9 +189,12 @@ Full end-to-end test on the live domain:
 
 ## Local Dev Parity (Node + Lockfile Hygiene)
 
-1. Use Node 22 for local work in this repo:
-   - repo root: `nvm use`
-   - app dir: `cd app && nvm use`
+For new-Mac setup and the exact Node 22 verification procedure, read
+[`node-runtime-runbook.md`](node-runtime-runbook.md). The app's `.nvmrc` lives
+in `app/`, so run `cd app && nvm use` before local dependency installation,
+testing, builds, or development-server commands.
+
+1. Use Node 22 for local work in this repo.
 2. If your work laptop/global npm config points to a private registry, lockfile entries can leak that host.
 3. Before pushing lockfile changes, verify:
    - `rg 'jfrog\\.booking\\.com' app/package-lock.json`

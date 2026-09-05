@@ -14,8 +14,13 @@ export const DEFAULT_ANALYSIS_MEMORY_MODE: AnalysisMemoryMode = "with-memory";
 export function getEffectiveAnalysisMemoryMode(
   viewMode: ViewDensityMode,
   testViewEnabled: boolean,
-  selectedMode: AnalysisMemoryMode
+  selectedMode: AnalysisMemoryMode,
+  contextualMemoryEnabled: boolean = true
 ): AnalysisMemoryMode {
+  if (!contextualMemoryEnabled) {
+    return "without-memory";
+  }
+
   return viewMode === "test" && testViewEnabled
     ? selectedMode
     : DEFAULT_ANALYSIS_MEMORY_MODE;

@@ -11,6 +11,7 @@ import {
   getStoredImageProvider,
   getStoredModel,
   getStoredTopBarPresets,
+  getRoleAwareTopBarPresets,
   getStoredViewDensityMode,
   getAvailableViewDensityModes,
   setStoredAnalystPersona,
@@ -18,6 +19,7 @@ import {
   setStoredModel,
   setStoredViewDensityMode,
 } from "@/lib/top-bar-presets";
+import { resolveRoleCapabilities } from "@/lib/role-capabilities";
 
 function createLocalStorage(initial: Record<string, string> = {}): Storage {
   const values = new Map(Object.entries(initial));
@@ -139,5 +141,43 @@ describe("top bar preset storage", () => {
   it("keeps Test view available when enabled or omitted", () => {
     expect(getAvailableViewDensityModes(true)).toEqual(["quiet", "insight", "test"]);
     expect(getStoredViewDensityMode()).toBe("insight");
+  });
+
+  it("ignores stale experimental values for a normal user without deleting them", () => {
+    installLocalStorage(createLocalStorage({
+      [MODEL_STORAGE_KEY]: "gemini-3.6-flash",
+      [IMAGE_PROVIDER_STORAGE_KEY]: "dual",
+      [VIEW_DENSITY_STORAGE_KEY]: "test",
+    }));
+
+    expect(getRoleAwareTopBarPresets(
+      "midjourney",
+      true,
+      true,
+      resolveRoleCapabilities("user", true)
+    )).toMatchObject({
+      modelId: DEFAULT_MODEL_ID,
+      imageProvider: "midjourney",
+      viewDensityMode: "quiet",
+    });
+  });
+
+  it("restores supported administrator selections in every available view", () => {
+    installLocalStorage(createLocalStorage({
+      [MODEL_STORAGE_KEY]: "gemini-3.6-flash",
+      [IMAGE_PROVIDER_STORAGE_KEY]: "dual",
+      [VIEW_DENSITY_STORAGE_KEY]: "quiet",
+    }));
+
+    expect(getRoleAwareTopBarPresets(
+      "midjourney",
+      true,
+      true,
+      resolveRoleCapabilities("admin", true)
+    )).toMatchObject({
+      modelId: "gemini-3.6-flash",
+      imageProvider: "dual",
+      viewDensityMode: "quiet",
+    });
   });
 });

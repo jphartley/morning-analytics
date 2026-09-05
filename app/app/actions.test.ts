@@ -150,6 +150,36 @@ describe("contextual memory orchestration", () => {
     );
   });
 
+  it("keeps a normal-user style save memory-free and does not update memory", async () => {
+    const result = await analyzeText(
+      "A memory-free journal entry.",
+      "user-123",
+      "gemini-3.1-pro-preview",
+      "jungian",
+      "without-memory"
+    );
+
+    await saveAnalysis(
+      "A memory-free journal entry.",
+      result.analysisText || "",
+      result.imagePrompt || null,
+      "gemini-3.1-pro-preview",
+      [],
+      "user-123",
+      undefined,
+      "jungian",
+      [],
+      []
+    );
+
+    expect(mocks.selectMemoryContext).not.toHaveBeenCalled();
+    expect(mocks.saveAnalysis).toHaveBeenCalledWith(
+      expect.any(String), expect.any(String), expect.anything(), "gemini-3.1-pro-preview",
+      [], undefined, "jungian", "user-123", [], []
+    );
+    expect(mocks.updateMemoryForSavedAnalysis).not.toHaveBeenCalled();
+  });
+
   it("continues without memory and returns a non-blocking selector warning", async () => {
     mocks.selectMemoryContext.mockResolvedValue({
       context: [],

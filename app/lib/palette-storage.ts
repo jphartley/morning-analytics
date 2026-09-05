@@ -7,20 +7,29 @@ export const PALETTE_STORAGE_KEY = "palette";
 
 export const DEFAULT_PALETTE_ID = "inkwell";
 
+export const VALID_PALETTE_IDS = [
+  "", "moss", "inkwell", "dusk-rose", "amber-den", "sage", "plum",
+  "terracotta", "ocean", "lavender", "sepia", "nordic", "cherry",
+  "forest", "copper", "twilight", "matcha", "slate-coral", "midnight",
+  "sandstorm",
+] as const;
+
 /** Persisted when the UI palette id is "" (Reverie); distinguishes from "key missing" → default Inkwell. */
 export const REVERIE_STORAGE_VALUE = "reverie";
 
 export function getStoredPaletteId(): string {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
-      const raw = localStorage.getItem(PALETTE_STORAGE_KEY);
+      const raw = window.localStorage.getItem(PALETTE_STORAGE_KEY);
       if (raw === null) {
         return DEFAULT_PALETTE_ID;
       }
       if (raw === REVERIE_STORAGE_VALUE) {
         return "";
       }
-      return raw;
+      return raw !== "" && VALID_PALETTE_IDS.includes(raw as (typeof VALID_PALETTE_IDS)[number])
+        ? raw
+        : DEFAULT_PALETTE_ID;
     }
   } catch {
     /* localStorage unavailable */
@@ -31,9 +40,9 @@ export function getStoredPaletteId(): string {
 /** Persists the palette; empty string (Reverie) uses REVERIE_STORAGE_VALUE so reload can restore it. */
 export function writeStoredPaletteId(paletteIdForDom: string): void {
   if (paletteIdForDom === "") {
-    localStorage.setItem(PALETTE_STORAGE_KEY, REVERIE_STORAGE_VALUE);
+    window.localStorage.setItem(PALETTE_STORAGE_KEY, REVERIE_STORAGE_VALUE);
   } else {
-    localStorage.setItem(PALETTE_STORAGE_KEY, paletteIdForDom);
+    window.localStorage.setItem(PALETTE_STORAGE_KEY, paletteIdForDom);
   }
 }
 
@@ -58,7 +67,9 @@ export const PALETTE_BOOTSTRAP_SCRIPT = [
   ";var r=",
   JSON.stringify(REVERIE_STORAGE_VALUE),
   ";var raw=localStorage.getItem(k);var v;",
-  "if(raw===null)v=d;else if(raw===r)v=\"\";else v=raw;",
+  ";var p=",
+  JSON.stringify(VALID_PALETTE_IDS),
+  ";if(raw===null)v=d;else if(raw===r)v=\"\";else v=raw!==\"\"&&p.indexOf(raw)>=0?raw:d;",
   "var el=document.documentElement;",
   "if(v){el.dataset.palette=v}else{delete el.dataset.palette}",
   "}catch(e){}})();",

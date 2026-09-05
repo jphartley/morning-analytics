@@ -65,7 +65,7 @@ export function PalettePicker() {
     }
   };
 
-  const currentLabel = PALETTES.find((p) => p.id === current)?.label || "Reverie";
+  const currentLabel = PALETTES.find((p) => p.id === current)?.label || "Inkwell";
 
   return (
     <div ref={containerRef} className="fixed bottom-4 left-4 z-50">

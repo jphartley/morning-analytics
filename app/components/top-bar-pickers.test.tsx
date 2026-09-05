@@ -52,4 +52,18 @@ describe("controlled top bar pickers", () => {
     expect(html).toMatch(/aria-label="Insight view"/);
     expect(html).not.toMatch(/aria-label="Test view"/);
   });
+
+  it("renders only Quiet and Insight when role capabilities omit Test", () => {
+    const html = renderToStaticMarkup(
+      <ViewDensityControl
+        value="quiet"
+        onChange={() => undefined}
+        availableModes={["quiet", "insight"]}
+      />
+    );
+
+    expect(html).toMatch(/aria-label="Quiet view"/);
+    expect(html).toMatch(/aria-label="Insight view"/);
+    expect(html).not.toMatch(/aria-label="Test view"/);
+  });
 });

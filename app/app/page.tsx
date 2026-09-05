@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useCallback, useEffect, useRef } from "react";
+import { useState, useTransition, useCallback, useEffect, useMemo, useRef } from "react";
 import { analyzeText, compareTextAnalyses, generateImages, saveAnalysis, regenerateImages, deleteAnalysis, updateMemory, TextAnalysisResponse, type BlindComparisonOption } from "./actions";
 import { getAnalysisById } from "@/lib/analytics-storage-client";
 import { selectNeighborId } from "@/lib/history-neighbor";
@@ -32,8 +32,7 @@ import { useAuth } from "@/lib/useAuth";
 import { ImageGenerationDiagnostics } from "@/lib/image-generation-diagnostics";
 import {
   DEFAULT_ANALYST_PERSONA,
-  DEFAULT_VIEW_DENSITY_MODE,
-  getStoredTopBarPresets,
+  getRoleAwareTopBarPresets,
   setStoredAnalystPersona,
   setStoredImageProvider,
   setStoredModel,
@@ -41,7 +40,7 @@ import {
   type AnalystPersona,
   type ViewDensityMode,
 } from "@/lib/top-bar-presets";
-import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { resolveImageProviderOverride, resolveRoleCapabilities } from "@/lib/role-capabilities";
 import { IMAGE_PROVIDER_IDS } from "@/lib/image-providers/types";
 import type { ImageProviderId } from "@/lib/image-providers/types";
 import type { MemoryContextItem } from "@/lib/memory-types";
@@ -90,7 +89,12 @@ const defaultImageProvider: ImageProviderId = IMAGE_PROVIDER_IDS.includes(
   : "midjourney";
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, role, profileError } = useAuth();
+  const capabilities = useMemo(
+    () => resolveRoleCapabilities(role, testViewEnabled),
+    [role]
+  );
+  const isAdmin = capabilities.role === "admin";
   const [state, setState] = useState<AppState>("idle");
   const [journalText, setJournalText] = useState("");
   const [analysisResult, setAnalysisResult] = useState<TextAnalysisResponse | null>(null);
@@ -99,9 +103,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
+  const [selectedModel, setSelectedModel] = useState<string>(capabilities.modelId);
   const [selectedPersona, setSelectedPersona] = useState<AnalystPersona>(DEFAULT_ANALYST_PERSONA);
-  const [viewMode, setViewMode] = useState<ViewDensityMode>(DEFAULT_VIEW_DENSITY_MODE);
+  const [viewMode, setViewMode] = useState<ViewDensityMode>(capabilities.defaultViewMode);
   const [analysisMemoryMode, setAnalysisMemoryMode] = useState<AnalysisMemoryMode>(
     DEFAULT_ANALYSIS_MEMORY_MODE
   );
@@ -134,11 +138,11 @@ export default function Home() {
 
   useEffect(() => {
     const restoreTimer = window.setTimeout(() => {
-      const storedPresets = getStoredTopBarPresets(
+      const storedPresets = getRoleAwareTopBarPresets(
         defaultImageProvider,
         providerOverrideEnabled,
         dualModeEnabled,
-        testViewEnabled
+        capabilities
       );
 
       setSelectedModel(storedPresets.modelId);
@@ -148,7 +152,7 @@ export default function Home() {
     }, 0);
 
     return () => window.clearTimeout(restoreTimer);
-  }, []);
+  }, [capabilities]);
 
   // Auto-dismiss success toast
   useEffect(() => {
@@ -168,9 +172,10 @@ export default function Home() {
   }, [imageGenerationStartedAt, state]);
 
   const handleModelChange = useCallback((modelId: string) => {
+    if (!capabilities.canSelectModel) return;
     setSelectedModel(modelId);
     setStoredModel(modelId);
-  }, []);
+  }, [capabilities.canSelectModel]);
 
   const handlePersonaChange = useCallback((persona: AnalystPersona) => {
     setSelectedPersona(persona);
@@ -178,14 +183,16 @@ export default function Home() {
   }, []);
 
   const handleViewModeChange = useCallback((mode: ViewDensityMode) => {
+    if (!capabilities.availableViewModes.includes(mode)) return;
     setViewMode(mode);
     setStoredViewDensityMode(mode);
-  }, []);
+  }, [capabilities.availableViewModes]);
 
   const handleImageProviderChange = useCallback((provider: ImageGenerationSelection) => {
+    if (!capabilities.canUseProviderOverrides || !providerOverrideEnabled) return;
     setSelectedImageProvider(provider);
     setStoredImageProvider(provider);
-  }, []);
+  }, [capabilities.canUseProviderOverrides]);
 
   const handleHistoryEmptyChange = useCallback((isEmpty: boolean) => {
     setIsHistoryEmpty(isEmpty);
@@ -242,7 +249,12 @@ export default function Home() {
       const imageResult = await generateImages(
         textResult.imagePrompt,
         user!.id,
-        selectedImageProvider !== defaultImageProvider ? selectedImageProvider : null
+        resolveImageProviderOverride(
+          capabilities,
+          selectedImageProvider,
+          defaultImageProvider,
+          providerOverrideEnabled
+        )
       );
       setImageGenerationStartedAt(null);
       setImageGenerationElapsedSeconds(null);
@@ -262,7 +274,9 @@ export default function Home() {
             : "Images generated successfully.");
         if (imageResult.uploadError) uploadErrorMessage = imageResult.uploadError;
       } else if (!imageResult.success) {
-        imageGenerationErrorMessage = imageResult.error || "Failed to generate images";
+        imageGenerationErrorMessage = isAdmin
+          ? imageResult.error || "Failed to generate images"
+          : "We couldn't generate images this time. Your analysis was saved; please try again.";
         imageGenerationBatches = imageResult.batches || [];
         analysisId = imageResult.analysisId;
         setImageGenerationStatus(imageGenerationErrorMessage);
@@ -277,13 +291,13 @@ export default function Home() {
       journalText,
       textResult.analysisText || "",
       textResult.imagePrompt || null,
-      selectedModel,
+      capabilities.canSelectModel ? selectedModel : capabilities.modelId,
       imagePaths,
       user!.id,
       analysisId,
       selectedPersona,
       imageGenerationBatches,
-      textResult.memoryContext || []
+      capabilities.contextualMemoryEnabled ? textResult.memoryContext || [] : []
     );
 
     const nonBlockingErrorMessage = imageGenerationErrorMessage || uploadErrorMessage;
@@ -291,9 +305,15 @@ export default function Home() {
       setHistoryRefreshTrigger((prev) => prev + 1);
       setSelectedHistoryId(saveResult.id);
       setCurrentAnalysisId(saveResult.id);
-      const memoryResult = await updateMemory(saveResult.id, user!.id, selectedModel);
-      if (!memoryResult.success) {
-        setSaveError(memoryResult.error || "Analysis saved, but contextual memory could not be updated.");
+      if (capabilities.contextualMemoryEnabled) {
+        const memoryResult = await updateMemory(
+          saveResult.id,
+          user!.id,
+          capabilities.canSelectModel ? selectedModel : capabilities.modelId
+        );
+        if (!memoryResult.success) {
+          setSaveError(memoryResult.error || "Analysis saved, but contextual memory could not be updated.");
+        }
       }
       if (nonBlockingErrorMessage) setSaveError(nonBlockingErrorMessage);
     } else if (!saveResult.success) {
@@ -308,7 +328,7 @@ export default function Home() {
       const textResult = await analyzeText(
         journalText,
         user!.id,
-        selectedModel,
+        capabilities.canSelectModel ? selectedModel : capabilities.modelId,
         selectedPersona,
         memoryMode
       );
@@ -339,7 +359,8 @@ export default function Home() {
     const effectiveMode = getEffectiveAnalysisMemoryMode(
       viewMode,
       testViewEnabled,
-      analysisMemoryMode
+      analysisMemoryMode,
+      capabilities.contextualMemoryEnabled
     );
 
     dispatchAnalysisMemoryMode(effectiveMode, {
@@ -434,7 +455,10 @@ export default function Home() {
 
     setIsRegenerating(true);
     setSaveError(null);
-    const roundCapacity = requiredImageCapacity(selectedImageProvider);
+    const activeSelection = isAdmin && providerOverrideEnabled
+      ? selectedImageProvider
+      : defaultImageProvider;
+    const roundCapacity = requiredImageCapacity(activeSelection);
     setImageGenerationStatus(`Requesting ${roundCapacity} more images.`);
     setImageGenerationDiagnostics([]);
     setImageGenerationStartedAt(Date.now());
@@ -443,7 +467,12 @@ export default function Home() {
     const result = await regenerateImages(
       analysisId,
       user.id,
-      selectedImageProvider !== defaultImageProvider ? selectedImageProvider : null
+      resolveImageProviderOverride(
+        capabilities,
+        selectedImageProvider,
+        defaultImageProvider,
+        providerOverrideEnabled
+      )
     );
     setImageGenerationStartedAt(null);
     setImageGenerationElapsedSeconds(null);
@@ -472,7 +501,9 @@ export default function Home() {
         setSuccessToast(`${result.imageUrls?.length || 0} new images added`);
       }
     } else {
-      const message = result.error || "Failed to regenerate images";
+      const message = isAdmin
+        ? result.error || "Failed to regenerate images"
+        : "We couldn't generate images this time. Please try again.";
       setImageGenerationStatus(message);
       setSaveError(message);
     }
@@ -532,14 +563,17 @@ export default function Home() {
 
   const showWelcomeEmptyState = state === "idle" && isHistoryEmpty === true;
   const isQuietMode = viewMode === "quiet";
-  const isInsightOrTestMode = viewMode === "insight" || viewMode === "test";
-  const isTestMode = viewMode === "test";
-  const isMockProviderActive = selectedImageProvider === "mock";
+  const isTestMode = isAdmin && viewMode === "test" && testViewEnabled;
+  const isInsightOrTestMode = viewMode === "insight" || isTestMode;
+  const activeImageProvider = isAdmin && providerOverrideEnabled
+    ? selectedImageProvider
+    : defaultImageProvider;
+  const isMockProviderActive = activeImageProvider === "mock";
   const currentImageUrls = flattenDisplayGroupUrls(imageGroups);
   const historyImageUrls = historyViewData
     ? flattenDisplayGroupUrls(historyViewData.imageGroups)
     : [];
-  const regenerationCapacity = requiredImageCapacity(selectedImageProvider);
+  const regenerationCapacity = requiredImageCapacity(activeImageProvider);
 
   return (
     <>
@@ -561,6 +595,11 @@ export default function Home() {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <main className="max-w-3xl mx-auto px-4 py-12">
+          {profileError && (
+            <div className="mb-6 rounded-lg border border-outline bg-surface px-4 py-3 text-sm text-ink-muted" role="status">
+              {profileError}
+            </div>
+          )}
           {isMockProviderActive && isTestMode && (
             <div className="mb-6 rounded-lg border border-outline bg-accent-soft px-4 py-2 text-center text-sm text-ink">
               Mock mode active — using local images for faster testing.
@@ -571,10 +610,10 @@ export default function Home() {
               <div />
               <div className="flex flex-wrap items-center justify-end gap-3">
                 <AnalystPicker value={selectedPersona} onChange={handlePersonaChange} />
-                {!isQuietMode && (
+                {isAdmin && !isQuietMode && (
                   <ModelPicker value={selectedModel} onChange={handleModelChange} />
                 )}
-                {providerOverrideEnabled && (
+                {isAdmin && isTestMode && providerOverrideEnabled && (
                   <ImageProviderPicker
                     value={selectedImageProvider}
                     defaultProvider={defaultImageProvider}
@@ -582,7 +621,11 @@ export default function Home() {
                     onChange={handleImageProviderChange}
                   />
                 )}
-                <ViewDensityControl value={viewMode} onChange={handleViewModeChange} testViewEnabled={testViewEnabled} />
+                <ViewDensityControl
+                  value={viewMode}
+                  onChange={handleViewModeChange}
+                  availableModes={capabilities.availableViewModes}
+                />
               </div>
             </div>
             <div className="text-center">
@@ -602,7 +645,7 @@ export default function Home() {
 
           {state === "idle" && (
             <div className="space-y-4">
-              {isTestMode && testViewEnabled && (
+              {isAdmin && isTestMode && (
                 <AnalysisMemoryModeControl
                   value={analysisMemoryMode}
                   onChange={setAnalysisMemoryMode}
@@ -659,7 +702,7 @@ export default function Home() {
                       showDurationHint={isInsightOrTestMode}
                     />
                   </div>
-                  {isTestMode && (
+                  {isAdmin && isTestMode && (
                     <div className="mt-2">
                       <ImageGenerationDiagnosticsDisclosure
                         diagnostics={null}
@@ -681,7 +724,7 @@ export default function Home() {
                       <p className="text-sm text-ink-muted">{imageGenerationStatus}</p>
                     </div>
                   )}
-                  {isTestMode && (
+                  {isAdmin && isTestMode && (
                     <ImageGenerationDiagnosticsList
                       diagnostics={imageGenerationDiagnostics}
                       statusMessage={imageGenerationStatus}
@@ -761,7 +804,7 @@ export default function Home() {
                   requiredCapacity={regenerationCapacity}
                 />
               )}
-              {isTestMode && (
+              {isAdmin && isTestMode && (
                 <ImageGenerationDiagnosticsList
                   diagnostics={imageGenerationDiagnostics}
                   statusMessage={imageGenerationStatus}
@@ -780,7 +823,7 @@ export default function Home() {
         />
       )}
 
-      {isTestMode && testViewEnabled && user && (
+      {isAdmin && isTestMode && user && (
         <MemoryDiagnosticsDrawer
           userId={user.id}
           modelId={selectedModel}

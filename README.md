@@ -177,6 +177,9 @@ after explicit approval or in a dedicated hygiene change.
 ## Documentation
 
 - `docs/current-architecture.md`: data flow, system architecture, and code organization.
+- `docs/supabase-cli-runbook.md`: safe production migration preview, push, and VPN/pooler troubleshooting.
+- `docs/node-runtime-runbook.md`: new-Mac Node 22 setup, project verification, and local environment troubleshooting.
+- `docs/gitleaks-runbook.md`: local secret-scanner setup, pre-commit protection, and release scanning.
 - `docs/prd.md`: product requirements and MVP scope.
 - `docs/prompt.md`: Gemini prompt and analysis structure.
 - `docs/technical-feasibility.md`: integration validation notes.
