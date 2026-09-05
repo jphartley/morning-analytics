@@ -2,7 +2,9 @@
 
 ## Purpose
 Describe how image generation attempts expose safe, provider-aware diagnostics for local debugging.
+
 ## Requirements
+
 ### Requirement: Capture image generation attempt diagnostics
 
 The system SHALL collect a chronological, provider-aware diagnostic trace for each image generation attempt in both new-analysis and regeneration flows.
@@ -81,3 +83,15 @@ The system SHALL display image-generation diagnostic affordances and detailed di
 - **WHEN** image generation is pending, succeeds, warns, or fails in `quiet` or `insight` mode
 - **THEN** the system SHALL NOT render the diagnostic disclosure or diagnostic copy affordance
 - **AND** the system SHALL still show any user-facing failure or warning summary
+
+### Requirement: Restrict detailed diagnostics to administrator Test/Debug
+The system SHALL render detailed image-generation diagnostics and copy affordances only to administrators in enabled Test/Debug.
+
+#### Scenario: Normal-user image generation completes or fails
+- **WHEN** a user-role account receives an image-generation result
+- **THEN** the UI SHALL show the successful images or a user-safe warning or failure summary
+- **AND** it SHALL not render provider attempts, telemetry, timelines, or diagnostic copy controls
+
+#### Scenario: Administrator inspects Test/Debug output
+- **WHEN** an administrator views image-generation output in Test/Debug
+- **THEN** the existing redacted diagnostics disclosure SHALL remain available

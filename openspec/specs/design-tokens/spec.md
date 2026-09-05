@@ -20,24 +20,28 @@ The system SHALL define all UI colors as CSS custom properties in `globals.css` 
 - **THEN** it uses Tailwind token utilities (e.g., `bg-page`, `text-ink`) instead of hardcoded color classes (e.g., `bg-stone-100`, `text-stone-800`)
 
 ### Requirement: Twenty switchable palette options
-
-The system SHALL include 20 palette definitions in `globals.css`, selectable at runtime via a `data-palette` attribute on the `<html>` element. The default palette (no attribute) SHALL be "Reverie" (violet). Each alternate palette SHALL be defined as `:root[data-palette="<id>"]`.
+The system SHALL include 20 palette definitions in `globals.css`, selectable at runtime via a `data-palette` attribute on the `<html>` element. Inkwell SHALL be the first-use default palette, and each palette SHALL remain available to every user.
 
 #### Scenario: Runtime palette switching
-
 - **WHEN** the `data-palette` attribute is set on `<html>` to a valid palette ID
-- **THEN** all CSS custom properties update to that palette's values
-- **THEN** all components reflect the new palette instantly without page reload
+- **THEN** all CSS custom properties SHALL update to that palette's values
+- **AND** all components SHALL reflect the new palette instantly without page reload
+
+#### Scenario: First-use default palette
+- **WHEN** the application loads and no palette preference is stored
+- **THEN** the system SHALL apply the Inkwell palette before application content is shown
 
 #### Scenario: Default palette
+- **WHEN** no palette preference can be restored
+- **THEN** the Inkwell palette SHALL be active
 
-- **WHEN** no `data-palette` attribute is present on `<html>`
-- **THEN** the Reverie palette is active (`--bg: #faf8f6`, `--accent: #7c3aed`)
+#### Scenario: All palette choices remain available
+- **WHEN** a user opens the palette picker
+- **THEN** the picker SHALL offer the existing twenty palette choices, including Inkwell
 
 #### Scenario: All 20 palettes are available
-
 - **WHEN** the CSS is loaded
-- **THEN** the following palette IDs are available: (default), moss, inkwell, dusk-rose, amber-den, sage, plum, terracotta, ocean, lavender, sepia, nordic, cherry, forest, copper, twilight, matcha, slate-coral, midnight, sandstorm
+- **THEN** the existing twenty palette IDs, including Inkwell and Reverie, SHALL be available
 
 ### Requirement: User-facing palette picker
 
@@ -60,20 +64,20 @@ The system SHALL display a floating `PalettePicker` component on all pages (incl
 - **THEN** the palette changes instantly across the entire app
 
 ### Requirement: Palette selection persisted to localStorage
-
-The system SHALL persist the user's palette selection to browser localStorage under the key `palette`. On page load, the stored palette SHALL be applied automatically.
+The system SHALL persist a user's palette selection to browser localStorage under the key `palette` and restore Inkwell when no valid selection exists.
 
 #### Scenario: Palette persists across page loads
-
-- **WHEN** user selects a palette and reloads the page
-- **THEN** the previously selected palette is restored from localStorage
+- **WHEN** a user chooses a palette and reloads the application in the same browser
+- **THEN** the selected palette SHALL be restored
 
 #### Scenario: No stored palette
-
 - **WHEN** no palette is stored in localStorage
-- **THEN** the default Reverie palette is used
+- **THEN** the Inkwell palette SHALL be used
 
 #### Scenario: Clearing palette selection
+- **WHEN** a user selects the Reverie palette
+- **THEN** the system SHALL persist a value that restores Reverie without treating it as an absent preference
 
-- **WHEN** user selects the default Reverie palette
-- **THEN** the `palette` key is removed from localStorage
+#### Scenario: Browser has no valid stored palette
+- **WHEN** localStorage is unavailable, empty, or contains an unsupported palette value
+- **THEN** the system SHALL use Inkwell without error
