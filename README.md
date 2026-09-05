@@ -19,6 +19,8 @@ Supabase for later review.
 - `docs/`: Product, prompt, and research documentation.
 - `openspec/`: Spec-driven workflow artifacts and change history.
 
+Repository control smoke test: this line verifies a small change can be committed and pushed safely.
+
 ## Requirements
 
 - Node.js 22.x. The app runtime pin is declared in `app/.nvmrc`,
