@@ -4,6 +4,23 @@
 
 The system SHALL enforce a maximum of 20 stored images per analysis and SHALL reserve enough capacity for the selected regeneration mode before invoking an external provider.
 
+#### Scenario: Cap not yet reached
+
+- **WHEN** an analysis has fewer than 17 images and a single provider is selected
+- **THEN** the "Regenerate Images" button SHALL be enabled for a four-image round
+
+#### Scenario: Cap reached
+
+- **WHEN** an analysis has 20 or more images
+- **THEN** the "Regenerate Images" button SHALL be disabled
+- **AND** a message SHALL indicate the maximum has been reached
+
+#### Scenario: Cap would be exceeded
+
+- **WHEN** a user triggers single-provider regeneration but the current image count plus four would exceed 20
+- **THEN** the system SHALL return an error before triggering image generation
+- **AND** the system SHALL make no external image-provider request
+
 #### Scenario: Single-provider round fits
 
 - **WHEN** an analysis has no more than 16 images and a single provider is selected
