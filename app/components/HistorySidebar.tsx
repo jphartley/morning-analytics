@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { listAnalyses } from "@/lib/analytics-storage-client";
+import { FIRST_USE_COPY } from "@/lib/first-use-copy";
 
 export interface HistoryEntry {
   id: string;
@@ -24,6 +25,7 @@ interface HistorySidebarProps {
   onEntriesChange?: (entries: HistoryEntry[]) => void;
   pendingRemovedId?: string | null;
   newAnalysisButtonRef?: React.RefObject<HTMLButtonElement | null>;
+  isFirstUse?: boolean;
 }
 
 export function formatDateTime(isoString: string): string {
@@ -37,6 +39,10 @@ export function formatDateTime(isoString: string): string {
   });
 }
 
+export function getEmptyHistoryMessage(isFirstUse: boolean): string {
+  return isFirstUse ? FIRST_USE_COPY.sidebarMessage : "No analyses yet. Create your first one!";
+}
+
 export function HistorySidebar({
   selectedId,
   onSelect,
@@ -47,6 +53,7 @@ export function HistorySidebar({
   onEntriesChange,
   pendingRemovedId = null,
   newAnalysisButtonRef,
+  isFirstUse = false,
 }: HistorySidebarProps) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -105,15 +112,17 @@ export function HistorySidebar({
 
   return (
     <aside className="hidden md:flex w-64 bg-surface border-r border-outline flex-col h-full">
-      <div className="p-4 border-b border-outline">
-        <button
-          ref={newAnalysisButtonRef}
-          onClick={onNewAnalysis}
-          className="w-full py-2 px-4 bg-accent text-white font-medium rounded-lg hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors"
-        >
-          + New Analysis
-        </button>
-      </div>
+      {!isFirstUse && (
+        <div className="p-4 border-b border-outline">
+          <button
+            ref={newAnalysisButtonRef}
+            onClick={onNewAnalysis}
+            className="w-full py-2 px-4 bg-accent text-white font-medium rounded-lg hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 transition-colors"
+          >
+            + New Analysis
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         {isLoading && (
@@ -131,7 +140,7 @@ export function HistorySidebar({
 
         {!isLoading && !error && visibleEntries.length === 0 && (
           <div className="p-4 text-center text-ink-muted text-sm">
-            No analyses yet. Create your first one!
+            {getEmptyHistoryMessage(isFirstUse)}
           </div>
         )}
 

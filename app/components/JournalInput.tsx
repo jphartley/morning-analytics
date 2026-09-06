@@ -8,6 +8,7 @@ import {
   countJournalWords,
   shouldAutoAnalyzePastedJournal,
 } from "@/lib/journal-submission";
+import { FIRST_USE_COPY } from "@/lib/first-use-copy";
 
 interface JournalInputProps {
   value: string;
@@ -15,6 +16,8 @@ interface JournalInputProps {
   onAnalyze: () => void;
   disabled: boolean;
   showWritingStats?: boolean;
+  placeholder?: string;
+  actionLabel?: string;
 }
 
 const editorProseStyles = [
@@ -36,6 +39,8 @@ export function JournalInput({
   onAnalyze,
   disabled,
   showWritingStats = true,
+  placeholder = FIRST_USE_COPY.editorPlaceholder,
+  actionLabel = FIRST_USE_COPY.actionLabel,
 }: JournalInputProps) {
   const isUpdatingFromProp = useRef(false);
   const pasteDetected = useRef(false);
@@ -122,8 +127,16 @@ export function JournalInput({
   return (
     <div className="w-full space-y-4">
       <div
-        className={`w-full border border-outline rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-accent focus-within:border-transparent ${disabled ? "opacity-50 cursor-not-allowed" : ""} [&_.ProseMirror]:placeholder:text-ink-muted ${editorProseStyles}`}
+        className={`relative w-full border border-outline rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-accent focus-within:border-transparent ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${editorProseStyles}`}
       >
+        {placeholder && !value.trim() && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-4 top-4 text-lg text-ink-muted"
+          >
+            {placeholder}
+          </span>
+        )}
         <EditorContent editor={editor} />
       </div>
       {showWritingStats && (
@@ -141,7 +154,7 @@ export function JournalInput({
         onClick={onAnalyze}
         disabled={disabled || !value.trim()}
       >
-        Analyze
+        {actionLabel}
       </button>
     </div>
   );

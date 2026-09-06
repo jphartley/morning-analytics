@@ -24,6 +24,7 @@ import { AnalystPicker } from "@/components/AnalystPicker";
 import { HistorySidebar, HistoryEntry, formatDateTime } from "@/components/HistorySidebar";
 import { AppHeader } from "@/components/AppHeader";
 import { WelcomeEmptyState } from "@/components/WelcomeEmptyState";
+import { FIRST_USE_COPY } from "@/lib/first-use-copy";
 import { MemoryDiagnosticsDrawer } from "@/components/MemoryDiagnosticsDrawer";
 import { assignBlindOptions, BlindMemoryComparison, type AssignedBlindOptions } from "@/components/BlindMemoryComparison";
 import { ViewDensityControl } from "@/components/ViewDensityControl";
@@ -561,9 +562,11 @@ export default function Home() {
     setSuccessToast("Analysis deleted.");
   };
 
-  const showWelcomeEmptyState = state === "idle" && isHistoryEmpty === true;
+  const isFirstUse = isHistoryEmpty === true;
+  const showWelcomeEmptyState = state === "idle" && isFirstUse;
   const isQuietMode = viewMode === "quiet";
   const isTestMode = isAdmin && viewMode === "test" && testViewEnabled;
+  const isImageProviderPickerAvailable = isAdmin && isTestMode && providerOverrideEnabled;
   const isInsightOrTestMode = viewMode === "insight" || isTestMode;
   const activeImageProvider = isAdmin && providerOverrideEnabled
     ? selectedImageProvider
@@ -590,6 +593,7 @@ export default function Home() {
         onEntriesChange={handleHistoryEntriesChange}
         pendingRemovedId={pendingRemovedId}
         newAnalysisButtonRef={newAnalysisButtonRef}
+        isFirstUse={isFirstUse}
       />
 
       {/* Main Content */}
@@ -605,7 +609,7 @@ export default function Home() {
               Mock mode active — using local images for faster testing.
             </div>
           )}
-          <header className={showWelcomeEmptyState ? "mb-6" : "mb-12"}>
+          <header className="mb-6">
             <div className="flex items-center justify-between mb-4">
               <div />
               <div className="flex flex-wrap items-center justify-end gap-3">
@@ -613,7 +617,7 @@ export default function Home() {
                 {isAdmin && !isQuietMode && (
                   <ModelPicker value={selectedModel} onChange={handleModelChange} />
                 )}
-                {isAdmin && isTestMode && providerOverrideEnabled && (
+                {isImageProviderPickerAvailable && (
                   <ImageProviderPicker
                     value={selectedImageProvider}
                     defaultProvider={defaultImageProvider}
@@ -629,18 +633,10 @@ export default function Home() {
               </div>
             </div>
             <div className="text-center">
-              <h1 className="text-4xl font-bold text-ink mb-2">
-                Morning Analytics
-              </h1>
               <p className="text-lg text-ink-muted">
-                Insights From Your Morning Pages
+                {FIRST_USE_COPY.subtitle}
               </p>
             </div>
-            {showWelcomeEmptyState && (
-              <div className="mt-6 text-left">
-                <WelcomeEmptyState />
-              </div>
-            )}
           </header>
 
           {state === "idle" && (
@@ -659,6 +655,7 @@ export default function Home() {
                 disabled={isPending}
                 showWritingStats={isInsightOrTestMode}
               />
+              {showWelcomeEmptyState && <WelcomeEmptyState />}
             </div>
           )}
 
@@ -694,7 +691,6 @@ export default function Home() {
 
               {state === "text-ready" && (
                 <div className="w-full">
-                  <h2 className="text-xl font-semibold text-ink mb-4">Generated Images</h2>
                   <div className="bg-surface border border-outline rounded-lg">
                     <LoadingState
                       messages={IMAGE_MESSAGES}
@@ -717,7 +713,11 @@ export default function Home() {
 
               {state === "complete" && (
                 <>
-                  <ProviderImageGroups groups={imageGroups} onImageClick={handleImageClick} />
+                  <ProviderImageGroups
+                    groups={imageGroups}
+                    onImageClick={handleImageClick}
+                    showProviderHeadings={isImageProviderPickerAvailable}
+                  />
                   {imageGenerationStatus && imageGroups.length === 0 && (
                     <div className="rounded-lg border border-outline bg-surface p-4">
                       <h2 className="text-xl font-semibold text-ink mb-2">Generated Images</h2>
@@ -789,6 +789,7 @@ export default function Home() {
                   <ProviderImageGroups
                     groups={historyViewData.imageGroups}
                     onImageClick={handleImageClick}
+                    showProviderHeadings={isImageProviderPickerAvailable}
                   />
                   {isInsightOrTestMode && historyViewData.imagePrompt && (
                     <ImagePromptDisclosure imagePrompt={historyViewData.imagePrompt} />

@@ -4,9 +4,14 @@ import type { ImageDisplayGroup } from "@/lib/image-generation-types";
 interface ProviderImageGroupsProps {
   groups: ImageDisplayGroup[];
   onImageClick?: (index: number) => void;
+  showProviderHeadings?: boolean;
 }
 
-export function ProviderImageGroups({ groups, onImageClick }: ProviderImageGroupsProps) {
+export function ProviderImageGroups({
+  groups,
+  onImageClick,
+  showProviderHeadings = false,
+}: ProviderImageGroupsProps) {
   const offsets = groups.map((_, groupIndex) => groups
     .slice(0, groupIndex)
     .reduce((total, group) => total + group.imageUrls.length, 0));
@@ -17,7 +22,7 @@ export function ProviderImageGroups({ groups, onImageClick }: ProviderImageGroup
           <section key={group.id} className="w-full animate-fade-in-up">
             {group.imageUrls.length > 0 && (
               <ImageGrid
-                title={group.label}
+                title={showProviderHeadings ? group.label : undefined}
                 imageUrls={group.imageUrls}
                 onImageClick={onImageClick
                   ? (index) => onImageClick(offsets[groupIndex] + index)

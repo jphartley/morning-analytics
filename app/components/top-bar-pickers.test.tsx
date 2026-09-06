@@ -66,4 +66,13 @@ describe("controlled top bar pickers", () => {
     expect(html).toMatch(/aria-label="Insight view"/);
     expect(html).not.toMatch(/aria-label="Test view"/);
   });
+
+  it("keeps detail-view controls available before and after first use", () => {
+    const html = renderToStaticMarkup(
+      <ViewDensityControl value="insight" onChange={() => undefined} />
+    );
+
+    expect(html).toMatch(/aria-label="Quiet view"/);
+    expect(html).toMatch(/aria-label="Insight view"/);
+  });
 });
