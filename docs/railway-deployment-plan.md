@@ -2,6 +2,8 @@
 
 **Domain:** `morning-analytics.ink` (purchased on Namecheap)
 
+To recreate this GitHub → Railway → custom domain path in another repository, use [`github-railway-custom-domain.md`](github-railway-custom-domain.md). This file stays the Morning Analytics checklist.
+
 ---
 
 ## Phase 1: Railway Project Setup ✅ DONE
