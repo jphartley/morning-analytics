@@ -133,6 +133,12 @@ Safety rules:
 - Keep queue wrappers human readable: state which script they call, why, what safety boundary it enforces, and expected output.
 
 ## Commit & Pull Request Guidelines
+
+Work directly on `main` and push to `origin main` by default. Do not create or
+push feature branches or use separate worktrees unless the user explicitly
+requests them. The branch/worktree delivery queue described above is opt-in;
+its availability does not authorize using it for ordinary changes.
+
 In the Codex managed sandbox, run all Git commands with escalation on the first attempt. This avoids predictable `.git/index.lock`, `.git/worktrees/.../index.lock`, worktree metadata, and network failures. Treat anything Git-related as outside-sandbox work by default, including read-only inspection (`git status`, `git diff`, `git log`, `git branch`), metadata writes (`git add`, `git commit`, `git restore`, `git switch`, `git merge`, `git rebase`, `git stash`), branch/worktree cleanup, and remote operations (`git fetch`, `git pull`, `git push`).
 
 Use concise imperative commit subjects (`Add ...`, `Fix ...`, `Prepare ...`) and keep commits focused.

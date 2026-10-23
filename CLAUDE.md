@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Workflow
+
+Work directly on `main` and push to `origin main`. Create or push branches or
+use separate worktrees only when the user explicitly requests them. See
+`AGENTS.md` for the full repository Git rules; the delivery queue is opt-in.
+
 ## Project Overview
 
 Morning Analytics: AI-powered psychoanalytic insights and symbolic imagery from morning pages journaling. Users paste morning pages text, receive psychoanalytic-style analysis (~2s), then view 4 AI-generated artistic images. Designed for "Morning Pages" practitioners from "The Artist's Way".
