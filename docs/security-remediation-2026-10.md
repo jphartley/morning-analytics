@@ -12,7 +12,7 @@ values, access tokens, raw environment exports, or unredacted logs in this file.
 | Work | Status | Evidence |
 | --- | --- | --- |
 | Railway credential response | Complete, confirmed by the operator | In this chat on 23 October, the operator confirmed revocation in Google, Discord and Supabase, replacement values in Railway, redeployment, and review of Railway, Google and Supabase logs with nothing suspicious found. |
-| Dependency remediation | Locally implemented; operator smoke test passed; release in progress | [OpenSpec change](../openspec/changes/patch-october-2026-security-dependencies/proposal.md). 14 of 17 tasks complete; the 3 production release/verification tasks remain open. |
+| Dependency remediation | Published to main; Railway deployment pending; operator local smoke test passed | Patch commit a7c8099. [OpenSpec change](../openspec/changes/patch-october-2026-security-dependencies/proposal.md). 14 of 17 tasks complete; the 3 production release/verification tasks remain open. |
 | Server-side authorization | Open; urgent | Code inspection found browser-supplied identity used with service-role database access. No production exploit was attempted. |
 | Editor and development tools | Open | Affected Markdown-it, Tiptap, Vite and Vitest dependency versions remain locked. |
 | Automated lockfile assessment | Completed through local registry mirror; findings remain open | All three lockfiles assessed on 23 October, including development dependencies. App: 14 High / 4 Moderate dependency-package findings; root and validation: 1 High each. These are not independent CVE counts. See triage below. |
@@ -248,6 +248,23 @@ for each implementation change.
 | Local Sharp native libraries | libvips 8.18.7, librsvg 2.63.2, libheif 1.23.5 on macOS |
 | Linux native image verification | Pending: no local Docker/Linux runtime available. macOS success is not evidence for Linux. Confirm native versions and image processing on the Railway build/runtime. |
 | Production deployment and smoke checks | Pending; the earlier credential redeploy does not deploy this new local patch |
+
+### Release record, 23 October 2026
+
+- Published implementation commit `a7c8099` (`Patch October security dependencies`)
+  to `origin main`; local and remote main matched after the push, with a clean
+  working tree. The commit contains the 18 scoped implementation, verification
+  and documentation files.
+- The pre-commit secret scan passed for the final staged patch. A further
+  redacted full-history scan passed for 188 commits before the push.
+- GitHub reported the Railway status `compassionate-analytics - morning-analytics`
+  as pending for that commit. Deployment success, active production commit and
+  installed runtime/package/native-library versions remain unverified.
+- Environment / Railway variables: none new, changed or removed.
+- Next operator checks: confirm the Railway production deployment containing
+  `a7c8099` is Active, record its build/runtime versions, then verify production
+  sign-in, analysis, real Midjourney images, save/load and deletion. Keep tasks
+  5.1–5.3 open until their respective deployment and verification evidence exists.
 
 One initial shell-based app install/test command selected the machine's Node 26
 instead of the project runtime. Installation and the full test/lint/build checks
