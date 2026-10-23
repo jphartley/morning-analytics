@@ -5,6 +5,7 @@ import { closeSync, existsSync, mkdirSync, readFileSync, writeFileSync, cpSync, 
 import http from "node:http";
 import path from "node:path";
 import process from "node:process";
+import { parseNodeVersion, resolveNodeToolchain as selectNodeToolchain } from "./node-runtime.mjs";
 
 const initialCwd = process.cwd();
 const currentWorktreeRoot = discoverRepoRoot(initialCwd);
@@ -603,17 +604,17 @@ function envModeFromFiles(files) {
   return "real-local";
 }
 
-function requiredNodeMajor(config) {
-  const nvmrc = path.join(repoRoot, "app", ".nvmrc");
-  if (existsSync(nvmrc)) {
-    const value = readFileSync(nvmrc, "utf8").trim().match(/\d+/)?.[0];
-    if (value) return Number(value);
+function nodeRuntimeRequirement(config) {
+  const appPin = readFileSync(path.join(repoRoot, "app", ".nvmrc"), "utf8").trim();
+  const rootPin = readFileSync(path.join(repoRoot, ".nvmrc"), "utf8").trim();
+  const engine = readJson(path.join(repoRoot, "app", "package.json"), {}).engines?.node;
+  const minimum = /^>=(\d+\.\d+\.\d+)\s+<(\d+)$/.exec(engine || "");
+  const version = minimum ? parseNodeVersion(minimum[1]) : null;
+  if (!version || version[0] !== Number(config.requiredNodeMajor || 22)
+    || Number(minimum[2]) !== version[0] + 1 || appPin !== String(version[0]) || rootPin !== appPin) {
+    throw new Error("Align root/app .nvmrc files to the supported Node major and app engines.node to an explicit minimum such as >=22.23.4 <23 before candidate setup.");
   }
-  return Number(config.requiredNodeMajor || 22);
-}
-
-function nodeMajor(version) {
-  return Number(String(version).replace(/^v/, "").split(".")[0]);
+  return { requiredVersion: minimum[1], versionSelector: appPin };
 }
 
 function commandVersion(cmd, cmdArgs, cwd = repoRoot) {
@@ -628,58 +629,18 @@ function commandVersion(cmd, cmdArgs, cwd = repoRoot) {
 }
 
 function resolveNodeToolchain(config) {
-  const required = requiredNodeMajor(config);
-  const queueVersion = `v${process.versions.node}`;
-  const pathNodeVersion = commandVersion("node", ["-v"]);
-  const pathNodeMajor = pathNodeVersion ? nodeMajor(pathNodeVersion) : null;
-  const queueMajor = nodeMajor(queueVersion);
-  const base = {
-    requiredMajor: required,
-    queueNodeVersion: queueVersion,
-    queueNodeMajor: queueMajor,
-    pathNodeVersion,
-    pathNodeMajor,
+  return selectNodeToolchain({
+    ...nodeRuntimeRequirement(config),
+    queueVersion: process.version,
     executable: process.execPath,
-    instruction: `Run queue-managed app commands with Node ${required}. Known-good command shape: fnm exec --using ${required} npm ci`
-  };
-  if (queueMajor === required && pathNodeMajor === required) {
-    return {
-      ...base,
-      status: "passed",
-      mode: "direct",
-      commandPrefix: [],
-      version: pathNodeVersion,
-      major: pathNodeMajor,
-      runner: "direct"
-    };
-  }
-  const fnmVersion = commandVersion("fnm", ["exec", "--using", String(required), "node", "-v"]);
-  if (fnmVersion && nodeMajor(fnmVersion) === required) {
-    return {
-      ...base,
-      status: "passed",
-      mode: "fnm",
-      commandPrefix: ["fnm", "exec", "--using", String(required)],
-      version: fnmVersion,
-      major: required,
-      runner: `fnm exec --using ${required}`
-    };
-  }
-  return {
-    ...base,
-    status: "failed",
-    mode: "unavailable",
-    commandPrefix: null,
-    version: queueVersion,
-    major: queueMajor,
-    runner: null
-  };
+    commandVersion
+  });
 }
 
 function assertNodeRuntime(config, action) {
   const runtime = resolveNodeToolchain(config);
   if (runtime.status !== "passed") {
-    throw new Error(`${action} requires Node ${runtime.requiredMajor}. Queue runtime is ${runtime.queueNodeVersion} at ${runtime.executable}; PATH node is ${runtime.pathNodeVersion || "unavailable"}. ${runtime.instruction}`);
+    throw new Error(`${action} requires Node ${runtime.requiredMajor}.x >= ${runtime.requiredVersion}. Queue runtime is ${runtime.queueNodeVersion} at ${runtime.executable}; PATH node is ${runtime.pathNodeVersion || "unavailable"}. ${runtime.instruction}`);
   }
   return runtime;
 }

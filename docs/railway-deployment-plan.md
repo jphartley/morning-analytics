@@ -178,7 +178,7 @@ Full end-to-end test on the live domain:
 |---------|-------------|-----|
 | Build fails on `npm ci` | Lockfile pinned to private registry | Ensure `app/package-lock.json` does not contain `jfrog.booking.com`; use `registry.npmjs.org` entries |
 | Build fails | Wrong root directory | Set to `app` in Settings |
-| Build fails after Node pin change | App and lockfile engine metadata out of sync | Keep `app/.nvmrc`, `app/package.json`, and lockfile root `engines.node` aligned |
+| Build fails after Node pin change | App and lockfile engine metadata out of sync | Keep root/app `.nvmrc` selectors at `22`; app manifest and lockfile root engines must agree on `>=22.23.4 <23` |
 | App loads but analysis fails | Missing `GEMINI_API_KEY` | Check Variables tab |
 | Images don't generate | Missing Discord env vars | Check all `DISCORD_*` vars |
 | Dual mode is missing | No authorized trial candidate is configured, the server Dual gate is off, or derived browser metadata needs a rebuild | Check production Variables, deploy staged changes, and redeploy |
@@ -197,7 +197,7 @@ For new-Mac setup and the exact Node 22 verification procedure, read
 in `app/`, so run `cd app && nvm use` before local dependency installation,
 testing, builds, or development-server commands.
 
-1. Use Node 22 for local work in this repo.
+1. Use the latest available stable Node 22 release, at least 22.23.4, for local work in this repo. `nvm install 22` refreshes the installed runtime; `nvm use` selects an installed version.
 2. If your work laptop/global npm config points to a private registry, lockfile entries can leak that host.
 3. Before pushing lockfile changes, verify:
    - `rg 'jfrog\\.booking\\.com' app/package-lock.json`
@@ -207,6 +207,16 @@ testing, builds, or development-server commands.
    - `rg 'jfrog\\.booking\\.com' app/package-lock.json` should return no matches.
 
 ---
+
+## Verify deployed runtime and dependency versions
+
+After a security patch deploy, record the active commit and actual Node versions
+from the build and running service. Require Node 22.23.4 or later within 22.x;
+an existing deployment does not update itself when a newer 22.x patch is released.
+Verify the installed Next.js, React pair, Sharp/native libraries and Undici
+versions against the reviewed dependency graph. Keep local test success and
+production verification as separate entries in
+[`security-remediation-2026-10.md`](security-remediation-2026-10.md).
 
 ## Fallback: railway.toml
 

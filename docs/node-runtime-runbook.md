@@ -2,8 +2,11 @@
 
 Use this runbook when setting up a new Mac or verifying that this repository is
 running under its pinned Node.js runtime. The application is currently pinned to
-Node 22.x. The pin must remain aligned in `app/.nvmrc`, `app/package.json`, and
-the root package metadata in `app/package-lock.json`.
+the latest available stable Node 22.x release, with a security minimum of
+22.23.4. Both root and app `.nvmrc` files select `22`; `app/package.json` and
+the root package metadata in `app/package-lock.json` declare `>=22.23.4 <23`.
+This allows newer 22.x patches while excluding older vulnerable releases and
+unreviewed major upgrades.
 
 ## Install `nvm` on macOS
 
@@ -43,8 +46,8 @@ the Node versions used for this repository.
 
 ## Set up this repository
 
-The `.nvmrc` file is inside `app/`, not the repository root. From the app
-directory, install and activate the declared version:
+Matching `.nvmrc` files exist in the repository root and `app/`. From the app
+directory, install the latest available release in the declared line and activate it:
 
 ```zsh
 cd /Users/jhartley/code/morning-analytics/app
@@ -53,11 +56,16 @@ nvm use
 node --version
 ```
 
-The version must start with `v22`. On later terminal sessions, run `nvm use`
+The version must be 22.23.4 or later within 22.x. An older Node 22 release does
+not meet the security minimum. On later terminal sessions, run `nvm use`
 from `app/` before installing dependencies, testing, building, or starting the
 development server. `nvm` does not switch automatically on `cd` by default.
 
-Install a clean dependency tree after selecting Node 22:
+`nvm use` selects an installed runtime; it does not download a newer release.
+Run `nvm install 22` when refreshing the local runtime. Existing running Railway
+services also require a fresh build/deployment to adopt a newer runtime.
+
+Install a clean dependency tree after selecting the patched Node 22 runtime:
 
 ```zsh
 npm ci
@@ -80,8 +88,19 @@ npm run dev
 ```
 
 Open `http://localhost:3000` and perform the relevant manual smoke test. A
-successful baseline on this project is a Node `v22.x.x` version, passing tests,
-passing lint, and a successful production build.
+successful baseline on this project is a stable Node 22 version at or above
+22.23.4, passing tests, passing lint, and a successful production build.
+
+From the repository root, verify the runtime-selection boundary tests without
+creating queue state:
+
+```zsh
+node --test scripts/node-runtime.test.mjs
+```
+
+Runtime readiness checks the actual child-command version against the engine
+minimum. If PATH is unsuitable, the existing helper tries `fnm` for the 22 line
+and checks that selected version too.
 
 `npm run build` validates required Supabase configuration while prerendering.
 If it fails with a missing `NEXT_PUBLIC_SUPABASE_URL` (or another required
@@ -104,8 +123,14 @@ real Supabase-backed manual tests.
 
 ## Railway relationship
 
-Railway uses the committed project runtime pin; local `nvm` configuration and
-`app/.env.local` are not deployed. Before changing the Node pin, update all
-three pin locations together, run the full local verification above, and verify
-the Railway deployment. Follow the registry and deployment guidance in
-`docs/railway-deployment-plan.md`.
+Railway uses the committed project runtime declarations; local `nvm` configuration
+and `app/.env.local` are not deployed. Keep both `.nvmrc` selectors and the app
+manifest/lockfile engine metadata aligned. After changing these declarations,
+run local verification and verify the Railway deployment. Follow the registry
+and deployment guidance in `docs/railway-deployment-plan.md`.
+
+Record the actual Node version used during the build and in the running service
+after redeployment. Both must be stable 22.x releases at or above 22.23.4.
+Declarations and a successful local build alone do not establish the runtime of
+an existing production deployment. Use the same patched runtime for validation
+commands and repository-root admin scripts.

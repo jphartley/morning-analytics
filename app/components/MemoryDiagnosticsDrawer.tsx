@@ -114,9 +114,18 @@ export function MemoryDiagnosticsDrawer({
   };
 
   useEffect(() => {
-    if (isOpen) void loadMemories();
-  // Loading is intentionally tied to opening the diagnostic surface.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!isOpen) return;
+    let active = true;
+    void getMemoryStore(userId).then((result) => {
+      if (!active) return;
+      if (result.success) {
+        setMemories(result.memories || []);
+        setStatus(null);
+      } else {
+        setStatus(result.error || "Contextual memory could not be loaded.");
+      }
+    });
+    return () => { active = false; };
   }, [isOpen, userId]);
 
   const handleReset = async () => {
