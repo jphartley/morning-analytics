@@ -30,12 +30,9 @@ DISCORD_CHANNEL_ID
 MIDJOURNEY_APP_ID
 MIDJOURNEY_IMAGINE_COMMAND_ID
 USE_AI_MOCKS
-NEXT_PUBLIC_IMAGE_PROVIDER
 IMAGE_GENERATION_PROVIDER
 IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED
-NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED
 IMAGE_PROVIDER_DUAL_MODE_ENABLED
-NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED
 NEXT_PUBLIC_TEST_VIEW_ENABLED
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -44,25 +41,29 @@ SUPABASE_SERVICE_ROLE_KEY
 
 Note: `PORT` is not needed — Railway injects its own.
 
-### Dual image provider trial
+### Dormant image provider trials
 
-The optional Test-view comparison mode requires all four flags below in the
-`morning-analytics` service's **production** environment:
+Midjourney/Discord is the chosen production provider. Set
+`IMAGE_GENERATION_PROVIDER=midjourney`, leave the new optional
+`IMAGE_PROVIDER_TRIAL_CANDIDATE` unset, and keep the two server flags
+`IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED` and `IMAGE_PROVIDER_DUAL_MODE_ENABLED`
+`false`. Remove the retired `NEXT_PUBLIC_IMAGE_PROVIDER`,
+`NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED`, and
+`NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED` settings if present. Browser
+metadata is derived automatically from server configuration.
+Remove unused `BLACK_FOREST_LABS_*` variables, including its API key, if present.
+The adapter remains available for an explicitly configured future experiment.
 
-```text
-IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED=true
-NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED=true
-IMAGE_PROVIDER_DUAL_MODE_ENABLED=true
-NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED=true
-```
+Make these changes in **morning-analytics service > Variables > production**.
+Railway does not read local environment files. Review staged changes and click
+**Deploy**; saving alone does not activate variables. Deploy/redeploy after any
+variable change. Public values require a rebuild, as does changing the
+server-only trial candidate because safe candidate metadata enters the browser
+bundle. No database migration is required for dormancy.
 
-Keep both Dual mode flags `false` until the database migration adding
-`analyses.image_generation_batches` and the compatible application release are
-deployed. Railway variable edits are staged: review the staged changes and
-click **Deploy** before treating them as active. Always deploy or redeploy after
-any variable change. `NEXT_PUBLIC_*` values are compiled into the Next.js client
-bundle and specifically require a rebuild/redeploy before browsers can see the
-new picker option.
+For exact BFL variable names and deliberate trial activation, see
+[Image provider trials](image-provider-trials.md). Old flags alone no longer
+activate BFL or Dual mode. This checklist does not verify current remote values.
 
 ### Contextual memory and Test view
 
@@ -180,7 +181,7 @@ Full end-to-end test on the live domain:
 | Build fails after Node pin change | App and lockfile engine metadata out of sync | Keep `app/.nvmrc`, `app/package.json`, and lockfile root `engines.node` aligned |
 | App loads but analysis fails | Missing `GEMINI_API_KEY` | Check Variables tab |
 | Images don't generate | Missing Discord env vars | Check all `DISCORD_*` vars |
-| Dual mode is missing | One of the four Test/Dual flags is disabled or was not rebuilt into the client | Check production Variables, deploy staged changes, and redeploy |
+| Dual mode is missing | No authorized trial candidate is configured, the server Dual gate is off, or derived browser metadata needs a rebuild | Check production Variables, deploy staged changes, and redeploy |
 | Test view is missing | `NEXT_PUBLIC_TEST_VIEW_ENABLED=false` was compiled into the client | Set the intended production value, review staged changes, and redeploy |
 | Memory diagnostics fail | Contextual-memory migration is missing or Supabase policies are not deployed | Apply the migration before the compatible app release |
 | Images 403 Forbidden | Supabase bucket not public | Enable public read on `analysis-images` bucket |

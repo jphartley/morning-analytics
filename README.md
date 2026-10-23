@@ -57,11 +57,11 @@ backend.
 | --- | --- |
 | Static build with placeholders | `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` may use safe placeholders from `app/.env.example` |
 | Local dev shell boot | Same as build; use mock values only when avoiding backend manual tests |
-| Mock AI/image testing | `USE_AI_MOCKS=true`, `NEXT_PUBLIC_IMAGE_PROVIDER=mock`, Supabase values still needed for auth/history code paths |
+| Mock AI/image testing | `USE_AI_MOCKS=true`, `IMAGE_GENERATION_PROVIDER=mock`, Supabase values still needed for auth/history code paths |
 | Supabase auth manual testing | Real `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
 | History persistence and storage uploads | Real `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; anon read policies for history images |
 | Real Gemini analysis | `GEMINI_API_KEY`; optional `GEMINI_MODEL` |
-| Real Midjourney image generation | Discord/Midjourney values listed below and `NEXT_PUBLIC_IMAGE_PROVIDER=midjourney` |
+| Real Midjourney image generation | Discord/Midjourney values listed below and `IMAGE_GENERATION_PROVIDER=midjourney` |
 | Admin cleanup script | `SUPABASE_SERVICE_ROLE_KEY` and either `NEXT_PUBLIC_SUPABASE_URL` or `SUPABASE_URL` |
 
 ### Gemini (text analysis)
@@ -110,9 +110,9 @@ but failing it means auth manual testing is not ready.
 ### Mocking and local testing
 
 - `USE_AI_MOCKS=true` bypasses Gemini + Discord/Midjourney APIs.
-- `NEXT_PUBLIC_IMAGE_PROVIDER=mock` uses local images from
+- `IMAGE_GENERATION_PROVIDER=mock` uses local images from
   `app/public/mock-images` (PNG or JPEG).
-- Set `NEXT_PUBLIC_IMAGE_PROVIDER=midjourney` for real image generation.
+- Set `IMAGE_GENERATION_PROVIDER=midjourney` for real image generation.
 
 Mock and placeholder values can support build/static checks, but do not use
 them for signin, signup, history, storage, or other Supabase-backed manual
@@ -187,3 +187,6 @@ after explicit approval or in a dedicated hygiene change.
 ## License
 
 MIT. See `LICENSE`.
+
+Image provider trials are dormant by default. BFL is retained but disabled; see
+[Image provider trials](docs/image-provider-trials.md) for the mechanism and setup.

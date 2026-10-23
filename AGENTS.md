@@ -78,7 +78,7 @@ Use strict TypeScript (`app/tsconfig.json`). Follow existing style: 2-space inde
 There is no full unit/integration suite yet in `app/`. Required baseline:
 1. analyze journal text,
 2. verify analysis renders,
-3. verify image generation path (`NEXT_PUBLIC_IMAGE_PROVIDER=mock|midjourney`),
+3. verify image generation path (`IMAGE_GENERATION_PROVIDER=mock|midjourney`),
 4. verify history persistence/load.
 
 For no-API testing, use `USE_AI_MOCKS=true` and mock images. If changing Gemini output format, keep `---IMAGE PROMPT---` parsing in sync in `app/app/actions.ts`.

@@ -43,6 +43,7 @@ import {
 } from "@/lib/top-bar-presets";
 import { resolveImageProviderOverride, resolveRoleCapabilities } from "@/lib/role-capabilities";
 import { IMAGE_PROVIDER_IDS } from "@/lib/image-providers/types";
+import { getImageTrialCandidate } from "@/lib/image-providers/availability";
 import type { ImageProviderId } from "@/lib/image-providers/types";
 import type { MemoryContextItem } from "@/lib/memory-types";
 import {
@@ -75,11 +76,15 @@ interface HistoryViewData {
 }
 
 const MAX_IMAGES = 20;
-const providerOverrideEnabled = process.env.NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED === "true";
-const dualModeEnabled = process.env.NEXT_PUBLIC_IMAGE_PROVIDER_DUAL_MODE_ENABLED === "true";
+const trialCandidate = getImageTrialCandidate(
+  process.env.NEXT_PUBLIC_CONFIGURED_IMAGE_TRIAL_CANDIDATE,
+  true
+);
+const providerOverrideEnabled = trialCandidate !== null;
+const dualModeEnabled = process.env.NEXT_PUBLIC_CONFIGURED_IMAGE_DUAL_MODE_ENABLED === "true";
 const testViewEnabled = process.env.NEXT_PUBLIC_TEST_VIEW_ENABLED !== "false";
 // NEXT_PUBLIC_CONFIGURED_IMAGE_PROVIDER is built in next.config.ts from the same
-// IMAGE_GENERATION_PROVIDER || NEXT_PUBLIC_IMAGE_PROVIDER || "midjourney" chain the
+// IMAGE_GENERATION_PROVIDER || "midjourney" chain the
 // server uses (getDeploymentImageProviderId), so the client default mirrors the
 // server default. The override guard below relies on this agreement.
 const configuredProvider = process.env.NEXT_PUBLIC_CONFIGURED_IMAGE_PROVIDER;
@@ -143,7 +148,8 @@ export default function Home() {
         defaultImageProvider,
         providerOverrideEnabled,
         dualModeEnabled,
-        capabilities
+        capabilities,
+        trialCandidate
       );
 
       setSelectedModel(storedPresets.modelId);
@@ -617,11 +623,12 @@ export default function Home() {
                 {isAdmin && !isQuietMode && (
                   <ModelPicker value={selectedModel} onChange={handleModelChange} />
                 )}
-                {isImageProviderPickerAvailable && (
+                {isImageProviderPickerAvailable && trialCandidate && (
                   <ImageProviderPicker
                     value={selectedImageProvider}
                     defaultProvider={defaultImageProvider}
                     dualModeEnabled={dualModeEnabled}
+                    trialCandidate={trialCandidate}
                     onChange={handleImageProviderChange}
                   />
                 )}

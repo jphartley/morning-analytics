@@ -1,5 +1,10 @@
 # Image Generation Architecture
 
+> Current product decision: Midjourney/Discord remains the chosen provider after
+> the BFL quality trial. BFL is retained but disabled by default. Earlier
+> reliability recommendations below are historical research, not the current
+> provider selection. See [Image provider trials](image-provider-trials.md).
+
 This document records the investigation into recurring Midjourney/Discord image-generation failures and the recommended replacement architecture. It exists so future work starts from the evidence and conclusions below instead of reopening the same timeout and message-matching investigations.
 
 ## Investigation Conclusion
@@ -187,59 +192,21 @@ If Midjourney's specific aesthetic is non-negotiable, the supported fallback is 
 
 The recommended product choice is reliable in-app automation through a supported provider.
 
-## Compatibility Phase: Switchable Providers
+## Current provider boundary
 
-The first direct-provider implementation keeps the existing synchronous server-action boundary so Black Forest Labs can be evaluated inside the current app without deleting Midjourney. This is a deliberate compatibility phase, not the durable-job target described above.
+The shared server-action boundary and provider orchestration are retained.
+Midjourney/Discord is the chosen production provider; mock supports local checks.
+BFL is disabled by default, retained behind a lazy adapter wrapper, and loaded
+only when an explicitly authorized trial invokes it. Historical BFL batches do
+not require its module or credentials.
 
-```mermaid
-flowchart LR
-    UI["Browser generation or regeneration"] --> Action["Shared server action"]
-    Action --> Resolver["Strict provider resolver"]
-    Resolver -->|"mock"| Mock["Four local fixtures"]
-    Resolver -->|"midjourney"| MJ["Existing Discord adapter"]
-    Resolver -->|"black-forest-labs"| BFL["Four parallel FLUX.2 requests"]
-    MJ --> Normalize["Exactly four data URLs"]
-    Mock --> Normalize
-    BFL --> Poll["Poll provider-owned job URLs"]
-    Poll --> Download["Immediately download signed results"]
-    Download --> Normalize
-    Normalize --> Storage["Shared Supabase upload"]
-    Storage --> History["Existing analysis history"]
-```
+Provider selection is immutable for each attempt. `IMAGE_GENERATION_PROVIDER`
+is the only deployment-default setting and defaults to Midjourney. A configured
+trial candidate and server override/Dual flags control optional comparison;
+browser visibility is derived from those server settings. Selected-provider
+errors never trigger implicit cross-provider fallback.
 
-Provider selection is immutable for an attempt. `IMAGE_GENERATION_PROVIDER` is the canonical server-side deployment default, while `NEXT_PUBLIC_IMAGE_PROVIDER` remains a temporary compatibility fallback. Test-view overrides require both a public visibility flag and an independent server authorization flag. An error from the selected provider is returned directly; the resolver never invokes another provider as an implicit fallback.
-
-The Black Forest Labs adapter uses the documented EU API by default and pins `flux-2-pro`. It submits four independent jobs concurrently, records deterministic slot seeds, polls each returned URL within a bounded timeout, and immediately downloads each Ready result because delivery URLs are temporary. Polling and delivery URLs are HTTPS allowlisted to BFL public endpoints and returned regional cluster hosts, and are never returned to the browser or retained in diagnostics. The adapter only returns a result when all four images are available.
-
-```mermaid
-sequenceDiagram
-    participant Action as Server action
-    participant BFL as Black Forest Labs API
-    participant Delivery as BFL delivery host
-    participant Storage as Supabase Storage
-
-    par Four image slots
-        Action->>BFL: POST flux-2-pro prompt and slot seed
-        BFL-->>Action: Request ID and polling URL
-        loop Until Ready or bounded failure
-            Action->>BFL: GET polling URL
-            BFL-->>Action: Pending, Ready, Moderated, or Error
-        end
-        Action->>Delivery: Download Ready image immediately
-        Delivery-->>Action: JPEG or PNG bytes
-    end
-    Action->>Action: Require all four normalized images
-    Action->>Storage: Upload through shared persistence flow
-```
-
-Validation commands:
-
-```bash
-cd app
-npm run test:image-providers
-
-cd ../validation
-npm run test-black-forest-labs
-```
-
-The mocked suite spends no provider credits. The smoke command submits and downloads one 1024x1024 image, writes it to `/private/tmp/black-forest-labs-smoke.jpg`, and does not touch Supabase.
+See [Image provider trials](image-provider-trials.md) for the trial mechanism,
+BFL adapter reference, setup, verification, and experiment outcome. This is the
+single reference for retained BFL implementation details; the research above
+remains historical evidence.

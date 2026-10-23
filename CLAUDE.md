@@ -305,7 +305,7 @@ ERROR can occur at any phase:
 
 **generateImages(imagePrompt, userId)**
 - Requires authenticated userId
-- **Mock mode** (`NEXT_PUBLIC_IMAGE_PROVIDER=mock`): Reads 4 local images from `/app/public/mock-images/`
+- **Mock mode** (`IMAGE_GENERATION_PROVIDER=mock`): Reads 4 local images from `/app/public/mock-images/`
 - **Real mode**: Discord user token → Midjourney → Discord bot listens → Download grid → Sharp splits → Upload to S3
 - Returns: `{ success, imageUrls: base64[], imagePaths: storagePaths[], analysisId, error? }`
 - `imageUrls` are base64 data URLs for immediate display
@@ -485,7 +485,7 @@ DISCORD_GUILD_ID=...            # Required for real: Server ID where /imagine is
 DISCORD_CHANNEL_ID=...          # Required for real: Channel ID to watch for Midjourney images
 MIDJOURNEY_APP_ID=...           # Optional: Midjourney app ID (default: 936929561302675456)
 MIDJOURNEY_IMAGINE_COMMAND_ID=...  # Optional: /imagine command ID (default: 938956540159881230)
-NEXT_PUBLIC_IMAGE_PROVIDER=mock/midjourney  # Optional: Use local mock images or real Midjourney
+IMAGE_GENERATION_PROVIDER=mock/midjourney  # Optional: Use local mock images or real Midjourney
 DEBUG_DISCORD=true              # Optional: Verbose Discord/Midjourney listener logging
 ```
 
@@ -502,13 +502,13 @@ SUPABASE_SERVICE_ROLE_KEY=...          # Required: Service role key for server w
 **Mock-only testing** (no API keys needed except Supabase):
 ```
 USE_AI_MOCKS=true
-NEXT_PUBLIC_IMAGE_PROVIDER=mock
+IMAGE_GENERATION_PROVIDER=mock
 ```
 
 **Development with real Gemini but mock images**:
 ```
 GEMINI_API_KEY=...
-NEXT_PUBLIC_IMAGE_PROVIDER=mock
+IMAGE_GENERATION_PROVIDER=mock
 USE_AI_MOCKS=false
 ```
 
@@ -522,7 +522,7 @@ DISCORD_CHANNEL_ID=...
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
-NEXT_PUBLIC_IMAGE_PROVIDER=midjourney
+IMAGE_GENERATION_PROVIDER=midjourney
 ```
 
 ## External Services & APIs

@@ -598,7 +598,7 @@ function fileContainsAny(filePath, values) {
 
 function envModeFromFiles(files) {
   if (files.length === 0) return "placeholder";
-  if (files.some((file) => fileContainsAny(file, ["USE_AI_MOCKS=true", "NEXT_PUBLIC_IMAGE_PROVIDER=mock"]))) return "mock";
+  if (files.some((file) => fileContainsAny(file, ["USE_AI_MOCKS=true", "IMAGE_GENERATION_PROVIDER=mock"]))) return "mock";
   if (files.some((file) => fileContainsAny(file, ["example.supabase.co", "placeholder", "mock-service-role-key"]))) return "placeholder";
   return "real-local";
 }
@@ -705,7 +705,7 @@ function writePlaceholderEnv(worktreePath) {
   const target = path.join(worktreePath, "app", ".env.local");
   const content = [
     "USE_AI_MOCKS=true",
-    "NEXT_PUBLIC_IMAGE_PROVIDER=mock",
+    "IMAGE_GENERATION_PROVIDER=mock",
     "NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder",
     "SUPABASE_SERVICE_ROLE_KEY=mock-service-role-key"

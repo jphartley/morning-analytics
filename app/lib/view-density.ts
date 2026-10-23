@@ -3,7 +3,6 @@ export {
   VIEW_DENSITY_MODES,
   VIEW_DENSITY_STORAGE_KEY,
   getAvailableViewDensityModes,
-  getStoredViewDensityMode,
   isViewDensityMode,
   setStoredViewDensityMode,
   type ViewDensityMode,

@@ -1,13 +1,19 @@
-import { blackForestLabsImageProvider } from "./black-forest-labs";
 import { midjourneyImageProvider } from "./midjourney";
 import { mockImageProvider } from "./mock";
 import type { ImageProvider, ImageProviderId } from "./types";
 import { IMAGE_PROVIDER_IDS, ImageProviderError } from "./types";
+import { getImageTrialCandidate, isImageProviderAvailable } from "./availability";
 
 const PROVIDERS: Record<ImageProviderId, ImageProvider> = {
   mock: mockImageProvider,
   midjourney: midjourneyImageProvider,
-  "black-forest-labs": blackForestLabsImageProvider,
+  "black-forest-labs": {
+    id: "black-forest-labs",
+    async generateImageSet(request) {
+      const { blackForestLabsImageProvider } = await import("./black-forest-labs");
+      return blackForestLabsImageProvider.generateImageSet(request);
+    },
+  },
 };
 
 export interface ResolveImageProviderOptions {
@@ -29,9 +35,24 @@ export function isImageProviderId(value: string): value is ImageProviderId {
   return IMAGE_PROVIDER_IDS.includes(value as ImageProviderId);
 }
 
+function getTrialCandidate(): ImageProviderId | null {
+  return getImageTrialCandidate(
+    process.env.IMAGE_PROVIDER_TRIAL_CANDIDATE,
+    process.env.IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED === "true"
+  );
+}
+
+function assertProviderAvailable(id: ImageProviderId): void {
+  if (!isImageProviderAvailable(id, getTrialCandidate())) {
+    throw new ImageProviderError(
+      "configuration",
+      `Image provider "${id}" is disabled. Configure an authorized IMAGE_PROVIDER_TRIAL_CANDIDATE to enable a trial, or use midjourney or mock.`
+    );
+  }
+}
+
 export function getDeploymentImageProviderId(): ImageProviderId {
   const configured = process.env.IMAGE_GENERATION_PROVIDER
-    || process.env.NEXT_PUBLIC_IMAGE_PROVIDER
     || "midjourney";
 
   if (!isImageProviderId(configured)) {
@@ -41,6 +62,7 @@ export function getDeploymentImageProviderId(): ImageProviderId {
     );
   }
 
+  assertProviderAvailable(configured);
   return configured;
 }
 
@@ -62,6 +84,7 @@ export function resolveImageProvider(
       );
     }
 
+    assertProviderAvailable(override);
     return {
       id: override,
       provider: PROVIDERS[override],
@@ -96,11 +119,19 @@ export function resolveImageGenerationSelection(
       );
     }
 
+    const candidate = getTrialCandidate();
+    if (!candidate) {
+      throw new ImageProviderError(
+        "configuration",
+        "Dual mode requires an available IMAGE_PROVIDER_TRIAL_CANDIDATE distinct from midjourney and mock."
+      );
+    }
+
     return {
       selection: "dual",
-      providers: ["black-forest-labs", "midjourney"].map((id) => ({
-        id: id as ImageProviderId,
-        provider: PROVIDERS[id as ImageProviderId],
+      providers: [candidate, "midjourney" as const].map((id) => ({
+        id,
+        provider: PROVIDERS[id],
         source: "test-override" as const,
       })),
     };

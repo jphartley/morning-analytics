@@ -54,7 +54,7 @@ User Input
 │ - Resolves one provider for the complete attempt        │
 │ - Mock: loads four local fixtures                       │
 │ - Midjourney: Discord flow + 2x2 grid splitting         │
-│ - BFL: four parallel jobs + polling + immediate download│
+│ - BFL: dormant adapter, loaded only for an active trial│
 │ - Uploads exactly 4 images to Supabase storage          │
 └──────────────────────────────────────────────────────────┘
     ↓
@@ -98,7 +98,7 @@ User Input
   - `parseResponse(response)`: Splits on `---IMAGE PROMPT---` delimiter.
 
 - **`lib/image-providers/registry.ts`**: Strictly resolves one provider per attempt.
-- **`lib/image-providers/black-forest-labs.ts`**: Submits four FLUX.2 jobs, polls their provider-owned URLs, downloads ready images immediately, and returns data URLs.
+- **`lib/image-providers/black-forest-labs.ts`**: Retained but disabled by default and loaded only when an authorized trial invokes it. See [Image provider trials](image-provider-trials.md) for adapter details.
 - **`lib/image-providers/midjourney.ts`**: Adapter around the existing Discord implementation.
 - **`lib/image-providers/mock.ts`**: Adapter around the local four-image fixtures.
 - **`lib/discord/trigger.ts`**: Sends `/imagine` via the legacy Midjourney path.
@@ -186,16 +186,20 @@ The current prompt instructs Gemini to adopt a **Jungian analyst** persona and p
 
 **Key ENV variables for flow:**
 - `GEMINI_API_KEY`: Enables real Gemini analysis
-- `IMAGE_GENERATION_PROVIDER`: Server-side deployment default: `mock`, `midjourney`, or `black-forest-labs`
-- `BLACK_FOREST_LABS_API_KEY`: Server-only BFL credential
-- `BLACK_FOREST_LABS_MODEL`: Pinned BFL model; defaults to `flux-2-pro`
+- `IMAGE_GENERATION_PROVIDER`: Only deployment-default setting; normally `midjourney`, or `mock` for local checks
 - `DISCORD_USER_TOKEN`, `DISCORD_BOT_TOKEN`: Enable Midjourney generation
 - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: Enable history storage
 - `USE_AI_MOCKS=true`: Bypasses Gemini + Discord, uses mock responses
 - `NEXT_PUBLIC_TEST_VIEW_ENABLED`: Optional build-time visibility for Test view; false hides Test diagnostics while memory continues in other views
-- `NEXT_PUBLIC_IMAGE_PROVIDER=mock`: Uses local images from `app/public/mock-images`
+- `IMAGE_GENERATION_PROVIDER=mock`: Uses local images from `app/public/mock-images`
 
-`NEXT_PUBLIC_IMAGE_PROVIDER` remains a compatibility fallback only. In Test view, a provider menu is visible only when `NEXT_PUBLIC_IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED=true`; the server independently requires `IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED=true` before accepting that override.
+Image trials are dormant unless `IMAGE_PROVIDER_TRIAL_CANDIDATE` names an
+available candidate and `IMAGE_PROVIDER_TEST_OVERRIDE_ENABLED=true`.
+`IMAGE_PROVIDER_DUAL_MODE_ENABLED` additionally authorizes comparison.
+Administrator Test/Debug visibility is derived from those server settings;
+there are no separate public provider flags. The legacy public default is no
+longer supported. See [Image provider trials](image-provider-trials.md).
+
 
 ---
 

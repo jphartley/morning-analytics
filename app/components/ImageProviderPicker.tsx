@@ -2,36 +2,38 @@
 
 import type { ImageProviderId } from "@/lib/image-providers/types";
 import type { ImageGenerationSelection } from "@/lib/image-generation-types";
+import { imageProviderLabel } from "@/lib/image-generation-types";
 
 interface ImageProviderPickerProps {
   value: ImageGenerationSelection;
   defaultProvider: ImageProviderId;
   dualModeEnabled: boolean;
+  trialCandidate: ImageProviderId;
   onChange: (provider: ImageGenerationSelection) => void;
 }
 
 const PROVIDER_OPTIONS: Array<{ id: ImageProviderId; label: string }> = [
   { id: "mock", label: "Mock" },
   { id: "midjourney", label: "Midjourney / Discord" },
-  { id: "black-forest-labs", label: "Black Forest Labs" },
 ];
 
-export function getImageProviderOptions(dualModeEnabled: boolean): Array<{
+export function getImageProviderOptions(dualModeEnabled: boolean, trialCandidate: ImageProviderId | null = null): Array<{
   id: ImageGenerationSelection;
   label: string;
 }> {
-  return dualModeEnabled
-    ? [...PROVIDER_OPTIONS, { id: "dual", label: "Dual mode" }]
-    : PROVIDER_OPTIONS;
+  if (!trialCandidate) return [];
+  const providers = [...PROVIDER_OPTIONS, { id: trialCandidate, label: imageProviderLabel(trialCandidate) }];
+  return dualModeEnabled ? [...providers, { id: "dual", label: "Dual mode" }] : providers;
 }
 
 export function ImageProviderPicker({
   value,
   defaultProvider,
   dualModeEnabled,
+  trialCandidate,
   onChange,
 }: ImageProviderPickerProps) {
-  const options = getImageProviderOptions(dualModeEnabled);
+  const options = getImageProviderOptions(dualModeEnabled, trialCandidate);
 
   return (
     <select

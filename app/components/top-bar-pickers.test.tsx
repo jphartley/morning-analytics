@@ -25,6 +25,7 @@ describe("controlled top bar pickers", () => {
   it("renders an available saved provider as the selected option", () => {
     const html = renderToStaticMarkup(
       <ImageProviderPicker
+        trialCandidate="black-forest-labs"
         value="dual"
         defaultProvider="midjourney"
         dualModeEnabled

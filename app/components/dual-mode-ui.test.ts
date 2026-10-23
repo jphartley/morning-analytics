@@ -30,8 +30,9 @@ function batch(
 
 describe("dual mode UI helpers", () => {
   it("shows Dual mode only when its client flag is enabled", () => {
-    expect(getImageProviderOptions(false).map((option) => option.id)).not.toContain("dual");
-    expect(getImageProviderOptions(true).at(-1)).toEqual({ id: "dual", label: "Dual mode" });
+    expect(getImageProviderOptions(true)).toEqual([]);
+    expect(getImageProviderOptions(false, "black-forest-labs").map((option) => option.id)).not.toContain("dual");
+    expect(getImageProviderOptions(true, "black-forest-labs").at(-1)).toEqual({ id: "dual", label: "Dual mode" });
   });
 
   it("reserves four slots for single mode and eight for Dual mode", () => {

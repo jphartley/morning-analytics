@@ -5,6 +5,7 @@ import {
 } from "@/lib/image-generation-types";
 import type { ImageProviderId } from "@/lib/image-providers/types";
 import type { RoleCapabilities } from "@/lib/role-capabilities";
+import { getImageTrialCandidate, isImageProviderAvailable } from "@/lib/image-providers/availability";
 
 export const ANALYST_PERSONAS = [
   {
@@ -102,9 +103,11 @@ export function setStoredModel(modelId: string): void {
 export function getStoredImageProvider(
   defaultProvider: ImageProviderId,
   providerOverrideEnabled: boolean,
-  dualModeEnabled: boolean
+  dualModeEnabled: boolean,
+  trialCandidate: ImageProviderId | null = null
 ): ImageGenerationSelection {
-  if (!providerOverrideEnabled) {
+  const candidate = getImageTrialCandidate(trialCandidate, providerOverrideEnabled);
+  if (!candidate) {
     return defaultProvider;
   }
 
@@ -113,7 +116,10 @@ export function getStoredImageProvider(
     return defaultProvider;
   }
 
-  return stored === "dual" && !dualModeEnabled ? defaultProvider : stored;
+  const available = stored === "dual"
+    ? dualModeEnabled
+    : isImageProviderAvailable(stored, candidate);
+  return available ? stored : defaultProvider;
 }
 
 export function setStoredImageProvider(provider: ImageGenerationSelection): void {
@@ -124,33 +130,8 @@ export function isViewDensityMode(value: string | null): value is ViewDensityMod
   return value === "quiet" || value === "insight" || value === "test";
 }
 
-export function getStoredViewDensityMode(testViewEnabled: boolean = true): ViewDensityMode {
-  const stored = readStoredValue(VIEW_DENSITY_STORAGE_KEY);
-  return isViewDensityMode(stored) && getAvailableViewDensityModes(testViewEnabled).includes(stored)
-    ? stored
-    : DEFAULT_VIEW_DENSITY_MODE;
-}
-
 export function setStoredViewDensityMode(mode: ViewDensityMode): void {
   writeStoredValue(VIEW_DENSITY_STORAGE_KEY, mode);
-}
-
-export function getStoredTopBarPresets(
-  defaultProvider: ImageProviderId,
-  providerOverrideEnabled: boolean,
-  dualModeEnabled: boolean,
-  testViewEnabled: boolean = true
-): TopBarPresets {
-  return {
-    analystPersona: getStoredAnalystPersona(),
-    modelId: getStoredModel(),
-    imageProvider: getStoredImageProvider(
-      defaultProvider,
-      providerOverrideEnabled,
-      dualModeEnabled
-    ),
-    viewDensityMode: getStoredViewDensityMode(testViewEnabled),
-  };
 }
 
 /**
@@ -162,7 +143,8 @@ export function getRoleAwareTopBarPresets(
   defaultProvider: ImageProviderId,
   providerOverrideEnabled: boolean,
   dualModeEnabled: boolean,
-  capabilities: RoleCapabilities
+  capabilities: RoleCapabilities,
+  trialCandidate: ImageProviderId | null = null
 ): TopBarPresets {
   const storedView = readStoredValue(VIEW_DENSITY_STORAGE_KEY);
   const viewDensityMode = isViewDensityMode(storedView)
@@ -174,7 +156,7 @@ export function getRoleAwareTopBarPresets(
     analystPersona: getStoredAnalystPersona(),
     modelId: capabilities.canSelectModel ? getStoredModel() : capabilities.modelId,
     imageProvider: capabilities.canUseProviderOverrides
-      ? getStoredImageProvider(defaultProvider, providerOverrideEnabled, dualModeEnabled)
+      ? getStoredImageProvider(defaultProvider, providerOverrideEnabled, dualModeEnabled, trialCandidate)
       : defaultProvider,
     viewDensityMode,
   };

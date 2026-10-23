@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { imageProviderLabel } from "@/lib/image-generation-types";
 import { ImageGenerationDiagnostics } from "@/lib/image-generation-diagnostics";
 
 interface ImageGenerationDiagnosticsDisclosureProps {
@@ -354,11 +355,7 @@ export function ImageGenerationDiagnosticsList({
       {diagnostics.map((attempt) => (
         <div key={attempt.attemptId} className="flex items-start gap-2">
           <span className="pt-1 text-xs font-medium text-ink-muted">
-            {attempt.provider === "black-forest-labs"
-              ? "Black Forest Labs"
-              : attempt.provider === "midjourney"
-                ? "Midjourney"
-                : "Mock"}
+            {imageProviderLabel(attempt.provider)}
           </span>
           <ImageGenerationDiagnosticsDisclosure
             diagnostics={attempt}

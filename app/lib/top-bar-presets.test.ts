@@ -10,9 +10,7 @@ import {
   getStoredAnalystPersona,
   getStoredImageProvider,
   getStoredModel,
-  getStoredTopBarPresets,
   getRoleAwareTopBarPresets,
-  getStoredViewDensityMode,
   getAvailableViewDensityModes,
   setStoredAnalystPersona,
   setStoredImageProvider,
@@ -48,8 +46,8 @@ describe("top bar preset storage", () => {
   it("uses safe defaults during SSR or when no preferences are saved", () => {
     expect(getStoredAnalystPersona()).toBe(DEFAULT_ANALYST_PERSONA);
     expect(getStoredModel()).toBe(DEFAULT_MODEL_ID);
-    expect(getStoredImageProvider("midjourney", true, true)).toBe("midjourney");
-    expect(getStoredViewDensityMode()).toBe(DEFAULT_VIEW_DENSITY_MODE);
+    expect(getStoredImageProvider("midjourney", true, true, "black-forest-labs")).toBe("midjourney");
+    expect(getRoleAwareTopBarPresets("midjourney", false, false, resolveRoleCapabilities("admin", true)).viewDensityMode).toBe(DEFAULT_VIEW_DENSITY_MODE);
   });
 
   it("stores and restores all four preferences independently", () => {
@@ -63,9 +61,9 @@ describe("top bar preset storage", () => {
 
     expect(getStoredAnalystPersona()).toBe("mel-robbins");
     expect(getStoredModel()).toBe("gemini-3.1-pro-preview");
-    expect(getStoredImageProvider("midjourney", true, true)).toBe("dual");
-    expect(getStoredViewDensityMode()).toBe("test");
-    expect(getStoredTopBarPresets("midjourney", true, true)).toEqual({
+    expect(getStoredImageProvider("midjourney", true, true, "black-forest-labs")).toBe("dual");
+    expect(getRoleAwareTopBarPresets("midjourney", false, false, resolveRoleCapabilities("admin", true)).viewDensityMode).toBe("test");
+    expect(getRoleAwareTopBarPresets("midjourney", true, true, resolveRoleCapabilities("admin", true), "black-forest-labs")).toEqual({
       analystPersona: "mel-robbins",
       modelId: "gemini-3.1-pro-preview",
       imageProvider: "dual",
@@ -84,7 +82,7 @@ describe("top bar preset storage", () => {
     expect(getStoredAnalystPersona()).toBe(DEFAULT_ANALYST_PERSONA);
     expect(getStoredModel()).toBe(DEFAULT_MODEL_ID);
     expect(getStoredImageProvider("black-forest-labs", true, true)).toBe("black-forest-labs");
-    expect(getStoredViewDensityMode()).toBe(DEFAULT_VIEW_DENSITY_MODE);
+    expect(getRoleAwareTopBarPresets("midjourney", false, false, resolveRoleCapabilities("admin", true)).viewDensityMode).toBe(DEFAULT_VIEW_DENSITY_MODE);
   });
 
   it("falls back from removed model IDs", () => {
@@ -119,8 +117,8 @@ describe("top bar preset storage", () => {
 
     expect(getStoredAnalystPersona()).toBe(DEFAULT_ANALYST_PERSONA);
     expect(getStoredModel()).toBe(DEFAULT_MODEL_ID);
-    expect(getStoredImageProvider("midjourney", true, true)).toBe("midjourney");
-    expect(getStoredViewDensityMode()).toBe(DEFAULT_VIEW_DENSITY_MODE);
+    expect(getStoredImageProvider("midjourney", true, true, "black-forest-labs")).toBe("midjourney");
+    expect(getRoleAwareTopBarPresets("midjourney", false, false, resolveRoleCapabilities("admin", true)).viewDensityMode).toBe(DEFAULT_VIEW_DENSITY_MODE);
     expect(() => setStoredAnalystPersona("loving-parent")).not.toThrow();
     expect(() => setStoredModel("gemini-3.6-flash")).not.toThrow();
     expect(() => setStoredImageProvider("mock")).not.toThrow();
@@ -133,14 +131,14 @@ describe("top bar preset storage", () => {
     }));
 
     expect(getAvailableViewDensityModes(false)).toEqual(["quiet", "insight"]);
-    expect(getStoredViewDensityMode(false)).toBe("insight");
-    expect(getStoredTopBarPresets("midjourney", true, true, false).viewDensityMode)
+    expect(getRoleAwareTopBarPresets("midjourney", false, false, resolveRoleCapabilities("admin", false)).viewDensityMode).toBe("insight");
+    expect(getRoleAwareTopBarPresets("midjourney", true, true, resolveRoleCapabilities("admin", false)).viewDensityMode)
       .toBe("insight");
   });
 
   it("keeps Test view available when enabled or omitted", () => {
     expect(getAvailableViewDensityModes(true)).toEqual(["quiet", "insight", "test"]);
-    expect(getStoredViewDensityMode()).toBe("insight");
+    expect(getRoleAwareTopBarPresets("midjourney", false, false, resolveRoleCapabilities("admin", true)).viewDensityMode).toBe("insight");
   });
 
   it("ignores stale experimental values for a normal user without deleting them", () => {
@@ -173,11 +171,28 @@ describe("top bar preset storage", () => {
       "midjourney",
       true,
       true,
-      resolveRoleCapabilities("admin", true)
+      resolveRoleCapabilities("admin", true),
+      "black-forest-labs"
     )).toMatchObject({
       modelId: "gemini-3.6-flash",
       imageProvider: "dual",
       viewDensityMode: "quiet",
     });
   });
+  it.each(["quiet", "insight", "test"])("ignores dormant BFL and Dual preferences in %s without deleting them", (view) => {
+    for (const selection of ["black-forest-labs", "dual"]) {
+      const localStorage = createLocalStorage({
+        [IMAGE_PROVIDER_STORAGE_KEY]: selection,
+        [VIEW_DENSITY_STORAGE_KEY]: view,
+      });
+      installLocalStorage(localStorage);
+      expect(getRoleAwareTopBarPresets(
+        "midjourney", true, true, resolveRoleCapabilities("admin", true)
+      )).toMatchObject({ imageProvider: "midjourney", viewDensityMode: view });
+      expect(localStorage.getItem(IMAGE_PROVIDER_STORAGE_KEY)).toBe(selection);
+      expect(getStoredImageProvider("midjourney", true, true, "black-forest-labs")).toBe(selection);
+      expect(getStoredImageProvider("midjourney", false, true, "black-forest-labs")).toBe("midjourney");
+    }
+  });
+
 });
