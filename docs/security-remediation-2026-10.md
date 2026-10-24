@@ -365,8 +365,8 @@ additional overrides. Do not pin a single Node patch without revisiting the
 operator's rolling-22 decision.
 
 Source: [Railway: disable build layer caching](https://docs.railway.com/builds/build-configuration#disable-build-layer-caching),
-checked 24 October 2026. The recommended variable addition, subsequent removal,
-and resulting deployments remain pending operator confirmation.
+checked 24 October 2026. The subsequent fresh-build result below confirms caching
+was disabled. Removal of the temporary setting and final verification remain open.
 
 ### Fresh-build result and Node release-age correction, 24 October 2026
 
@@ -419,6 +419,19 @@ absence of the app's EBADENGINE warning, and the Node executable used by the
 running Next.js server. After successful version and smoke verification, remove
 the temporary NO_CACHE setting, deploy its removal and verify that final state.
 
+The correction and evidence were published to origin main in commit `1ff2b1a`
+(`Allow immediate Node security updates in Railway builds`). Strict OpenSpec
+validation, TOML/runtime-declaration checks, staged secret scanning and the
+190-commit full-history secret scan passed. Publication does not establish the
+version running in the corrective production deployment.
+
+Durable operating guidance is in the
+[Node runtime runbook](node-runtime-runbook.md#railway-node-security-releases-and-mise)
+and [Railway deployment plan](railway-deployment-plan.md#october-2026-node-mismatch-verification-and-cleanup).
+They include the exact configuration, before/after reproduction, deployment
+checks and temporary NO_CACHE cleanup. Update those runbooks when changing the
+runtime policy or build tool, rather than relying on this chat.
+
 One initial shell-based app install/test command selected the machine's Node 26
 instead of the project runtime. Installation and the full test/lint/build checks
 were subsequently run using the explicit Node 22 executable and PATH. Only the
@@ -433,8 +446,9 @@ uses mock AI/image providers and a local in-memory service at 127.0.0.1:54329;
 it does not use real Supabase data or paid providers. For this fixture only, use
 the synthetic email smoke@example.test and the placeholder password
 local-fixture-only. It is not a real user account or credential. Fixture data is
-temporary and disappears when the fixture process stops. Real production
-sign-in, database/storage, Midjourney and deletion checks remain open.
+temporary and disappears when the fixture process stops. The operator's later
+production smoke confirmation is recorded above; corrective-deployment version
+verification remains open.
 
 The temporary fixture and browser scripts are under /tmp/morning-security-browser/;
 they are verification aids outside the repository, not product changes. Their

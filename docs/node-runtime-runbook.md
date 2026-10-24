@@ -135,16 +135,76 @@ Declarations and a successful local build alone do not establish the runtime of
 an existing production deployment. Use the same patched runtime for validation
 commands and repository-root admin scripts.
 
-Railpack 0.43.0 sets a 14-day Mise minimum release age. The committed
-app/mise.toml exempts only Node from that delay, allowing a new security release
-to be selected immediately while .nvmrc continues to select 22. Other tools keep
-the builder's release-age policy. This is a deployment configuration; nvm users
-continue to follow the local setup above.
+### Railway Node security releases and Mise
 
-The 24 October fresh-build log showed why actual-version checks matter: the
-summary said Node 22.23.4, but Mise installed 22.23.3 and npm emitted EBADENGINE.
-Inspect the installation output as well as node --version in the running service;
-an engine warning means the build does not meet the security minimum.
+On 24 October 2026, Railpack 0.43.0 reported Node 22.23.4 in its build summary,
+but actually installed and ran 22.23.3. The same failure occurred with build
+caching disabled. npm emitted EBADENGINE for the app's >=22.23.4 <23 constraint
+but continued the build; an engine declaration alone did not enforce the floor.
+
+Railpack generates a system Mise configuration with minimum_release_age = "14d".
+During installation, that policy excluded the newly released Node security patch
+from the rolling 22 selection. The correction is committed in
+[`app/mise.toml`](../app/mise.toml), inside Railway's app build root:
+
+```toml
+[settings]
+minimum_release_age_excludes = ["node"]
+```
+
+This makes fresh Node releases eligible immediately. Both .nvmrc files still
+select 22, and the app manifest/lockfile still declare >=22.23.4 <23. Other
+Mise-managed tools retain the builder's release-age delay. This deliberately
+trades Node's waiting period for timely security patches; it does not disable
+the delay globally or change the project's npm dependency lockfiles. Local nvm
+setup is unchanged.
+
+The correction was reproduced with Mise v2026.10.14 and isolated configuration:
+
+| Configuration | Global release age | Excluded tools | mise latest node@22 |
+| --- | --- | --- | --- |
+| Railpack defaults | 14d | None | 22.23.3 |
+| With app/mise.toml | 14d | node | 22.23.4 |
+
+### Verify the deployed Node executable
+
+In Railway, select production, open the morning-analytics service, then open the
+Active deployment and its Build Logs. Inspect the actual Mise installation
+version and npm engine warnings, as well as the summary. Then open a fresh
+service Console after the new deployment becomes Active and run:
+
+```sh
+node --version
+node -p 'process.env.RAILWAY_GIT_COMMIT_SHA || "Commit unavailable"'
+for p in /proc/[0-9]*; do
+  exe=$(readlink "$p/exe" 2>/dev/null) || continue
+  case "$exe" in
+    */node|*/nodejs)
+      printf '%s [%s]: ' "$p" "$(cat "$p/comm")"
+      "$p/exe" --version
+      ;;
+  esac
+done
+```
+
+These commands run inside the Railway Linux container and print only the commit,
+process names and versions. The Console Node and the npm/Next.js application
+processes must use stable 22.x at or above 22.23.4. A successful build, Active
+status or dashboard version label does not replace this check. Reconnect the
+Console after a deployment so the evidence comes from the new container.
+
+If the mismatch recurs, inspect just these non-secret Mise settings:
+
+```sh
+mise settings get minimum_release_age
+mise settings get minimum_release_age_excludes
+```
+
+For the observed builder, the expected values are 14d and a list containing node.
+Record the actual build and runtime evidence in
+[`the remediation tracker`](security-remediation-2026-10.md). Production
+verification of the corrective deployment remains open until those results are
+supplied; the local reproduction alone does not close it.
 
 References: [Railpack Mise configuration](https://railpack.com/config/mise) and
 [Mise Node-only release-age exclusion](https://mise.jdx.dev/configuration/settings.html#minimum_release_age_excludes).

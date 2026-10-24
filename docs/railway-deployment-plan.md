@@ -230,6 +230,41 @@ morning-analytics production service, review and deploy the staged removal, and
 verify the resulting deployment. No permanent new Railway variable is required
 for the Node release-age correction.
 
+### October 2026 Node mismatch: verification and cleanup
+
+The incident, fix and executable-check commands are documented in the
+[`Node runtime runbook`](node-runtime-runbook.md#railway-node-security-releases-and-mise).
+The observed cause was the builder's 14-day tool-release delay: a build summary
+selected 22.23.4 while Mise installed 22.23.3. Disabling caching did not fix it.
+Keep app/mise.toml's Node-only exclusion when updating the runtime policy; do not
+replace it with a global release-age override or a permanent single-patch pin.
+
+For each corrective deployment:
+
+1. Wait for the new deployment to become Active. Record its source commit and
+   actual Node installation output from Build Logs; app EBADENGINE warnings
+   mean the required runtime floor has not been met.
+2. Open a fresh Console and follow the runbook's checks for the actual npm and
+   Next.js process executables. Require Node 22.23.4 or later within 22.x.
+3. Record the installed package and image-library versions using:
+
+   ```sh
+   npm ls next react react-dom sharp undici --all
+   node -p 'JSON.stringify(require("sharp").versions, null, 2)'
+   ```
+
+4. Repeat the relevant production smoke checks and add the results to the
+   remediation tracker. Keep unresolved version checks open even if the app works.
+5. If the temporary NO_CACHE setting is present, remove it from this service's
+   production Variables, review and deploy the staged removal, reconnect the
+   Console, and verify the final deployment again. Normal cached builds should
+   retain the Node-only release-age correction through the committed file.
+
+Environment / Railway variables: the permanent fix adds no new variables.
+NO_CACHE was a temporary diagnostic addition; its removal is a separate staged
+production change requiring deployment. No credential changes or database
+migration are required by this correction.
+
 ## Fallback: railway.toml
 
 If the root directory setting doesn't work via the dashboard, add this file to the repo root:
