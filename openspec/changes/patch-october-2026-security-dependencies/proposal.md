@@ -18,6 +18,8 @@ according to the operator.
   narrowly scoped override only if necessary.
 - Strengthen the Node 22 runtime contract to require at least 22.23.4, align
   declarations and related metadata, and verify both build and running versions.
+  Configure a Node-only exception to Railpack's release-age delay so a fresh
+  security release is eligible while the runtime continues to select latest 22.x.
 - Verify all three dependency trees, registry safety, normal application flows,
   and deployed versions; record evidence in the October remediation tracker.
 - Recheck superseding advisories before selecting exact implementation versions.
@@ -38,7 +40,7 @@ None. This change adds no user-facing feature.
 ## Impact
 
 Expected implementation areas are app and validation manifests/lockfiles, root
-runtime declarations and lockfile metadata where needed, existing runtime
+runtime declarations and lockfile metadata where needed, app/mise.toml, existing runtime
 selection/verification helpers, and the Node/deployment documentation. No database
 migration or new environment variables are planned. Credential values must never
 enter the artifacts or diagnostics.

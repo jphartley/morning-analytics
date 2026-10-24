@@ -85,6 +85,16 @@ Update the Node runbook's major-only verification wording and document the actua
 Railway build/runtime check. Engine declarations and local success alone do not
 prove an existing production deployment has been rebuilt with the patched runtime.
 
+The production rebuild on 24 October identified Railpack 0.43.0. Its generated
+Mise settings impose a 14-day release-age delay: even with cache disabled, the
+builder planned 22.23.4 but installed 22.23.3. Add app/mise.toml with the
+Node-only minimum_release_age_excludes setting so newly released Node security
+fixes are eligible immediately. Retain the rolling 22 selectors and engine
+minimum. Other tools retain Railpack's release-age policy. This trades Node's
+release-age quarantine for timely security updates and must be verified against
+the actual build and application executables. No new Railway variable is needed
+for the correction; the diagnostic NO_CACHE setting can be removed after verification.
+
 ### 4. Verify the image stack on its deployment platform
 
 The app already has provider and orchestration tests. Run those as part of the

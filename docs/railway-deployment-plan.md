@@ -218,6 +218,18 @@ versions against the reviewed dependency graph. Keep local test success and
 production verification as separate entries in
 [`security-remediation-2026-10.md`](security-remediation-2026-10.md).
 
+Railpack's generated Mise configuration delays new tool releases for 14 days.
+The committed app/mise.toml excludes only Node from that delay so urgent security
+patches can be adopted while retaining latest 22.x selection. Other tools retain
+the builder's policy. Verify the actual Node installation output and running
+executable: a package-summary label can disagree with the installed version.
+
+If NO_CACHE=1 was added for the October diagnostic rebuild, it is temporary.
+After the corrected deployment's versions are verified, remove NO_CACHE from the
+morning-analytics production service, review and deploy the staged removal, and
+verify the resulting deployment. No permanent new Railway variable is required
+for the Node release-age correction.
+
 ## Fallback: railway.toml
 
 If the root directory setting doesn't work via the dashboard, add this file to the repo root:

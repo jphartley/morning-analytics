@@ -1,6 +1,6 @@
 # October 2026 security remediation
 
-Last updated: 23 October 2026 (Europe/Amsterdam).
+Last updated: 24 October 2026 (Europe/Amsterdam).
 
 This is the working checklist for the security review started on 23 October.
 Keep completed incident response separate from dependency patching and application
@@ -12,14 +12,15 @@ values, access tokens, raw environment exports, or unredacted logs in this file.
 | Work | Status | Evidence |
 | --- | --- | --- |
 | Railway credential response | Complete, confirmed by the operator | In this chat on 23 October, the operator confirmed revocation in Google, Discord and Supabase, replacement values in Railway, redeployment, and review of Railway, Google and Supabase logs with nothing suspicious found. |
-| Dependency remediation | Published to main; Railway deployment pending; operator local smoke test passed | Patch commit a7c8099. [OpenSpec change](../openspec/changes/patch-october-2026-security-dependencies/proposal.md). 14 of 17 tasks complete; the 3 production release/verification tasks remain open. |
+| Dependency remediation | Deployed and production smoke test passed; application Node runtime below security minimum | Both npm and Next.js server executables report Node 22.23.3, below the 22.23.4 minimum, despite the dashboard label Node 22.23.4. Installed targeted dependencies match the patch. [OpenSpec change](../openspec/changes/patch-october-2026-security-dependencies/proposal.md): 16 of 17 tasks complete; task 5.2 remains open. |
 | Server-side authorization | Open; urgent | Code inspection found browser-supplied identity used with service-role database access. No production exploit was attempted. |
 | Editor and development tools | Open | Affected Markdown-it, Tiptap, Vite and Vitest dependency versions remain locked. |
 | Automated lockfile assessment | Completed through local registry mirror; findings remain open | All three lockfiles assessed on 23 October, including development dependencies. App: 14 High / 4 Moderate dependency-package findings; root and validation: 1 High each. These are not independent CVE counts. See triage below. |
 
 No evidence of misuse was reported in the reviewed logs. That does not prove that
-no misuse occurred. Production package versions and the database patch level were
-not independently inspected in this review. The operator's confirmation above
+no misuse occurred. Production dependency versions are recorded from the operator's
+console output below; the application process is confirmed below the Node
+security minimum and the database patch level remains unverified. The operator's confirmation above
 supersedes the earlier, provisional incident status in the chat.
 
 ## 1. Completed Railway response
@@ -124,10 +125,10 @@ Additional triage:
 - [x] Align Node declarations and establish a patched Node 22 floor; check app and root declarations as well as lockfile metadata.
 - [x] Inspect all three lockfiles and keep npm registry URLs public.
 - [x] Run app tests, lint, lockfile registry check and a production build; record results and build-mode limitations below.
-- [ ] Verify image decoding with the deployment's Linux/native dependency build, not only macOS.
-- [ ] Smoke-test sign-in, analysis rendering, image generation, history save/load and deletion.
+- [x] Verify image decoding with the deployment's Linux/native dependency build, not only macOS; operator-confirmed real-image smoke test and production Sharp/native-library output recorded below.
+- [x] Smoke-test sign-in, analysis rendering, image generation, history save/load and deletion; operator confirmed the requested production checklist works on 23 October.
 - [ ] Deploy and record the active production commit, Node version and resolved dependency versions.
-- [ ] Repeat the relevant production smoke checks and record outcomes.
+- [x] Repeat the relevant production smoke checks and record outcomes; operator confirmation recorded below.
 
 Do not use npm audit fix --force. A Node update patches its bundled Undici,
 while npm-installed Undici copies need their own dependency update.
@@ -185,6 +186,14 @@ dormancy guidance; their current presence was not verified here.
 
 Dependency patch outcome: no environment or Railway variables were added, changed
 or removed. No database migration is required.
+Operational follow-up on 24 October: recommend temporarily adding `NO_CACHE=1`
+to the Railway morning-analytics service in production to test a fresh build
+after the confirmed Node version mismatch. This is a new, non-secret build
+setting. The supplied 24 October rebuild explicitly confirms caching was disabled
+but still installed Node 22.23.3. Keep the temporary setting for the corrective
+configuration build, then remove it after successful verification, deploy that
+removal, and verify the final deployment too. The committed app/mise.toml fix
+requires no permanent new Railway variables or credential changes.
 If implementation reveals a necessary variable change, record the name and
 whether it is new, changed or removed. Apply it in the morning-analytics service's
 production environment, review staged changes and deploy/redeploy. NEXT_PUBLIC_*
@@ -242,12 +251,12 @@ for each implementation change.
 | Native image regression | A downloaded synthetic grid decodes into four correctly ordered 64x64 JPEG quadrants with the expected pixel colours |
 | Lint | Passed under Node 22 after a small asynchronous-effect compatibility correction for the newer React lint rule |
 | Production webpack build | Passed under Node 22.23.4, including TypeScript, prerendering and build tracing; command: npm run build -- --webpack |
-| Default Turbopack production build | Not verified: first font requests failed; network-enabled retry reached an internal process/port-binding EPERM restriction in this environment. Default build/deployment remains a production verification item. |
+| Default Turbopack production build | Local attempts were blocked by font access and then an internal process/port-binding EPERM restriction. The supplied Railway build log confirms Turbopack compilation, TypeScript and prerendering succeeded, but under Node 22.23.3. Repeat the deployment using a runtime meeting the security minimum. |
 | Lockfile registry check | Passed; all three lockfiles use public npm URLs. Root lockfile changed only to normalize pre-existing private registry URLs; its dependency graph is unchanged. |
 | Secret scanning | Redacted Gitleaks scans passed for the tracked diff, each named new file/change-artifact directory, full existing history (187 commits), and the exact staged patch. The configured pre-commit hook repeats the staged scan when committing. |
 | Local Sharp native libraries | libvips 8.18.7, librsvg 2.63.2, libheif 1.23.5 on macOS |
-| Linux native image verification | Pending: no local Docker/Linux runtime available. macOS success is not evidence for Linux. Confirm native versions and image processing on the Railway build/runtime. |
-| Production deployment and smoke checks | Pending; the earlier credential redeploy does not deploy this new local patch |
+| Linux native image verification | Operator confirmed real-image smoke test passed and supplied production console output: Sharp 0.35.5, libvips 8.18.7, librsvg 2.63.2 and libheif 1.23.5. |
+| Production deployment and smoke checks | Operator confirmed deployment and the production smoke checklist passed on 23 October. Console commit and dependency/native versions are recorded below; Node version discrepancy remains unresolved. |
 
 ### Release record, 23 October 2026
 
@@ -258,13 +267,157 @@ for each implementation change.
 - The pre-commit secret scan passed for the final staged patch. A further
   redacted full-history scan passed for 188 commits before the push.
 - GitHub reported the Railway status `compassionate-analytics - morning-analytics`
-  as pending for that commit. Deployment success, active production commit and
-  installed runtime/package/native-library versions remain unverified.
+  as pending for that commit at publication. The operator subsequently confirmed
+  on 23 October: "It is deployed now. I will test it". Deployment is recorded as
+  operator-confirmed; the active production commit and installed
+  runtime/package/native-library versions have not been independently verified.
+- Operator screenshot on 23 October shows the service deployment as Active and
+  successful, with the title `Record security patch publication and local review`
+  and Railway's `node@22.23.4` label. That title matches repository commit
+  `b1439b9`, which includes patch `a7c8099`; the screenshot does not display its
+  SHA. Record the running process's Node version and installed dependency/native
+  versions separately before completing task 5.2.
 - Environment / Railway variables: none new, changed or removed.
-- Next operator checks: confirm the Railway production deployment containing
-  `a7c8099` is Active, record its build/runtime versions, then verify production
-  sign-in, analysis, real Midjourney images, save/load and deletion. Keep tasks
-  5.1–5.3 open until their respective deployment and verification evidence exists.
+- Production smoke confirmation: after receiving the checklist for sign-in,
+  analysis, real image generation, history save/load and deletion, the operator
+  responded "It works" on 23 October. This records the operator's overall pass;
+  no independent browser inspection or per-step logs were supplied.
+- Tasks 5.1 and 5.3 are complete. Keep task 5.2 open until the active production
+  commit, build/runtime Node versions, framework/React, Sharp/native-library and
+  installed Undici versions are recorded. The separate authorization and
+  remaining dependency findings stay open.
+
+### Production console evidence, 23 October 2026
+
+The operator supplied the output of the requested read-only commands from the
+Railway service Console at `/app`. These are reported service observations;
+no credentials or complete environment dumps were requested.
+
+| Check | Reported value | Assessment |
+| --- | --- | --- |
+| RAILWAY_GIT_COMMIT_SHA | b1439b91e0a08b50769c8d642117a94973c7800b | Matches the published documentation commit, which includes patch a7c8099 |
+| Console node --version | v22.23.3 | Below the required 22.23.4 minimum; conflicts with dashboard label node@22.23.4 |
+| Running npm / Next.js executables | /proc/1 (npm run start): v22.23.3; /proc/25 (next-server): v22.23.3 | Operator ran the /proc executable check; the application itself is below the required minimum, not merely the Console shell |
+| Next.js | 16.4.1 | Matches selected patch |
+| React / React DOM | 19.2.9 / 19.2.9 | Matches selected pair; all displayed uses deduplicated |
+| Sharp | 0.35.5 | Direct and Next.js dependencies deduplicated |
+| Discord.js / Discord REST / Undici | 14.27.0 / 2.6.3 / 6.29.1 | Matches selected patched graph; displayed Undici copies deduplicated |
+| Native image libraries | libvips 8.18.7; librsvg 2.63.2; libheif 1.23.5 | Native versions observed in the production container; real-image smoke test previously passed |
+
+Do not close task 5.2. The running application is confirmed on Node 22.23.3.
+Inspect the Active deployment's build logs for its builder/version, Node
+resolution and installation steps, and cache reuse before selecting the fix.
+The historical February deployment used Railpack, but that does not establish
+the current builder configuration. Railpack supports a Node version override;
+Nixpacks only selects a major version. Do not prescribe an override for an
+unconfirmed builder or assume that the dashboard label proves the executable's
+version. Correct the build/runtime selection, rebuild/redeploy and repeat the
+process-executable verification before closing this item. No Railway variable
+changes have been made or prescribed during this diagnostic step.
+
+Reference: [Railpack Node version selection](https://railpack.com/languages/node)
+and [Nixpacks Node version limitations](https://nixpacks.com/docs/providers/node),
+checked 23 October 2026.
+
+### Runtime log supplied on 24 October 2026
+
+The operator supplied a 179-line runtime log covering 23 October, 10:15–23:51
+UTC. It starts with `Starting Container`, runs `next start`, reports Next.js
+16.4.1 ready, and records a real Discord image-generation success. It contains
+no Railpack/Nixpacks identification, Node installation/version output or build
+cache information, so it cannot resolve the Node 22.23.3 versus dashboard
+22.23.4 discrepancy. Request the Active deployment's separate Build Logs tab;
+task 5.2 remains open.
+
+The excerpt also contains 54 occurrences of the error stating that the Server
+Reference ID did not match the expected format: x (18), 0 (12), 1 (12), and action
+(12). These are malformed-reference errors; the excerpt lacks the request data
+needed to attribute them or establish successful exploitation. Do not treat this
+excerpt as evidence of a clean security review or as proof of compromise. No
+credential rotation or environment change was prescribed from these errors.
+
+### Build log supplied on 24 October 2026
+
+The operator supplied the 203-line build log for 23 October, 10:13–10:15 UTC.
+It confirms Railway builder v4 and Railpack 0.43.0, using the builder/runtime
+images tagged `mise-2026.10.14`. The package summary resolves Node to 22.23.4
+with source `idiomatic-version-file (22.23.4)`, but npm installation reports:
+
+```text
+required: { node: '>=22.23.4 <23' }
+current: { node: 'v22.23.3', npm: '10.9.9' }
+```
+
+The build proceeds after this EBADENGINE warning, completes `next build`, and
+exports an image. Thus both the dependency-install build process and deployed
+application used Node 22.23.3; the dashboard/planned version was not the actual
+executable version. This closes the missing build-log evidence, but fails the
+required runtime floor, so task 5.2 remains incomplete.
+
+There are no explicit `CACHED` markers in the supplied text. Reused build layers
+or a version-selection defect are hypotheses, not established causes. The next
+step is a fresh build with the documented temporary `NO_CACHE=1` setting,
+retaining the rolling Node 22 selectors and existing >=22.23.4 <23 engine floor.
+After it becomes Active, reconnect the Console and verify Node and the npm/Next
+process executables again. If the build/runtime still selects an older release,
+inspect the actual Mise/executable paths and configuration before prescribing
+additional overrides. Do not pin a single Node patch without revisiting the
+operator's rolling-22 decision.
+
+Source: [Railway: disable build layer caching](https://docs.railway.com/builds/build-configuration#disable-build-layer-caching),
+checked 24 October 2026. The recommended variable addition, subsequent removal,
+and resulting deployments remain pending operator confirmation.
+
+### Fresh-build result and Node release-age correction, 24 October 2026
+
+The next supplied log contains 288 lines and covers the fresh build from
+08:07–08:09 UTC on 24 October. It explicitly reports `Caching Disabled`, retains
+Railpack 0.43.0, and still plans Node 22.23.4. The actual installation now shows:
+
+```text
+mise node@22.23.3 v22.23.3
+mise node@22.23.3 10.9.9
+mise ... node@22.23.3 ... node-v22.23.3-linux-x64.tar.gz
+npm warn EBADENGINE ... required: { node: '>=22.23.4 <23' }
+npm warn EBADENGINE ... current: { node: 'v22.23.3', npm: '10.9.9' }
+```
+
+The fresh build completes and pushes an image, but fails the Node security
+minimum. Disabling build-layer caching did not resolve the issue.
+
+Railpack 0.43.0's source sets Mise's minimum_release_age to 14d during tool
+installation. That cutoff excludes the 21 October Node security release from
+the rolling 22 selector. The app/mise.toml correction adds only:
+
+```toml
+[settings]
+minimum_release_age_excludes = ["node"]
+```
+
+This permits immediate Node security updates, retains both .nvmrc selectors at
+22 and the engine minimum >=22.23.4 <23, and retains the release-age delay for
+other tools. It intentionally gives up Node's 14-day quarantine to satisfy the
+operator's latest-22 security policy. It adds no package dependencies or secrets.
+
+Verification used the official Mise v2026.10.14 macOS arm64 release in an
+isolated /tmp fixture with the same system settings and .nvmrc selector. Without
+the app configuration, minimum_release_age was 14d, exclusions were empty, and
+mise latest node@22 resolved 22.23.3. With the committed configuration, the
+global setting remained 14d, exclusions were exactly ["node"], and the same
+command resolved 22.23.4. TOML parsing passed. This reproduces the version-choice
+failure and verifies the policy correction locally; the corrective Linux build
+and application-process version remain pending. Task 5.2 stays open.
+
+Sources checked on 24 October:
+
+- [Railpack 0.43.0 implementation](https://github.com/railwayapp/railpack/blob/v0.43.0/core/generate/mise_step_builder.go): generated 14d policy and project-config copying.
+- [Railpack Mise configuration](https://railpack.com/config/mise): project overrides and default release-age policy.
+- [Mise 2026.10.14 setting definition](https://github.com/jdx/mise/blob/v2026.10.14/settings.toml): Node-specific exclusion support in the deployed tool version.
+
+The next production evidence must include the actual Node installation version,
+absence of the app's EBADENGINE warning, and the Node executable used by the
+running Next.js server. After successful version and smoke verification, remove
+the temporary NO_CACHE setting, deploy its removal and verify that final state.
 
 One initial shell-based app install/test command selected the machine's Node 26
 instead of the project runtime. Installation and the full test/lint/build checks

@@ -26,6 +26,6 @@
 
 ## 5. Verify production and close the scoped patch
 
-- [ ] 5.1 After release review, follow the gitleaks and delivery runbooks for any commit/push and deployment; verify the published change contains only scoped artifacts and changes, and record Environment / Railway variables as none new, changed or removed unless implementation establishes otherwise.
+- [x] 5.1 After release review, follow the gitleaks and delivery runbooks for any commit/push and deployment; verify the published change contains only scoped artifacts and changes, and record Environment / Railway variables as none new, changed or removed unless implementation establishes otherwise.
 - [ ] 5.2 Record the active production commit, build/runtime Node versions, framework/React versions, Sharp/native libraries and installed Undici versions; verify the targeted fixes are running rather than merely present in local manifests.
-- [ ] 5.3 Have the operator verify production sign-in, analysis, Midjourney images, save/load and deletion; record outcomes and mark only completed remediation items in the tracker, preserving unresolved scan or separate-change work.
+- [x] 5.3 Have the operator verify production sign-in, analysis, Midjourney images, save/load and deletion; record outcomes and mark only completed remediation items in the tracker, preserving unresolved scan or separate-change work.

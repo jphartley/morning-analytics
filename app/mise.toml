@@ -1,0 +1,4 @@
+[settings]
+# Railpack delays new tool releases for 14 days. Adopt Node security fixes
+# immediately while .nvmrc selects 22 and package.json defines the minimum.
+minimum_release_age_excludes = ["node"]

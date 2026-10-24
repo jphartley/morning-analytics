@@ -134,3 +134,17 @@ after redeployment. Both must be stable 22.x releases at or above 22.23.4.
 Declarations and a successful local build alone do not establish the runtime of
 an existing production deployment. Use the same patched runtime for validation
 commands and repository-root admin scripts.
+
+Railpack 0.43.0 sets a 14-day Mise minimum release age. The committed
+app/mise.toml exempts only Node from that delay, allowing a new security release
+to be selected immediately while .nvmrc continues to select 22. Other tools keep
+the builder's release-age policy. This is a deployment configuration; nvm users
+continue to follow the local setup above.
+
+The 24 October fresh-build log showed why actual-version checks matter: the
+summary said Node 22.23.4, but Mise installed 22.23.3 and npm emitted EBADENGINE.
+Inspect the installation output as well as node --version in the running service;
+an engine warning means the build does not meet the security minimum.
+
+References: [Railpack Mise configuration](https://railpack.com/config/mise) and
+[Mise Node-only release-age exclusion](https://mise.jdx.dev/configuration/settings.html#minimum_release_age_excludes).

@@ -12,10 +12,21 @@ constraint SHALL provide the explicit security minimum.
 - **THEN** the tool SHALL select the installed Node 22 release line or prompt for its installation
 - **AND** repository runtime readiness SHALL reject a selected release below 22.23.4, with guidance to install the latest available 22.x release
 
-#### Scenario: Nixpacks reads .nvmrc
-- **WHEN** Railway deploys the app using Nixpacks
-- **THEN** Nixpacks SHALL use a Node 22 release at or above 22.23.4 for both build and runtime
+#### Scenario: Railway deploys with Railpack
+- **WHEN** Railway deploys the app using Railpack
+- **THEN** Railpack SHALL use a Node 22 release at or above 22.23.4 for both build and runtime
 - **AND** the production verification record SHALL identify the actual build and running Node versions
+
+#### Scenario: Nixpacks reads .nvmrc
+- **WHEN** a legacy Railway deployment uses Nixpacks and reads .nvmrc
+- **THEN** it SHALL select Node 22
+- **AND** the deployment SHALL only be accepted after the actual build and runtime versions are verified at or above 22.23.4
+
+#### Scenario: A Node security release is newer than Railpack's release-age cutoff
+- **WHEN** a patched Node 22 release is available but is less than 14 days old
+- **THEN** app/mise.toml SHALL exempt only Node from Mise's minimum release age
+- **AND** fresh builds SHALL be able to select that release without pinning a single Node patch
+- **AND** the release-age policy for other tools SHALL remain in effect
 
 ### Requirement: Package-level engine constraint
 
@@ -28,7 +39,7 @@ package metadata SHALL contain the same engine constraint.
 - **THEN** npm SHALL display a warning about the engine mismatch
 
 #### Scenario: Railway reads engines field
-- **WHEN** Railway's Nixpacks detects the `engines.node` field
+- **WHEN** Railway's Railpack detects the `engines.node` field
 - **THEN** it SHALL select a Node 22 release at or above 22.23.4 for the deployment environment
 
 #### Scenario: Patched engine metadata is aligned
