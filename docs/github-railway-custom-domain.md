@@ -26,7 +26,7 @@ A push to `main` on GitHub is the production deploy. Railway builds that commit 
 | Directory Railway builds | `app/`, set as the service Root Directory. Docs and other repo folders are not the Next.js app |
 | Builder | Railway Railpack. It installs from the lockfile in that root, runs `npm run build`, then `npm start` |
 | Scripts | `app/package.json`: `"build": "next build"`, `"start": "next start"` |
-| Node.js | 22, pinned in `app/.nvmrc` (`22`), `app/package.json` (`"node": "22.x"`), and the lockfile root `engines.node` (`22.x`) |
+| Node.js | Latest stable 22.x, minimum 22.23.4; root/app `.nvmrc` select `22`, while app manifest and lockfile root engines declare `>=22.23.4 <23`. `app/mise.toml` exempts only Node from Railpack's release-age delay. |
 | Public URL | `https://morning-analytics.ink` |
 | Registrar | Namecheap. Railway issues the HTTPS certificate |
 
@@ -108,6 +108,15 @@ Keep the Node.js pin aligned in the app root:
 - `.nvmrc`
 - `package.json` `engines.node`
 - lockfile root `engines.node`
+
+For Morning Analytics, the selector is `22` and the engine minimum is
+`>=22.23.4 <23`. Preserve app/mise.toml's Node-only release-age exception:
+Railpack's 14-day delay previously installed 22.23.3 despite a 22.23.4 summary.
+Disabling caching did not fix that mismatch. Follow the
+[Node runtime runbook](node-runtime-runbook.md) for the correction, actual-process
+verification and the Console fallback when node is not on PATH. Other projects
+must choose their own supported runtime/security floor rather than copy this
+dated minimum without review.
 
 Before committing a lockfile, confirm every `resolved` URL uses `https://registry.npmjs.org/`. In this repository the checks are `cd app && npm run check:lockfile-registry` and, when that fails, `npm run fix:lockfile-registry`. Another repository needs the same outcome even if it does not have those scripts. Morning Analytics hit a production build failure because `app/package-lock.json` had been rewritten to a private registry host (`jfrog.booking.com`). Railway could not authenticate there, `npm ci` failed, and the visible npm error (`Exit handler never called`) hid that cause. Details are in [`research/railway-npm-ci-failure.md`](research/railway-npm-ci-failure.md).
 

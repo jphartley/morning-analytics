@@ -6,6 +6,13 @@
 **Affected service**: Morning Analytics (`/app` directory deployed to Railway)  
 **Builder**: Railpack v0.17.2
 
+**Historical snapshot:** Versions and runtime declarations below describe the
+February incident. The current runtime policy is latest stable Node 22.x with
+minimum 22.23.4 and a Node-only Mise release-age exception. See the
+[Node runtime runbook](../node-runtime-runbook.md) and
+[October remediation record](../security-remediation-2026-10.md) for current
+configuration and verified production evidence.
+
 ---
 
 ## Incident Summary

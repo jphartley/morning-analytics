@@ -1,5 +1,12 @@
 # App / Repo Hygiene For Queue Readiness
 
+**Runtime update, 24 October 2026:** The Node observations below are historical
+queue-run evidence. The current policy is latest stable 22.x, minimum 22.23.4;
+the runtime helper now checks the minimum and selected child-process version.
+Railway's Node-only release-age fix and actual-process checks are documented in
+the [Node runtime runbook](node-runtime-runbook.md). This update does not mark
+the other queue recommendations complete or opt into the queue workflow.
+
 ## Background
 
 This document is the app/repo hygiene follow-up from the `add-welcome-empty-state` queue validation run. It supersedes the earlier first-run hygiene brief by removing items that did not recur and focusing on items that were either still rough or were supposed to be fixed by prior readiness work but did not hold during the latest workflow.

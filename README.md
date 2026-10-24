@@ -23,8 +23,10 @@ Repository control smoke test: this line verifies a small change can be committe
 
 ## Requirements
 
-- Node.js 22.x. The app runtime pin is declared in `app/.nvmrc`,
-  `app/package.json`, and `app/package-lock.json`.
+- Latest stable Node.js 22.x, with minimum 22.23.4. Root/app `.nvmrc` files
+  select `22`; the app manifest and lockfile declare `>=22.23.4 <23`.
+  Follow the [Node runtime runbook](docs/node-runtime-runbook.md) for setup and
+  Railway's Node-only release-age exception in `app/mise.toml`.
 - npm (or your preferred package manager).
 - Gemini, Discord, and Supabase credentials for real integrations.
 
@@ -130,8 +132,9 @@ npm run build
 npm run check:lockfile-registry
 ```
 
-Use the Node 22.x runtime declared in `app/.nvmrc`, `app/package.json`, and
-`app/package-lock.json`. If a change modifies `app/package-lock.json`, run
+Use stable Node 22.x at or above 22.23.4, following the runtime declarations in
+the root/app `.nvmrc` files, app manifest and lockfile. If a change modifies
+`app/package-lock.json`, run
 `npm run check:lockfile-registry` before committing; if it fails, run
 `npm run fix:lockfile-registry` and re-check.
 
@@ -178,7 +181,9 @@ after explicit approval or in a dedicated hygiene change.
 
 - `docs/current-architecture.md`: data flow, system architecture, and code organization.
 - `docs/supabase-cli-runbook.md`: safe production migration preview, push, and VPN/pooler troubleshooting.
-- `docs/node-runtime-runbook.md`: new-Mac Node 22 setup, project verification, and local environment troubleshooting.
+- [Node runtime runbook](docs/node-runtime-runbook.md): patched Node 22 setup, Railway release-age policy, and actual-process checks, including the Console PATH fallback.
+- [Railway deployment plan](docs/railway-deployment-plan.md): production deployment and environment-change verification.
+- [October security remediation](docs/security-remediation-2026-10.md): completed dependency patch, production evidence and remaining security work.
 - `docs/gitleaks-runbook.md`: local secret-scanner setup, pre-commit protection, and release scanning.
 - `docs/prd.md`: product requirements and MVP scope.
 - `docs/prompt.md`: Gemini prompt and analysis structure.

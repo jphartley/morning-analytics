@@ -11,7 +11,7 @@ Primary code is in `app/` (Next.js App Router + TypeScript):
 Specs and change artifacts are in `openspec/` (`specs/`, `changes/`, `changes/archive/`). Research/product docs are in `docs/`. Integration checks are in `validation/`. Admin scripts are in `scripts/`.
 
 ## Build, Test, and Development Commands
-From `app/` (Node 22.x; see `.nvmrc`):
+From `app/` (latest stable Node 22.x, minimum 22.23.4; see `.nvmrc`):
 - `npm install`
 - `npm run dev` (localhost:3000)
 - `npm run build`
@@ -51,9 +51,16 @@ Local development may require a private npm registry (for example via `~/.npmrc`
   - Run `cd app && npm run check:lockfile-registry`
   - If it fails, run `cd app && npm run fix:lockfile-registry` and re-check
 - Keep app runtime pins aligned in these files:
+  - `.nvmrc` (root selector `22`)
   - `app/.nvmrc`
   - `app/package.json` (`engines.node`)
   - `app/package-lock.json` (root `packages[""].engines.node`)
+- Both selectors remain `22`; app engines must remain `>=22.23.4 <23` unless
+  the supported policy is explicitly revised. Preserve `app/mise.toml`'s
+  Node-only release-age exception: Railpack's default 14-day delay previously
+  selected an older Node patch despite a newer build-summary label. Verify the
+  actual npm/Next.js executable versions using the Node runbook. If node is
+  missing from the interactive Console PATH, use its verified-executable fallback.
 
 ### Railway Environment Variable Sync
 Railway does not read local `.env` files. Whenever an environment variable is added, removed, renamed, or its required value changes in `.env.example`, local `.env*` files, application code, or deployment configuration:

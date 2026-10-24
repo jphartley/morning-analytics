@@ -188,10 +188,37 @@ done
 ```
 
 These commands run inside the Railway Linux container and print only the commit,
-process names and versions. The Console Node and the npm/Next.js application
-processes must use stable 22.x at or above 22.23.4. A successful build, Active
+process names and versions. The npm/Next.js application processes and any Node
+selected by the Console must use stable 22.x at or above 22.23.4. A successful
+build, Active
 status or dashboard version label does not replace this check. Reconnect the
 Console after a deployment so the evidence comes from the new container.
+
+If the Console reports `node: command not found`, it may lack the service's Mise
+directories on PATH. On 24 October, node was unavailable by name in a fresh
+Console, but /proc/1/exe --version returned v22.23.4. This proves PID 1's Node
+version; it does not prove the Next.js child's version or identify the source
+commit. The process loop above does not depend on node being on PATH.
+
+Once /proc/1/exe --version has confirmed that PID 1 is Node, use that executable
+directly for the remaining read-only Node commands:
+
+```sh
+/proc/1/exe -p 'process.env.RAILWAY_GIT_COMMIT_SHA || "Commit unavailable"'
+/proc/1/exe -p 'JSON.stringify(require("sharp").versions, null, 2)'
+```
+
+Do not change Railway's PATH variable solely to repair the interactive Console.
+For a command such as npm that also needs Node on PATH, use the verified Node
+directory for that command only:
+
+```sh
+PATH="$(dirname "$(readlink -f /proc/1/exe)"):$PATH" npm ls next react react-dom sharp undici --all
+```
+
+This command-specific PATH does not change Railway Variables or the running
+application's environment. If PID 1 is not Node in a future deployment, use the
+verified Node executable found by the process loop instead of assuming PID 1.
 
 If the mismatch recurs, inspect just these non-secret Mise settings:
 
@@ -202,9 +229,12 @@ mise settings get minimum_release_age_excludes
 
 For the observed builder, the expected values are 14d and a list containing node.
 Record the actual build and runtime evidence in
-[`the remediation tracker`](security-remediation-2026-10.md). Production
-verification of the corrective deployment remains open until those results are
-supplied; the local reproduction alone does not close it.
+[`the remediation tracker`](security-remediation-2026-10.md). For the October
+correction, the operator verified commit
+1ad2218064f5f06168eebce3a9cb60166b8396e4, PID 1 and Next.js at 22.23.4, then
+confirmed removal of the temporary NO_CACHE variable and continued 22.23.4
+operation. Future deployments still require their own executable checks; local
+reproduction and a historical pass do not establish a later container's version.
 
 References: [Railpack Mise configuration](https://railpack.com/config/mise) and
 [Mise Node-only release-age exclusion](https://mise.jdx.dev/configuration/settings.html#minimum_release_age_excludes).

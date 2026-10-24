@@ -5,9 +5,10 @@ The runtime contract is defined in specs/node-version-pinning/spec.md.
 
 Railway builds from app/, using its committed lockfile and runtime declarations.
 The root scripts and validation directory have independent dependency trees.
-Local Node is already 22.23.4, but both .nvmrc files contain only 22 and the app
-engine constraint is 22.x. The existing queue runtime helper extracts only the
-major from app/.nvmrc and considers any matching Node 22 runtime ready.
+At the pre-patch inventory on 23 October, local Node was already 22.23.4, both
+.nvmrc files selected 22, and the app engine constraint was still 22.x. The queue
+runtime helper then checked only the major. The implemented contract below
+adds the explicit security minimum while retaining the rolling selector.
 
 The app calls fetch() directly and also consumes Discord REST's separate pinned
 Undici dependency. Updating Node's bundled HTTP client does not update that npm
@@ -145,9 +146,10 @@ prevent documenting verified targeted fixes, but complete assessment stays open.
    ready. Keep mock verification separate from real Supabase/provider results.
 5. Before any commit or push, follow the gitleaks runbook and run the applicable
    redacted secret scan. Stage only the named change artifacts and implementation.
-6. Deploy using the existing Railway workflow after release review. No new,
-   changed or removed environment variables are planned and no migration is
-   required. Any newly discovered variable change must be named, updated in the
+6. Deploy using the existing Railway workflow after release review. No permanent
+   new environment variables or migration are required. The diagnostic NO_CACHE
+   setting was temporarily added and then removed, with operator confirmation
+   that Node remains at 22.23.4. Any future variable change must be named, updated in the
    production environment, reviewed as staged changes and deployed. Public
    variables require a rebuild.
 7. Record the active commit, build/runtime Node versions, Next.js, React pair,

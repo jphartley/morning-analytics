@@ -12,15 +12,15 @@ values, access tokens, raw environment exports, or unredacted logs in this file.
 | Work | Status | Evidence |
 | --- | --- | --- |
 | Railway credential response | Complete, confirmed by the operator | In this chat on 23 October, the operator confirmed revocation in Google, Discord and Supabase, replacement values in Railway, redeployment, and review of Railway, Google and Supabase logs with nothing suspicious found. |
-| Dependency remediation | Deployed and production smoke test passed; application Node runtime below security minimum | Both npm and Next.js server executables report Node 22.23.3, below the 22.23.4 minimum, despite the dashboard label Node 22.23.4. Installed targeted dependencies match the patch. [OpenSpec change](../openspec/changes/patch-october-2026-security-dependencies/proposal.md): 16 of 17 tasks complete; task 5.2 remains open. |
+| Dependency remediation | Scoped patch complete; production Node verified and temporary cache setting removed | Operator output confirms commit 1ad2218064f5f06168eebce3a9cb60166b8396e4 and PID 1/Next.js at Node 22.23.4. The operator subsequently confirmed NO_CACHE removal and continued 22.23.4 operation. [OpenSpec change](../openspec/changes/patch-october-2026-security-dependencies/proposal.md): 17 of 17 tasks complete. Separate findings below remain open. |
 | Server-side authorization | Open; urgent | Code inspection found browser-supplied identity used with service-role database access. No production exploit was attempted. |
 | Editor and development tools | Open | Affected Markdown-it, Tiptap, Vite and Vitest dependency versions remain locked. |
 | Automated lockfile assessment | Completed through local registry mirror; findings remain open | All three lockfiles assessed on 23 October, including development dependencies. App: 14 High / 4 Moderate dependency-package findings; root and validation: 1 High each. These are not independent CVE counts. See triage below. |
 
 No evidence of misuse was reported in the reviewed logs. That does not prove that
 no misuse occurred. Production dependency versions are recorded from the operator's
-console output below; the application process is confirmed below the Node
-security minimum and the database patch level remains unverified. The operator's confirmation above
+console output below; the latest application process check meets the Node
+security minimum. The database patch level remains unverified. The operator's confirmation above
 supersedes the earlier, provisional incident status in the chat.
 
 ## 1. Completed Railway response
@@ -62,7 +62,9 @@ verification table below.
 
 Inventory sources: `app/package-lock.json`, `validation/package-lock.json`,
 `package-lock.json`, `app/package.json`, and the current shell's Node version.
-Recheck before implementation and record the selected versions after updating.
+This is the pre-patch baseline. Selected versions and production observations
+are recorded in the dated evidence below; do not use this table as the current
+dependency inventory.
 
 ## 3. Findings and minimum fixes
 
@@ -100,9 +102,11 @@ Additional triage:
 - The October Vitest 5 secret-file disclosure is outside our installed 4.x
   version range; do not label this checkout affected by that report.
   [Advisory](https://github.com/vitest-dev/vitest/security/advisories/GHSA-p458-7748-mcp3).
-- Older backlog: Tiptap 3.20.1 predates the attribute-merging XSS fix in 3.30.4.
+- Older backlog at the initial inventory: Tiptap 3.20.1 predates the attribute-merging XSS fix in 3.30.4.
   Exploitation needs an untrusted attribute object reaching the helper, which
-  has not been demonstrated here. Sharp also misses older libvips/libheif fixes.
+  has not been demonstrated here. The pre-patch Sharp version also missed older
+  libvips/libheif fixes; Sharp has since been upgraded to 0.35.5, with native
+  versions recorded below. Tiptap remains a separate open follow-up.
   [Tiptap advisory](https://github.com/ueberdosis/tiptap/security/advisories/GHSA-cp6q-959q-f8rh),
   [Sharp advisories](https://github.com/lovell/sharp/security/advisories).
 - The reviewed Gemini SDK, Discord.js and Supabase JS maintainer pages had no
@@ -117,7 +121,7 @@ Additional triage:
 
 - [x] Prepare an OpenSpec change for the urgent dependency patch: [proposal](../openspec/changes/patch-october-2026-security-dependencies/proposal.md), [design](../openspec/changes/patch-october-2026-security-dependencies/design.md), [runtime spec](../openspec/changes/patch-october-2026-security-dependencies/specs/node-version-pinning/spec.md), [tasks](../openspec/changes/patch-october-2026-security-dependencies/tasks.md).
 - [x] Review the dependency patch proposal and request implementation: operator invoked openspec-apply-change in this chat on 23 October.
-- [ ] Recheck superseding maintainer advisories and select explicit compatible versions.
+- [x] Recheck superseding maintainer advisories and select explicit compatible versions; performed before implementation on 23 October, with selections and source dates recorded below.
 - [x] Update Next.js to at least 16.4.1 and align eslint-config-next.
 - [x] Update React and React DOM together to a compatible patched pair.
 - [x] Update the direct Sharp dependency to at least 0.35.5; ^0.34.5 cannot select it.
@@ -127,8 +131,9 @@ Additional triage:
 - [x] Run app tests, lint, lockfile registry check and a production build; record results and build-mode limitations below.
 - [x] Verify image decoding with the deployment's Linux/native dependency build, not only macOS; operator-confirmed real-image smoke test and production Sharp/native-library output recorded below.
 - [x] Smoke-test sign-in, analysis rendering, image generation, history save/load and deletion; operator confirmed the requested production checklist works on 23 October.
-- [ ] Deploy and record the active production commit, Node version and resolved dependency versions.
+- [x] Deploy and record the active production commit, Node version and resolved dependency versions; corrective source commit and application processes verified on 24 October.
 - [x] Repeat the relevant production smoke checks and record outcomes; operator confirmation recorded below.
+- [x] Remove temporary NO_CACHE and verify continued Node 22.23.4 operation; confirmed by the operator on 24 October.
 
 Do not use npm audit fix --force. A Node update patches its bundled Undici,
 while npm-installed Undici copies need their own dependency update.
@@ -152,7 +157,7 @@ can invoke actions with another user's ID. No production exploit was attempted.
 - [ ] Verify missing, expired and forged credentials are rejected before data access or provider calls.
 - [ ] Test cross-user memory reads, resets, rebuilds, saves, image operations and analysis deletion.
 - [ ] Test role restrictions for administrator experimentation and paid operations.
-- [ ] Correct TechnicalDebt.md: its claims that all reads/deletes are protected and its getSession-based server verification advice are outdated.
+- [x] Correct TechnicalDebt.md: remove blanket read/delete protection claims and replace getSession-only verification advice. Documentation corrected on 24 October; application authorization work remains open.
 
 Supabase recommends verified getClaims() identity or getUser(); getSession()
 alone is not an authorization check:
@@ -184,16 +189,12 @@ DISCORD_USER_TOKEN and SUPABASE_SERVICE_ROLE_KEY. Unused BLACK_FOREST_LABS_API_K
 credentials, if still present, should be assessed under the existing provider
 dormancy guidance; their current presence was not verified here.
 
-Dependency patch outcome: no environment or Railway variables were added, changed
-or removed. No database migration is required.
-Operational follow-up on 24 October: recommend temporarily adding `NO_CACHE=1`
-to the Railway morning-analytics service in production to test a fresh build
-after the confirmed Node version mismatch. This is a new, non-secret build
-setting. The supplied 24 October rebuild explicitly confirms caching was disabled
-but still installed Node 22.23.3. Keep the temporary setting for the corrective
-configuration build, then remove it after successful verification, deploy that
-removal, and verify the final deployment too. The committed app/mise.toml fix
-requires no permanent new Railway variables or credential changes.
+Permanent dependency patch outcome: no new production variables or database
+migration are required. NO_CACHE=1 was temporarily added for diagnosis and used
+for the corrective configuration build. The operator has confirmed its removal
+and continued Node 22.23.4 operation on 24 October. Current required state:
+NO_CACHE absent, normal build caching enabled, app/mise.toml's Node-only exception
+retained. This correction requires no further credential rotation.
 If implementation reveals a necessary variable change, record the name and
 whether it is new, changed or removed. Apply it in the morning-analytics service's
 production environment, review staged changes and deploy/redeploy. NEXT_PUBLIC_*
@@ -205,6 +206,10 @@ the separate authorization change must first follow
 [the Supabase CLI runbook](supabase-cli-runbook.md).
 
 ## 6. Evidence to add as work progresses
+
+The dated checkpoints below preserve what was known at each stage. Earlier
+statements that a deployment, version check or cleanup was pending are historical;
+the Current status table and final confirmation are the present status.
 
 For each completed patch, record the OpenSpec change, selected versions, local
 checks, any exceptions, and production confirmation. Keep local implementation
@@ -251,12 +256,12 @@ for each implementation change.
 | Native image regression | A downloaded synthetic grid decodes into four correctly ordered 64x64 JPEG quadrants with the expected pixel colours |
 | Lint | Passed under Node 22 after a small asynchronous-effect compatibility correction for the newer React lint rule |
 | Production webpack build | Passed under Node 22.23.4, including TypeScript, prerendering and build tracing; command: npm run build -- --webpack |
-| Default Turbopack production build | Local attempts were blocked by font access and then an internal process/port-binding EPERM restriction. The supplied Railway build log confirms Turbopack compilation, TypeScript and prerendering succeeded, but under Node 22.23.3. Repeat the deployment using a runtime meeting the security minimum. |
+| Default Turbopack production build | Local attempts were restricted. The earlier Railway build used 22.23.3; the corrected 24 October build includes mise.toml and passes compilation, TypeScript and prerendering. The installed production image's PID 1 and Next.js binaries were subsequently verified at 22.23.4. |
 | Lockfile registry check | Passed; all three lockfiles use public npm URLs. Root lockfile changed only to normalize pre-existing private registry URLs; its dependency graph is unchanged. |
 | Secret scanning | Redacted Gitleaks scans passed for the tracked diff, each named new file/change-artifact directory, full existing history (187 commits), and the exact staged patch. The configured pre-commit hook repeats the staged scan when committing. |
 | Local Sharp native libraries | libvips 8.18.7, librsvg 2.63.2, libheif 1.23.5 on macOS |
 | Linux native image verification | Operator confirmed real-image smoke test passed and supplied production console output: Sharp 0.35.5, libvips 8.18.7, librsvg 2.63.2 and libheif 1.23.5. |
-| Production deployment and smoke checks | Operator confirmed deployment and the production smoke checklist passed on 23 October. Console commit and dependency/native versions are recorded below; Node version discrepancy remains unresolved. |
+| Production deployment and smoke checks | Operator confirmed production smoke checks on 23 October, then source commit and PID 1/Next.js at 22.23.4 on 24 October. Temporary NO_CACHE removal and continued 22.23.4 operation are confirmed. Full dated evidence follows. |
 
 ### Release record, 23 October 2026
 
@@ -432,6 +437,80 @@ They include the exact configuration, before/after reproduction, deployment
 checks and temporary NO_CACHE cleanup. Update those runbooks when changing the
 runtime policy or build tool, rather than relying on this chat.
 
+### Corrective build log supplied on 24 October 2026
+
+The next supplied log contains 173 lines, covering the build at 08:19 UTC on
+24 October. It identifies Railpack 0.43.0, plans Node 22.23.4, explicitly copies
+mise.toml before the tool-installation step, and reports caching disabled.
+Next.js 16.4.1 Turbopack compilation, TypeScript and prerendering complete, and
+the image is pushed. No EBADENGINE warning appears in the supplied excerpt.
+
+The excerpt does not print the resolved Node executable's version during the
+installation/build step, and image publication does not confirm an Active
+deployment. The configuration is present and the build succeeds, but task 5.2
+remains open pending fresh running-process evidence and the active commit.
+Request node --version and /proc/1/exe --version from a newly connected Console
+after this deployment becomes Active. Keep the temporary NO_CACHE setting until
+the corrected runtime is verified, then follow the documented removal/deploy
+and final-verification sequence.
+
+### Corrective runtime screenshot supplied on 24 October 2026
+
+The operator's connected Console screenshot shows node --version failing with
+`node: command not found`, /proc/1/exe --version returning v22.23.4, and the
+node-based source-commit query also failing because node is not on PATH. The
+important positive evidence is the actual PID 1 executable reporting the patched
+version. The screenshot does not provide the Git commit or the Next.js child's
+version; task 5.2 remains open for that evidence and final deployment cleanup.
+
+Use /proc/1/exe directly for the commit query, since it has been verified to be
+Node, and the /proc process check for the Next.js child. No service PATH change
+is required. The canonical runbooks now document this Console-specific fallback.
+
+### Corrective commit and Next.js runtime verified on 24 October 2026
+
+Using the verified /proc/1/exe executable, the operator retrieved the source
+commit and separately checked the running next-server process:
+
+```text
+RAILWAY_GIT_COMMIT_SHA: 1ad2218064f5f06168eebce3a9cb60166b8396e4
+next-server executable: v22.23.4
+```
+
+The preceding screenshot independently showed PID 1 using v22.23.4. The active
+source commit includes the Node-only release-age correction and its runbooks.
+This confirms that the application runtime has advanced from the vulnerable
+22.23.3 to the required 22.23.4. A missing node command in the interactive Console
+does not invalidate the executable checks.
+
+At this checkpoint, temporary NO_CACHE removal and a final runtime check were
+still outstanding. The subsequent operator confirmation below closes those
+steps. Keep app/mise.toml's permanent Node-only exception. The separate
+authorization and remaining dependency findings remain open.
+
+### Final confirmation, 24 October 2026
+
+The operator confirmed: "NO_CACHE has been removed and it is still reporting
+22.23.4". This follows the directly supplied source-commit and Next.js process
+outputs above. Record the temporary variable as removed and final runtime
+verification as passed; no additional operator action is pending for this patch.
+
+The version evidence is: Next.js 16.4.1, React/React DOM 19.2.9, Sharp 0.35.5
+(libvips 8.18.7, librsvg 2.63.2, libheif 1.23.5), Discord.js 14.27.0 / REST 2.6.3 /
+Undici 6.29.1, and the corrected running Node 22.23.4. Package/native values were
+supplied from the 23 October console inspection; the Node-only correction did
+not change those manifests or lockfiles. The latest directly observed source
+SHA was 1ad2218064f5f06168eebce3a9cb60166b8396e4. The post-removal source SHA was
+not separately supplied. The corrected build plan selected 22.23.4; its excerpt
+did not print a standalone build-time node --version, so the actual executable
+evidence is the shipped image's PID 1 and Next.js process checks.
+
+All 17 scoped OpenSpec tasks are complete. The main runtime spec is synchronized
+with the approved rolling-22 minimum and Node-only release-age policy. The change
+has not been archived. This closes the targeted dependency/Node patch, not the
+separate authorization work, remaining advisory findings, managed-database review
+or broader security assessment.
+
 One initial shell-based app install/test command selected the machine's Node 26
 instead of the project runtime. Installation and the full test/lint/build checks
 were subsequently run using the explicit Node 22 executable and PATH. Only the
@@ -441,14 +520,16 @@ The lint correction fetches drawer data asynchronously and ignores a result afte
 the drawer closes or user changes. It does not add authentication or resolve the
 separate server-side authorization finding.
 
-Local review URL: [http://127.0.0.1:3100](http://127.0.0.1:3100). This instance
+Historical local review URL from 23 October:
+[http://127.0.0.1:3100](http://127.0.0.1:3100); current availability has not been
+checked. That instance
 uses mock AI/image providers and a local in-memory service at 127.0.0.1:54329;
 it does not use real Supabase data or paid providers. For this fixture only, use
 the synthetic email smoke@example.test and the placeholder password
 local-fixture-only. It is not a real user account or credential. Fixture data is
 temporary and disappears when the fixture process stops. The operator's later
-production smoke confirmation is recorded above; corrective-deployment version
-verification remains open.
+production smoke confirmation and the final runtime/cache-cleanup confirmation
+are recorded above.
 
 The temporary fixture and browser scripts are under /tmp/morning-security-browser/;
 they are verification aids outside the repository, not product changes. Their

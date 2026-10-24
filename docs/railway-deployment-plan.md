@@ -246,6 +246,8 @@ For each corrective deployment:
    mean the required runtime floor has not been met.
 2. Open a fresh Console and follow the runbook's checks for the actual npm and
    Next.js process executables. Require Node 22.23.4 or later within 22.x.
+   If the Console cannot find node, follow the runbook's verified-executable
+   fallback; a missing interactive PATH entry does not establish a bad runtime.
 3. Record the installed package and image-library versions using:
 
    ```sh
@@ -265,6 +267,12 @@ NO_CACHE was a temporary diagnostic addition; its removal is a separate staged
 production change requiring deployment. No credential changes or database
 migration are required by this correction.
 
+**Verified outcome, 24 October 2026:** The operator retrieved commit
+1ad2218064f5f06168eebce3a9cb60166b8396e4 and confirmed both PID 1 and Next.js
+use Node 22.23.4. The operator then confirmed NO_CACHE was removed and Node
+still reported 22.23.4. The temporary setting is no longer required. The process
+checks and cleanup sequence above remain the procedure for future incidents.
+
 ## Fallback: railway.toml
 
 If the root directory setting doesn't work via the dashboard, add this file to the repo root:
@@ -282,13 +290,13 @@ Then set root directory to `app` in the dashboard and redeploy.
 
 ---
 
-## Post-Deployment: Rotate Credentials
+## Credential response status
 
-Credentials were exposed in chat history during deployment. Rotate these:
-
-- [ ] **Gemini API Key** — Google Cloud console → API & Services → Credentials → regenerate
-- [ ] **Discord Bot Token** — Discord Developer Portal → Bot → Reset Token
-- [ ] **Discord User Token** — Change Discord account password (invalidates old user token)
-- [ ] **Supabase Service Role Key** — Supabase Dashboard → Settings → API → regenerate
-- [ ] Update the new values in Railway Variables tab
-- [ ] Update `/app/.env.local` with the new values
+The earlier deployment-era rotation checklist is superseded by the
+[October response record](security-remediation-2026-10.md#1-completed-railway-response).
+On 23 October, the operator confirmed revocation/reset at Google, Discord and
+Supabase, replacement values in Railway, redeployment and provider-log review.
+Do not repeat that completed response solely because another dependency finding
+is open. New evidence or provider notices require their own assessment. Never
+put credential values in these documents or logs; production variable updates
+must still be reviewed and deployed as staged changes.

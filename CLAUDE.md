@@ -51,15 +51,23 @@ To keep both working:
   - `cd app && npm run check:lockfile-registry`
   - If check fails: `cd app && npm run fix:lockfile-registry`, then re-run check
 - Keep Node pins aligned across:
+  - `/.nvmrc` (repository root)
   - `/app/.nvmrc`
   - `/app/package.json` (`engines.node`)
   - `/app/package-lock.json` root `engines.node`
+- Select latest stable Node 22.x with minimum 22.23.4: both .nvmrc files contain
+  `22`, and app engines declare `>=22.23.4 <23`. Preserve `/app/mise.toml`'s
+  Node-only release-age exception so Railpack can install fresh security patches.
+  Verify actual process versions, not just the Railway summary. Follow
+  `/docs/node-runtime-runbook.md`, including its Console PATH fallback.
 
 ### If `npm install` fails with E401 or ECONNRESET
 
 JFrog auth token has expired. Follow the login and lockfile fix steps in `/docs/research/jfrog-npm-login-workflow.md`.
 
 Detailed references:
+- `/docs/node-runtime-runbook.md`
+- `/docs/security-remediation-2026-10.md`
 - `/docs/railway-deployment-plan.md`
 - `/docs/research/railway-npm-ci-failure.md`
 - `/docs/research/jfrog-npm-login-workflow.md`

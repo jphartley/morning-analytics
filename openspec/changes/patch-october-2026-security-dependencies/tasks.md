@@ -27,5 +27,13 @@
 ## 5. Verify production and close the scoped patch
 
 - [x] 5.1 After release review, follow the gitleaks and delivery runbooks for any commit/push and deployment; verify the published change contains only scoped artifacts and changes, and record Environment / Railway variables as none new, changed or removed unless implementation establishes otherwise.
-- [ ] 5.2 Record the active production commit, build/runtime Node versions, framework/React versions, Sharp/native libraries and installed Undici versions; verify the targeted fixes are running rather than merely present in local manifests.
+- [x] 5.2 Record the active production commit, build/runtime Node versions, framework/React versions, Sharp/native libraries and installed Undici versions; verify the targeted fixes are running rather than merely present in local manifests.
 - [x] 5.3 Have the operator verify production sign-in, analysis, Midjourney images, save/load and deletion; record outcomes and mark only completed remediation items in the tracker, preserving unresolved scan or separate-change work.
+
+Closure evidence, 24 October: operator supplied source commit
+1ad2218064f5f06168eebce3a9cb60166b8396e4 and PID 1/Next.js versions 22.23.4,
+then confirmed NO_CACHE removal and continued 22.23.4 operation. Package/native
+versions and the build-log evidence limits are recorded in
+[the remediation tracker](../../../docs/security-remediation-2026-10.md).
+All scoped tasks are complete; separate security findings remain open. Main
+runtime specs are synchronized; this change remains unarchived.

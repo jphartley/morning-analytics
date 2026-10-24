@@ -42,7 +42,8 @@ None. This change adds no user-facing feature.
 Expected implementation areas are app and validation manifests/lockfiles, root
 runtime declarations and lockfile metadata where needed, app/mise.toml, existing runtime
 selection/verification helpers, and the Node/deployment documentation. No database
-migration or new environment variables are planned. Credential values must never
+migration or permanent new environment variables are required. The temporary
+NO_CACHE diagnostic setting was removed after production verification. Credential values must never
 enter the artifacts or diagnostics.
 
 The existing workflows for sign-in, analysis, Midjourney images and history must

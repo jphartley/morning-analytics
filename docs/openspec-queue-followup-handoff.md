@@ -1,5 +1,12 @@
 # OpenSpec Queue Follow-Up Handoff
 
+**Runtime update, 24 October 2026:** References below to Node 22.x without a patch
+floor describe the earlier validation run. Current selection/readiness requires
+stable 22.x at or above 22.23.4. See the
+[Node runtime runbook](node-runtime-runbook.md) for local selection, Railway's
+release-age correction and process-version checks. Other queue findings remain
+separate from this runtime remediation.
+
 ## Background
 
 This document is the queue-architecture follow-up from the `add-welcome-empty-state` validation run. It supersedes the earlier first-run handoff by removing issues that did not recur and focusing on items that were either new or were supposed to be fixed by the prior queue hardening work but were not fixed thoroughly enough.

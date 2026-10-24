@@ -6,27 +6,29 @@ This document tracks technical decisions deferred from MVP and features planned 
 
 - [ ] **Email confirmation enforcement**: MVP allows signin before email confirmation for easier testing. Future versions should enforce email confirmation before granting access. See `openspec/changes/add-user-auth/design.md` for context.
 - [ ] **Password reset flow**: MVP does not include password reset. Users who forget passwords will need manual support. Add in v2.
-- [ ] **Account deletion**: MVP does not allow users to delete their accounts or analyses. Add deletion flow in v2, including Supabase storage cleanup.
+- [ ] **Account deletion**: Account self-deletion remains deferred. Analysis deletion already exists, including image cleanup, and was included in the operator's production smoke confirmation; the separate server-authorization finding below still applies.
 - [ ] **Server-side route protection (middleware)**: MVP uses client-side auth checking only (AuthSessionProvider). For production, implement `@supabase/ssr` with cookie-based sessions and Next.js middleware for server-side route protection. Benefits: no flash of loading state, faster redirects, defense in depth. Removed during add-user-auth because default Supabase JS client stores tokens in localStorage (not cookies), making middleware cookie checks fail.
 
 - [ ] **Server-side session verification for writes (critical for production)**:
 
-  **Current state (MVP):** Server actions (`analyzeText`, `generateImages`, `saveAnalysis`) receive `userId` as a parameter from the client. The client gets this from the Supabase Auth session (JWT-validated), then passes it to server actions. The server trusts this value without independent verification.
+  **Current evidence, 24 October 2026:** Multiple Server Actions trust a browser-supplied userId without independently verifying the caller. getMemoryStore and resetMemory use service-role storage helpers, and analysis deletion compares ownership with the caller-supplied userId. The service-role client bypasses RLS; blanket claims that all reads, updates and deletes are protected are incorrect. Browser authentication and a nonempty userId check do not establish server authorization.
 
-  **What's protected regardless:**
-  - All **reads** are protected by RLS policies at the database level (`WHERE user_id = auth.uid()`). No client-side code can bypass this. Even with a known email or UUID, one user cannot read another user's analyses or images.
-  - All **deletes** and **updates** are protected by RLS for the same reason.
+  **Risk and scope:** Urgent production authorization work remains open. Exposure is not limited to inserting unwanted analyses: inspected paths include cross-user memory reads/resets, deletion and paid provider operations. No production exploit was attempted, and this review does not establish that every data path is exploitable. The October dependency/Node patch does not resolve this issue.
 
-  **What's vulnerable:**
-  - **Write operations** (specifically `saveAnalysis`) use the service role key (bypasses RLS) and trust the client-provided `userId`. A technically sophisticated attacker who (a) has an account, (b) discovers another user's UUID, and (c) modifies client JavaScript could **insert fake analyses into another user's history**. They cannot read, modify, or delete existing data.
-
-  **Risk assessment:** Low for MVP/localhost. UUIDs are random and not exposed in the UI. Attack requires authenticated access plus DevTools modification. The "reward" is limited to junk insertion.
-
-  **Fix for production:** Implement `@supabase/ssr` with cookie-based sessions so that server actions can independently verify the authenticated user via `supabase.auth.getSession()` reading from HTTP-only cookies. This eliminates trust in client-provided userId entirely. This item and the middleware item above should be implemented together as they share the same underlying infrastructure (`@supabase/ssr` cookie-based sessions).
+  **Fix for production:** Derive identity from a server-verified session/token, use getUser() or verified getClaims() as appropriate, and enforce ownership and roles before each data operation or provider call. getSession() alone is not a server authorization check. Prefer user-scoped clients/RLS and constrain necessary service-role operations. See [Supabase's server-side guidance](https://supabase.com/docs/guides/auth/server-side/nextjs) and the [October authorization checklist](docs/security-remediation-2026-10.md#b-urgent-server-side-authorization). This is a separate implementation change requiring cross-user and missing/forged-credential tests; documentation correction does not complete it.
 
   **Role-aware UI note:** `add-admin-user-modes` adds a browser-resolved `user`/`admin` product boundary for the trusted-friends release. It deliberately does not enforce that role in server actions; complete this hardening before relying on roles for sensitive server-side authorization.
 
 ## Deployment & Infrastructure
+
+**October 2026 security patch:** Framework, Sharp and Undici updates are deployed.
+The Node release-age correction is verified in production at 22.23.4; the operator
+also confirmed temporary NO_CACHE removal and continued 22.23.4 operation.
+Keep the permanent Node-only app/mise.toml policy. See the
+[Node runbook](docs/node-runtime-runbook.md) and
+[remediation tracker](docs/security-remediation-2026-10.md) for evidence and the
+remaining authorization/editor/tooling findings. This patch is not a clean bill
+of health for the whole dependency tree.
 
 - [ ] **Next.js standalone output mode**: Currently using default Next.js output. For leaner Railway deployments, switch to `output: "standalone"` in `next.config.ts`. This produces a self-contained `.next/standalone/` directory with only the files needed to run. Requires ensuring non-code assets (e.g., prompt files in `/app/prompts/`) are copied into the standalone output via `outputFileTracingIncludes`. Deferred during Railway prep to keep initial deployment simple.
 
