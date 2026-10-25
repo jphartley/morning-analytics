@@ -1,7 +1,8 @@
 # content-transition Specification
 
 ## Purpose
-TBD - created by archiving change fade-in-animation. Update Purpose after archive.
+Define how newly generated analysis text and images appear smoothly while preserving direct history access and reduced-motion preferences.
+
 ## Requirements
 ### Requirement: Fade-in animation on AnalysisPanel mount
 

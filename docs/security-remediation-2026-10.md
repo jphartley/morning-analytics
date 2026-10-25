@@ -1,6 +1,6 @@
 # October 2026 security remediation
 
-Last updated: 24 October 2026 (Europe/Amsterdam).
+Last updated: 25 October 2026 (Europe/Amsterdam).
 
 This is the working checklist for the security review started on 23 October.
 Keep completed incident response separate from dependency patching and application
@@ -12,8 +12,8 @@ values, access tokens, raw environment exports, or unredacted logs in this file.
 | Work | Status | Evidence |
 | --- | --- | --- |
 | Railway credential response | Complete, confirmed by the operator | In this chat on 23 October, the operator confirmed revocation in Google, Discord and Supabase, replacement values in Railway, redeployment, and review of Railway, Google and Supabase logs with nothing suspicious found. |
-| Dependency remediation | Scoped patch complete; production Node verified and temporary cache setting removed | Operator output confirms commit 1ad2218064f5f06168eebce3a9cb60166b8396e4 and PID 1/Next.js at Node 22.23.4. The operator subsequently confirmed NO_CACHE removal and continued 22.23.4 operation. [OpenSpec change](../openspec/changes/patch-october-2026-security-dependencies/proposal.md): 17 of 17 tasks complete. Separate findings below remain open. |
-| Server-side authorization | Open; urgent | Code inspection found browser-supplied identity used with service-role database access. No production exploit was attempted. |
+| Dependency remediation | Scoped patch complete; production Node verified and temporary cache setting removed | Operator output confirms commit 1ad2218064f5f06168eebce3a9cb60166b8396e4 and PID 1/Next.js at Node 22.23.4. The operator subsequently confirmed NO_CACHE removal and continued 22.23.4 operation. [OpenSpec change](../openspec/changes/archive/2026-10-25-patch-october-2026-security-dependencies/proposal.md): 17 of 17 tasks complete. Separate findings below remain open. |
+| Server-side authorization | Scoped remediation complete | Deployed `5f3073c` and the reviewed forward migration on 25 October. Production ownership/policy metadata, signed-out and forged-cookie page denial, and operator sign-out/sign-in plus analysis create/read/delete checks passed. Operator runtime output confirms the commit and Node 22.23.4. Cross-account/role denial tests used isolated Supabase accounts. Detailed assessment evidence remains local and ignored. |
 | Editor and development tools | Open | Affected Markdown-it, Tiptap, Vite and Vitest dependency versions remain locked. |
 | Automated lockfile assessment | Completed through local registry mirror; findings remain open | All three lockfiles assessed on 23 October, including development dependencies. App: 14 High / 4 Moderate dependency-package findings; root and validation: 1 High each. These are not independent CVE counts. See triage below. |
 
@@ -119,7 +119,7 @@ Additional triage:
 
 ### A. Urgent dependency patch
 
-- [x] Prepare an OpenSpec change for the urgent dependency patch: [proposal](../openspec/changes/patch-october-2026-security-dependencies/proposal.md), [design](../openspec/changes/patch-october-2026-security-dependencies/design.md), [runtime spec](../openspec/changes/patch-october-2026-security-dependencies/specs/node-version-pinning/spec.md), [tasks](../openspec/changes/patch-october-2026-security-dependencies/tasks.md).
+- [x] Prepare an OpenSpec change for the urgent dependency patch: [proposal](../openspec/changes/archive/2026-10-25-patch-october-2026-security-dependencies/proposal.md), [design](../openspec/changes/archive/2026-10-25-patch-october-2026-security-dependencies/design.md), [runtime spec](../openspec/changes/archive/2026-10-25-patch-october-2026-security-dependencies/specs/node-version-pinning/spec.md), [tasks](../openspec/changes/archive/2026-10-25-patch-october-2026-security-dependencies/tasks.md).
 - [x] Review the dependency patch proposal and request implementation: operator invoked openspec-apply-change in this chat on 23 October.
 - [x] Recheck superseding maintainer advisories and select explicit compatible versions; performed before implementation on 23 October, with selections and source dates recorded below.
 - [x] Update Next.js to at least 16.4.1 and align eslint-config-next.
@@ -138,26 +138,37 @@ Additional triage:
 Do not use npm audit fix --force. A Node update patches its bundled Undici,
 while npm-installed Undici copies need their own dependency update.
 
-### B. Urgent server-side authorization
+<a id="b-urgent-server-side-authorization"></a>
 
-Code evidence: `app/app/actions.ts` accepts userId arguments and checks only for
-nonempty values in multiple actions. `getMemoryStore` and `resetMemory` call
-`app/lib/memory-storage.ts`, which uses the service-role client created by
-`app/lib/supabase.ts`. That client bypasses database row security. Analysis
-deletion also compares ownership against a caller-supplied userId.
+### B. Server-side authorization
 
-This is an application finding, not a newly disclosed third-party CVE. It could
-allow cross-user memory reads/resets or other unauthorized work if an attacker
-can invoke actions with another user's ID. No production exploit was attempted.
+Completed on 25 October 2026 in `5f3073ce8d9cad8c6d8952f54207267684ae6dd8`,
+with `20261025120000_enforce_server_authorization.sql` applied after a reviewed
+dry run. Sessions and roles are verified at each protected action; user-scoped
+database access, server-managed ownership bindings and a constrained privileged
+image adapter enforce the data boundary.
 
-- [ ] Prepare a separate OpenSpec authorization change, keeping it urgent rather than waiting for routine editor maintenance.
-- [ ] Inventory every Server Action, data operation, paid provider call and privileged role check.
-- [ ] Derive identity from a server-verified session/token and enforce ownership and roles server-side.
-- [ ] Use user-scoped database/storage access where possible; constrain remaining service-role operations.
-- [ ] Verify missing, expired and forged credentials are rejected before data access or provider calls.
-- [ ] Test cross-user memory reads, resets, rebuilds, saves, image operations and analysis deletion.
-- [ ] Test role restrictions for administrator experimentation and paid operations.
-- [x] Correct TechnicalDebt.md: remove blanket read/delete protection claims and replace getSession-only verification advice. Documentation corrected on 24 October; application authorization work remains open.
+- [x] Prepare and implement the separate authorization change.
+- [x] Inventory all 12 Server Actions and their data/provider/privilege boundaries.
+- [x] Derive identity from a server-verified session and enforce ownership and roles.
+- [x] Use user-scoped database access and constrain privileged image operations.
+- [x] Verify missing, expired and forged credentials fail before protected side effects in the isolated test environment.
+- [x] Test cross-user memory, analysis and image operations against isolated Supabase accounts.
+- [x] Test administrator capability restrictions and current-role changes.
+- [x] Correct TechnicalDebt.md and record the deployed implementation.
+
+Validation: 239 unit tests and 21 isolated real-Supabase integration tests passed.
+The operator confirmed production sign-out/sign-in and analysis create/read/delete.
+Read-only production metadata confirmed the ownership constraint, identity trigger,
+resource grants/RLS and restrictive memory/evidence/Storage policies. Independent
+public requests with absent or forged session cookies redirect to sign-in with
+private/no-store headers. Operator runtime output confirms the deployed commit
+above and Node 22.23.4. This is not a full production penetration test; no other
+person's production content was used for adversarial testing.
+
+Environment / Railway variables: none new, changed or removed for this release.
+Detailed assessment and validation evidence remain ignored locally. Independent
+findings elsewhere in this tracker remain open.
 
 Supabase recommends verified getClaims() identity or getUser(); getSession()
 alone is not an authorization check:
@@ -507,7 +518,7 @@ evidence is the shipped image's PID 1 and Next.js process checks.
 
 All 17 scoped OpenSpec tasks are complete. The main runtime spec is synchronized
 with the approved rolling-22 minimum and Node-only release-age policy. The change
-has not been archived. This closes the targeted dependency/Node patch, not the
+was archived on 25 October 2026. This closes the targeted dependency/Node patch, not the
 separate authorization work, remaining advisory findings, managed-database review
 or broader security assessment.
 
@@ -519,6 +530,23 @@ Node 22 results are used for this change's required-runtime verification.
 The lint correction fetches drawer data asynchronously and ignores a result after
 the drawer closes or user changes. It does not add authentication or resolve the
 separate server-side authorization finding.
+
+### Authorization and archive closure, 25 October 2026
+
+The authorization remediation in section B is now deployed and verified within
+its stated scope. The operator's final container output identifies
+`5f3073ce8d9cad8c6d8952f54207267684ae6dd8` and PID 1 Node 22.23.4. Their live
+sign-out/sign-in and analysis create/read/delete checks passed, as did the
+production ownership/policy metadata checks and independent signed-out page
+checks. The earlier dated entries above retain the state at those checkpoints;
+their references to open authorization work are superseded by this closure.
+
+The three recent completed OpenSpec changes are archived and their implemented
+contracts synchronized. Detailed authorization assessment/evidence stays ignored
+in its local archive; public trackers record completion and limits. Other
+security findings remain separate work. The Supabase runbook now starts with
+session-only database-password authentication, following the successful operator
+preview and migration. This is local CLI setup, not a Railway variable change.
 
 Historical local review URL from 23 October:
 [http://127.0.0.1:3100](http://127.0.0.1:3100); current availability has not been

@@ -2,7 +2,9 @@
 
 ## Overview
 
-Morning Analytics follows a memory-assisted processing model:
+Morning Analytics verifies the signed-in session and current account role before
+protected server work. Normal users receive memory-free analysis; administrators
+can use the memory-assisted processing model:
 1. **Memory selection**: Gemini fuzzily selects relevant compact memories for the original journal text.
 2. **Phase 1 analysis**: Gemini analyzes text with at most five memories / 150 words and generates an image prompt.
 3. **Phase 2 images**: The configured image provider returns normalized images.
@@ -12,6 +14,21 @@ Results are stored in Supabase for historical browsing.
 
 Memory selection degrades to a memory-free analysis when unavailable. Post-save
 memory update failures do not invalidate the readable or saved analysis.
+
+## Authentication and ownership
+
+Browser and server use the same cookie-backed Supabase session. The Next.js proxy
+handles refresh and page redirects, and the protected server page checks the
+user before returning the app. Each of the 12 protected Server Actions separately
+verifies identity, loads the persisted role and authorizes referenced resources.
+Business inputs cannot supply identity or role authority.
+
+Routine database operations use the verified user's client and row-level
+policies. Resource IDs are allocated and bound to their owner on the server
+before image generation or a text-only save. Privileged image operations stay
+inside a server-only adapter that checks those bindings and permitted paths.
+Private page/session responses use private/no-store caching. Public image reads
+remain a separate documented limitation.
 
 For the Midjourney/Discord failure investigation, architectural conclusions, rejected approaches, and recommended direct-provider job architecture, see `docs/image-generation-architecture.md`.
 
@@ -78,7 +95,8 @@ User Input
 ## Code Architecture
 
 ### Pages & Components
-- **`app/app/page.tsx`**: Main orchestrator. Manages UI state machine, coordinates API calls.
+- **`app/app/page.tsx`**: Protected server entry that verifies the session.
+- **`components/JournalApp.tsx`**: Interactive orchestrator and UI state machine.
 - **`components/JournalInput`**: Text input + Analyze button.
 - **`components/ModelPicker`**: Dropdown for selecting Gemini model variant.
 - **`components/AnalysisPanel`**: Displays structured analysis text.
@@ -87,9 +105,9 @@ User Input
 
 ### Server-Side Logic
 - **`app/actions.ts`**: Server actions for orchestrating Gemini → image generation → storage.
-  - `analyzeText(journalText, modelId)`: Calls Gemini, returns analysis + image prompt.
-  - `generateImages(imagePrompt)`: Triggers Discord/Midjourney flow, returns image URLs.
-  - `saveAnalysis(...)`: Persists analysis and image metadata to Supabase.
+  - `analyzeText({ journalText, ...options })`: Authorizes the account/options, then calls Gemini.
+  - `generateImages({ imagePrompt, ...options })`: Verifies identity, allocates owned resources, then calls the provider.
+  - `saveAnalysis({ ...businessInputs })`: Verifies ownership and image manifests, then persists under the user's RLS client.
 
 ### Core Libraries
 - **`lib/gemini.ts`**:
@@ -104,7 +122,11 @@ User Input
 - **`lib/discord/trigger.ts`**: Sends `/imagine` via the legacy Midjourney path.
 - **`lib/discord/listener.ts`**: Listens for Midjourney completion via Discord bot token.
 - **`lib/image-splitter.ts`**: Uses Sharp to split 2x2 grid into 4 quadrants.
-- **`lib/analytics-storage.ts`**: Supabase client for reading history.
+- **`lib/supabase.ts`**: Cookie-backed browser client and shared database types.
+- **`lib/supabase-server.ts`**: Request-scoped authenticated server client.
+- **`lib/server-authorization.ts`**: Verified identity, current persisted role and capability checks.
+- **`lib/authorized-image-storage.ts`**: Constrained privileged resource/image adapter.
+- **`lib/analytics-storage.ts`**: User-scoped history persistence, regeneration metadata and deletion.
 - **`lib/analytics-storage-client.ts`**: Supabase anon client for browser reads.
 - **`lib/memory-ai.ts`**: Structured Gemini relevance selection and block-ID memory-update inference.
 - **`lib/memory-service.ts`**: User-scoped selection and post-save update orchestration.
@@ -136,8 +158,10 @@ Original journal entry + compact memory catalog
  Server resolves IDs to exact original evidence
 ```
 
-Memories are persona-independent and active in Quiet, Insight, and Test views.
-The Test-only diagnostic drawer displays the complete read-only store, dated
+Memories are persona-independent and available to administrators in Quiet,
+Insight and enabled Test views. Normal users perform no live memory retrieval
+or inference. The administrator Test-only diagnostic drawer displays the
+account's complete read-only store, dated
 evidence, confidence, temporal state, and the memory snapshot used by a saved
 analysis. It also provides reset, newest-N rebuild (default 7), and ephemeral
 blind memory-on/off comparison controls.
@@ -188,9 +212,10 @@ The current prompt instructs Gemini to adopt a **Jungian analyst** persona and p
 - `GEMINI_API_KEY`: Enables real Gemini analysis
 - `IMAGE_GENERATION_PROVIDER`: Only deployment-default setting; normally `midjourney`, or `mock` for local checks
 - `DISCORD_USER_TOKEN`, `DISCORD_BOT_TOKEN`: Enable Midjourney generation
-- `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: Enable history storage
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Configure authenticated browser/server access
+- `SUPABASE_SERVICE_ROLE_KEY`: Secret for the constrained resource/image adapter
 - `USE_AI_MOCKS=true`: Bypasses Gemini + Discord, uses mock responses
-- `NEXT_PUBLIC_TEST_VIEW_ENABLED`: Optional build-time visibility for Test view; false hides Test diagnostics while memory continues in other views
+- `NEXT_PUBLIC_TEST_VIEW_ENABLED`: Optional build-time visibility for administrator Test view; false hides Test diagnostics while administrator memory can continue in other views
 - `IMAGE_GENERATION_PROVIDER=mock`: Uses local images from `app/public/mock-images`
 
 Image trials are dormant unless `IMAGE_PROVIDER_TRIAL_CANDIDATE` names an
@@ -209,19 +234,27 @@ longer supported. See [Image provider trials](image-provider-trials.md).
 | Column | Type | Purpose |
 |--------|------|---------|
 | id | UUID | Primary key |
-| user_id | UUID | User (not currently used) |
+| user_id | UUID | Immutable owner, derived from the verified session |
 | input_text | TEXT | Original journal text |
 | analysis_text | TEXT | Gemini's structured analysis |
 | image_prompt | TEXT | Image prompt sent to Midjourney |
 | model_id | TEXT | Which Gemini model was used |
-| image_paths | JSONB | Array of storage paths for 4 quadrant images |
+| image_paths | TEXT[] | Stored image paths, including appended regeneration rounds |
 | created_at | TIMESTAMP | When analysis was created |
 | memory_context | JSONB | Immutable IDs, versions, titles, and summaries supplied to the analysis |
 
 ### `memories` table (Supabase)
 
 Stores consolidated, user-scoped summaries with retrieval terms, confidence,
-significance, temporal state, version, and first/last observation dates.
+significance, temporal state, version, and first/last observation dates. Live
+access requires both ownership and the current administrator role.
+
+### `analysis_resources` table (Supabase)
+
+Stores server-managed ID/owner bindings and generated-image manifests. Clients
+may read their own allocations but cannot create, transfer or mutate them.
+Saved analyses reference a matching resource ID/owner pair; bindings remain
+reserved after deletion.
 
 ### `memory_evidence` table (Supabase)
 
@@ -236,8 +269,8 @@ Stores 4 image files per analysis:
 
 ## Model Selection
 
-Currently, the system supports **multiple Gemini model variants** via the ModelPicker dropdown:
-- User selects a model variant in the header
+Administrators can select **multiple Gemini model variants** via the ModelPicker dropdown; normal users use the configured default:
+- Administrator selects an allowed model variant in the header
 - Model ID is passed through `analyzeText()` → `analyzeWithGemini()`
 - Same system prompt is used regardless of model
 - Model preference is stored in analysis history

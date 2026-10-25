@@ -105,8 +105,9 @@ any variable change. This is required even for server-only values; every
 specifically needs a rebuild/redeploy.
 
 For future production schema changes, use the reviewed CLI workflow in
-[`supabase-cli-runbook.md`](supabase-cli-runbook.md). It includes the required
-dry-run review and the VPN/pooler troubleshooting that applies to this project.
+[`supabase-cli-runbook.md`](supabase-cli-runbook.md). Start with its hidden-prompt,
+session-only database-password setup rather than passwordless login. It also
+covers the required dry-run review and this project's VPN/pooler recovery.
 
 ---
 

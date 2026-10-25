@@ -1,7 +1,8 @@
 # image-prompt-disclosure Specification
 
 ## Purpose
-TBD - created by archiving change add-image-prompt-toggle. Update Purpose after archive.
+Let users inspect the prompt associated with generated images when their chosen view mode exposes image details.
+
 ## Requirements
 ### Requirement: Reveal generated image prompt
 The system SHALL allow users to reveal and hide the image prompt associated with generated images in insight and test modes. The system SHALL hide image prompt disclosure in quiet mode.

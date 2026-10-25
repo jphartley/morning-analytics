@@ -1,7 +1,8 @@
 # history-entry-disclosure Specification
 
 ## Purpose
-TBD - created by archiving change collapsible-history-entry. Update Purpose after archive.
+Keep long journal entries compact in history while allowing accessible expansion without hiding the associated analysis.
+
 ## Requirements
 ### Requirement: Long history entries start compact
 When a saved analysis has a long original journal entry, the history view SHALL present that entry collapsed by default with its date, word count, and a useful plain-text preview while keeping the analysis content accessible without scrolling past the full entry.

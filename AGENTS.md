@@ -32,6 +32,11 @@ From repo root:
 For Supabase schema changes, read `docs/supabase-cli-runbook.md` before giving
 deployment instructions. It is the repository's production migration workflow,
 including dry-run review and known VPN/pooler connection recovery.
+Start remote database commands with the runbook's session-only
+`SUPABASE_DB_PASSWORD` setup; do not first retry passwordless login, which has
+repeatedly stalled at `Initialising login role`. The operator enters the password
+in their own hidden Terminal prompt, then unsets it. Never request the value in
+chat, save it in an environment file or Railway, or read credential stores.
 
 For new-Mac Node setup or Node 22 verification, read
 `docs/node-runtime-runbook.md` before giving runtime instructions. It is the

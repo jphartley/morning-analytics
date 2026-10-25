@@ -84,12 +84,13 @@ backend.
 
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL (browser + server).
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: public anon key for client reads.
-- `SUPABASE_SERVICE_ROLE_KEY`: server-side key for writes (keep secret).
+- `SUPABASE_SERVICE_ROLE_KEY`: secret key used only by the constrained server-side resource/image adapter.
 
 Supabase setup assumptions:
 
 - Table `analyses` exists for history records.
 - Storage bucket `analysis-images` exists for image uploads.
+- Apply reviewed forward migrations using the [Supabase runbook](docs/supabase-cli-runbook.md), including server-managed `analysis_resources` ownership bindings. Ordinary browser/server database access uses the verified user's session and RLS.
 - Storage policies allow anon read (for history) and server writes.
 
 Troubleshooting notes for image uploads live in
@@ -180,7 +181,7 @@ after explicit approval or in a dedicated hygiene change.
 ## Documentation
 
 - `docs/current-architecture.md`: data flow, system architecture, and code organization.
-- `docs/supabase-cli-runbook.md`: safe production migration preview, push, and VPN/pooler troubleshooting.
+- [Supabase CLI runbook](docs/supabase-cli-runbook.md): standard session-only database-password setup, production migration preview/push, and connection recovery.
 - [Node runtime runbook](docs/node-runtime-runbook.md): patched Node 22 setup, Railway release-age policy, and actual-process checks, including the Console PATH fallback.
 - [Railway deployment plan](docs/railway-deployment-plan.md): production deployment and environment-change verification.
 - [October security remediation](docs/security-remediation-2026-10.md): completed dependency patch, production evidence and remaining security work.

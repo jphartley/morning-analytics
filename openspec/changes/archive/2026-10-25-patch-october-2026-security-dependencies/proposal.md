@@ -56,4 +56,4 @@ does not clear those risks or claim a complete clean dependency scan. A necessar
 transitive update may touch development dependencies, but avoid unrelated major
 upgrades or npm audit fix --force.
 
-Reference: [October remediation tracker](../../../docs/security-remediation-2026-10.md).
+Reference: [October remediation tracker](../../../../docs/security-remediation-2026-10.md).

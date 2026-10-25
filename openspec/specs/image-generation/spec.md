@@ -2,6 +2,7 @@
 
 Define provider-neutral image generation, normalized storage output, and provider-specific Midjourney capture behavior.
 ## Requirements
+
 ### Requirement: Normalize provider image output before storage
 The system SHALL normalize output from every registered image provider into the same four-image application contract before shared storage and response handling.
 
@@ -103,12 +104,12 @@ The system SHALL return actionable image-generation errors when Discord trigger,
 - **THEN** the diagnostics SHALL include redacted configured channel context and latest inspected candidate counts when available
 
 ### Requirement: Generate comparable Dual mode image groups
-The system SHALL submit the exact same image prompt to Black Forest Labs and Midjourney during an authorized Dual mode request and SHALL keep their results independently attributed.
+The system SHALL submit the exact same image prompt to the configured trial candidate and Midjourney during an authorized Dual mode request and SHALL keep their results independently attributed.
 
 #### Scenario: Both providers succeed
-- **WHEN** Black Forest Labs and Midjourney each return a valid four-image set
+- **WHEN** the configured trial candidate and Midjourney each return a valid four-image set
 - **THEN** the system SHALL return eight images in two provider result groups
-- **AND** the Black Forest Labs group SHALL appear before the Midjourney group
+- **AND** the trial-candidate group SHALL appear before the Midjourney group
 - **AND** each group SHALL identify its provider and exact submitted prompt
 
 #### Scenario: One provider fails
@@ -127,7 +128,7 @@ The system SHALL render generated images in groups based on persisted or newly r
 #### Scenario: Fresh Dual mode result is displayed
 - **WHEN** a Dual mode request returns provider result groups
 - **AND** the admin image-provider picker is available in the current view
-- **THEN** the results page SHALL show a `Black Forest Labs` heading above its images
+- **THEN** the results page SHALL show the configured trial candidate's provider heading above its images
 - **AND** the results page SHALL show a `Midjourney` heading above its images
 
 #### Scenario: Fresh single-provider result is displayed with the provider picker
@@ -168,3 +169,10 @@ The system SHALL render generated images in groups based on persisted or newly r
 - **THEN** the system SHALL display its images with a neutral legacy label only when the admin image-provider picker is available
 - **AND** it SHALL display the same images without a heading when the picker is unavailable
 - **AND** the system SHALL NOT infer provider attribution from path position
+
+#### Scenario: Disabled-provider images are displayed
+- **WHEN** a historical analysis contains BFL or mixed BFL/Midjourney batches and BFL is disabled for new generation
+- **THEN** all previously stored images SHALL remain displayable in their existing order
+- **AND** the system SHALL preserve their stored provider attribution and exact per-batch prompt
+- **AND** headings SHALL continue to follow the current picker-visibility rule
+- **AND** loading history SHALL NOT require BFL credentials or invoke BFL

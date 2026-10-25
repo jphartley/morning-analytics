@@ -85,23 +85,6 @@ The system SHALL not provide in-app role promotion or revocation in this release
 - **THEN** the implementation SHALL ship without a committed email allowlist
 - **AND** accounts SHALL remain `user` until individually promoted by the authorized operator procedure
 
-### Requirement: Treat the first-release role as a product boundary
-For the trusted-friends release, the system SHALL use the browser-resolved database role as a product and UI capability boundary. This change SHALL NOT claim to add server-verified session identity, server-enforced role authorization, `@supabase/ssr`, middleware authorization, or tamper-proof protection against crafted direct requests; those controls SHALL remain scoped to the documented follow-up security-hardening change.
-
-#### Scenario: Normal user does not receive administrator UI
-- **WHEN** a user-role account uses the supported application interface
-- **THEN** the client SHALL not render or submit administrator-only experimental controls and selections
-- **AND** documentation SHALL describe this as UI capability restriction rather than server authorization
-
-#### Scenario: User crafts a direct request
-- **WHEN** a person bypasses the supported interface and manually crafts a request to an existing server action
-- **THEN** this change SHALL rely on the existing server feature gates and data-access behavior
-- **AND** it SHALL not represent the client-derived role as proof that the server rejected the request based on role
-
-#### Scenario: Server-role hardening is planned
-- **WHEN** the trusted trial is expanded or stronger authorization is required
-- **THEN** a separate change SHALL replace browser-supplied identity and role assumptions with server-verified session context and server-enforced capability checks
-
 ### Requirement: Recognize privileged Supabase access as an operational trust boundary
 Application roles and user-facing row-level policies SHALL not be represented as protection from people or systems holding privileged Supabase project, database-owner, or service-role access. Such access is an operationally trusted capability outside the Morning Analytics `user` and `admin` product roles.
 
@@ -113,3 +96,38 @@ Application roles and user-facing row-level policies SHALL not be represented as
 - **WHEN** a trusted operator uses Supabase project, database-owner, or service-role privileges
 - **THEN** that operator MAY access data beyond application row-level restrictions
 - **AND** the application SHALL document this as an operational privacy and credential-management boundary
+
+### Requirement: Enforce persisted roles on server operations
+The system SHALL load the application role from the verified user's persisted profile for each protected action. A browser-provided role or user-editable authentication metadata SHALL NOT grant privileges. Missing, invalid, or unreadable profiles SHALL deny protected action execution with a recoverable error; browser rendering MAY continue to show its existing safe normal-user fallback.
+
+#### Scenario: Normal user crafts administrator input
+- **WHEN** a normal user supplies an admin role, enables Test view manually, or calls an administrator-only action directly
+- **THEN** the server SHALL reject privileged work according to the persisted profile
+
+#### Scenario: Profile cannot be resolved
+- **WHEN** the server cannot obtain a valid persisted role
+- **THEN** it SHALL return an account-settings error before journal, memory, storage, or provider operations
+
+#### Scenario: Role is changed by an operator
+- **WHEN** an operator changes an account's persisted role
+- **THEN** its next protected action SHALL use that updated role without requiring a new login
+- **AND** demotion SHALL prevent further administrator-only action requests
+
+### Requirement: Preserve role-specific operation defaults
+The system SHALL permit both roles to analyze journals, generate images, save, read history, regenerate, and delete their own analyses. Normal users SHALL use the configured default model and image provider without contextual memory. Administrators SHALL retain model selection and contextual memory; experiment and provider controls SHALL additionally obey their existing feature gates.
+
+#### Scenario: Normal user omits privileged options
+- **WHEN** a normal user submits an ordinary analysis without model, provider override, or memory selection
+- **THEN** the server SHALL resolve allowed defaults and perform no memory retrieval or inference
+
+#### Scenario: Normal user explicitly submits a restricted option
+- **WHEN** a normal user supplies a non-default model, a provider override, enabled memory, or nonempty memory-context metadata when saving
+- **THEN** the server SHALL reject the restricted input before performing the operation
+
+#### Scenario: Administrator requests a disabled provider
+- **WHEN** an administrator requests a provider or mode disabled by server configuration or runtime availability
+- **THEN** the server SHALL reject it despite the administrator role
+
+#### Scenario: Administrator targets another owner's content
+- **WHEN** an administrator requests another account's records or privileged image mutation
+- **THEN** ownership checks SHALL reject it just as they would for a normal user

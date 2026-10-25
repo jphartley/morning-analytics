@@ -371,12 +371,14 @@ USING (auth.uid() = id);
 Apply:
 
 ```bash
-# Local
-supabase db push
-
-# Production
-supabase db push --db-url postgresql://postgres:[PASSWORD]@...
+# Local database only
+supabase db push --local
 ```
+
+For production, follow the current
+[Supabase CLI runbook](../supabase-cli-runbook.md). Start with its session-only
+database-password prompt, review the linked-project dry run, and apply only the
+approved migration set. Do not put a database password in a command-line URL.
 
 
 ***

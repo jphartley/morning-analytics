@@ -1,7 +1,8 @@
 # analysis-deletion Specification
 
 ## Purpose
-TBD - created by archiving change delete-analysis-safely. Update Purpose after archive.
+Define confirmed deletion of an owned analysis and its generated images, including accessible cancellation, ownership enforcement and recovery from partial failures.
+
 ## Requirements
 ### Requirement: Guarded per-analysis deletion
 The system SHALL let an authenticated user initiate deletion of an analysis they own from its history entry and from the selected-analysis view, and SHALL require explicit confirmation before deleting any data.

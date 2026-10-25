@@ -4,20 +4,20 @@ This document tracks technical decisions deferred from MVP and features planned 
 
 ## Authentication (v2+)
 
-- [ ] **Email confirmation enforcement**: MVP allows signin before email confirmation for easier testing. Future versions should enforce email confirmation before granting access. See `openspec/changes/add-user-auth/design.md` for context.
+- [ ] **Email confirmation enforcement**: MVP allows signin before email confirmation for easier testing. Future versions should enforce email confirmation before granting access. See `openspec/changes/archive/2026-02-15-add-user-auth/design.md` for context.
 - [ ] **Password reset flow**: MVP does not include password reset. Users who forget passwords will need manual support. Add in v2.
-- [ ] **Account deletion**: Account self-deletion remains deferred. Analysis deletion already exists, including image cleanup, and was included in the operator's production smoke confirmation; the separate server-authorization finding below still applies.
-- [ ] **Server-side route protection (middleware)**: MVP uses client-side auth checking only (AuthSessionProvider). For production, implement `@supabase/ssr` with cookie-based sessions and Next.js middleware for server-side route protection. Benefits: no flash of loading state, faster redirects, defense in depth. Removed during add-user-auth because default Supabase JS client stores tokens in localStorage (not cookies), making middleware cookie checks fail.
+- [ ] **Account deletion**: Account self-deletion remains deferred. Analysis deletion already exists, including image cleanup, and passed the operator's production smoke check on 25 October 2026.
+- [x] **Server-side route protection**: Deployed on 25 October 2026 in `5f3073c`. Cookie-backed sessions, the Next.js proxy and a protected server page entry now check authentication before returning the app. Browser session context continues to support the UI.
 
-- [ ] **Server-side session verification for writes (critical for production)**:
+- [x] **Server-side session verification and ownership**:
 
-  **Current evidence, 24 October 2026:** Multiple Server Actions trust a browser-supplied userId without independently verifying the caller. getMemoryStore and resetMemory use service-role storage helpers, and analysis deletion compares ownership with the caller-supplied userId. The service-role client bypasses RLS; blanket claims that all reads, updates and deletes are protected are incorrect. Browser authentication and a nonempty userId check do not establish server authorization.
+  **Completed, 25 October 2026:** All 12 protected Server Actions verify the session, resolve the persisted role and enforce resource ownership. Routine database work uses the authenticated user's client and RLS; necessary privileged image operations are confined to a server-only adapter and server-managed resource allocations.
 
-  **Risk and scope:** Urgent production authorization work remains open. Exposure is not limited to inserting unwanted analyses: inspected paths include cross-user memory reads/resets, deletion and paid provider operations. No production exploit was attempted, and this review does not establish that every data path is exploitable. The October dependency/Node patch does not resolve this issue.
+  **Verification:** 239 unit tests and 21 isolated Supabase integration tests passed. The production migration, ownership constraints and restrictive policies were checked; the operator verified sign-out/sign-in and analysis creation, reading and deletion. Railway runtime output identifies `5f3073ce8d9cad8c6d8952f54207267684ae6dd8` on Node 22.23.4. Cross-account and role denial tests ran locally against isolated real Supabase services, not other people's production data.
 
-  **Fix for production:** Derive identity from a server-verified session/token, use getUser() or verified getClaims() as appropriate, and enforce ownership and roles before each data operation or provider call. getSession() alone is not a server authorization check. Prefer user-scoped clients/RLS and constrain necessary service-role operations. See [Supabase's server-side guidance](https://supabase.com/docs/guides/auth/server-side/nextjs) and the [October authorization checklist](docs/security-remediation-2026-10.md#b-urgent-server-side-authorization). This is a separate implementation change requiring cross-user and missing/forged-credential tests; documentation correction does not complete it.
+  See the [October authorization checklist](docs/security-remediation-2026-10.md#b-server-side-authorization) for the completion record. Detailed assessment evidence remains local and ignored. Independent security findings remain separate work.
 
-  **Role-aware UI note:** `add-admin-user-modes` adds a browser-resolved `user`/`admin` product boundary for the trusted-friends release. It deliberately does not enforce that role in server actions; complete this hardening before relying on roles for sensitive server-side authorization.
+  **Role-aware UI note:** Administrator-only operations now enforce the persisted role on the server as well as in the UI. Administrator status does not grant access to another account's content.
 
 ## Deployment & Infrastructure
 
@@ -27,7 +27,7 @@ also confirmed temporary NO_CACHE removal and continued 22.23.4 operation.
 Keep the permanent Node-only app/mise.toml policy. See the
 [Node runbook](docs/node-runtime-runbook.md) and
 [remediation tracker](docs/security-remediation-2026-10.md) for evidence and the
-remaining authorization/editor/tooling findings. This patch is not a clean bill
+remaining editor/tooling and other security findings. This patch is not a clean bill
 of health for the whole dependency tree.
 
 - [ ] **Next.js standalone output mode**: Currently using default Next.js output. For leaner Railway deployments, switch to `output: "standalone"` in `next.config.ts`. This produces a self-contained `.next/standalone/` directory with only the files needed to run. Requires ensuring non-code assets (e.g., prompt files in `/app/prompts/`) are copied into the standalone output via `outputFileTracingIncludes`. Deferred during Railway prep to keep initial deployment simple.

@@ -1,8 +1,10 @@
 # openspec-delivery-queue Specification
 
 ## Purpose
-TBD - created by archiving change queue-architecture-hardening. Update Purpose after archive.
+Define the opt-in OpenSpec delivery queue, including isolated candidate setup, approval gates, verification, local test handoff and safe finalization.
+
 ## Requirements
+
 ### Requirement: Builder Worktree Boundary Preflight
 The system SHALL mechanically verify and enforce that Builder implementation work runs only in the assigned candidate worktree for the queued change.
 
@@ -72,6 +74,15 @@ The system SHALL perform and enforce a first-class candidate setup step before c
 #### Scenario: Placeholder backend env blocks backend manual testing
 - **WHEN** a candidate uses placeholder Supabase or backend env values
 - **THEN** the system does not present auth or backend manual testing as ready for Gate 2 approval
+
+#### Scenario: Generated mock environment uses canonical image selection
+- **WHEN** candidate bootstrap creates a placeholder environment
+- **THEN** it SHALL set USE_AI_MOCKS=true and IMAGE_GENERATION_PROVIDER=mock
+- **AND** it SHALL NOT generate the removed NEXT_PUBLIC_IMAGE_PROVIDER setting
+
+#### Scenario: Canonical mock image mode is reported
+- **WHEN** a candidate environment selects IMAGE_GENERATION_PROVIDER=mock
+- **THEN** bootstrap SHALL recognize mock mode without relying on a legacy public provider setting
 
 ### Requirement: Dev Server Readiness Handoff
 The system SHALL verify local candidate server readiness before reporting a running Gate 2 URL.
@@ -544,4 +555,3 @@ The system SHALL clean up successful queue items without deleting useful work.
 #### Scenario: Dirty worktree is not deleted
 - **WHEN** cleanup is requested for a worktree with uncommitted changes
 - **THEN** the system refuses automatic deletion and reports the files that require attention
-

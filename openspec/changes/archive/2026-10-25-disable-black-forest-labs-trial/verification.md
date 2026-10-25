@@ -1,5 +1,11 @@
 # Implementation verification and handoff
 
+Finalized on 25 October 2026: the owner approved archiving this completed change.
+All 22 tasks are complete and its five delta capabilities are synchronized.
+The implementation is included in production release `5f3073c`. Archiving does
+not change provider settings or remove the retained adapter/history. The
+verification results below record the original 23 October implementation checks.
+
 Verified on 23 October 2026, using Node 22.23.2.
 
 ## Results
@@ -72,4 +78,5 @@ Review Railway's staged changes and deploy them with the implementation. Saving 
 
 At the local URL, confirm the provider picker is absent in all views, including administrator Test/Debug, while the other controls remain available. Load existing BFL/mixed history and confirm images remain visible. If performing a normal live Midjourney run, check initial generation and regeneration; this uses the configured provider and may incur its usual cost.
 
-Implementation is ready for manual approval. Archiving, merging, pushing, and deployment have not been performed and must follow the repository's explicit test approval boundary.
+The original handoff awaited manual approval. The owner has since approved
+finalization and the change is archived under `2026-10-25-disable-black-forest-labs-trial`.

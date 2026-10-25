@@ -34,6 +34,7 @@ Closure evidence, 24 October: operator supplied source commit
 1ad2218064f5f06168eebce3a9cb60166b8396e4 and PID 1/Next.js versions 22.23.4,
 then confirmed NO_CACHE removal and continued 22.23.4 operation. Package/native
 versions and the build-log evidence limits are recorded in
-[the remediation tracker](../../../docs/security-remediation-2026-10.md).
+[the remediation tracker](../../../../docs/security-remediation-2026-10.md).
 All scoped tasks are complete; separate security findings remain open. Main
-runtime specs are synchronized; this change remains unarchived.
+runtime specs are synchronized; the owner approved archiving this completed
+change on 25 October 2026.

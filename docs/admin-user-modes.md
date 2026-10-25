@@ -1,7 +1,8 @@
 # Administrator and normal-user modes
 
 Each authenticated account has a `profiles` row with one application role:
-`user` or `admin`. New and existing accounts start as `user`. The role changes
+`user` or `admin`. New accounts and accounts without a profile start as `user`;
+existing valid role assignments are preserved. The role changes
 the supported product experience; it does not grant an administrator access to
 another person's journal data.
 
@@ -52,15 +53,19 @@ WHERE id = '<account-id>';
 Role promotion is data-only and does not require an application deployment.
 The promoted person should refresh the application or sign out and back in to
 resolve the changed role. To revoke, update that profile's role to `user`.
+The next protected action reads the current persisted role independently of
+browser UI state, so server-side revocation does not require a new login.
 
 ## Security boundary
 
-The first release resolves this role in the browser to choose product controls.
-It is not server-verified role authorization and does not make crafted direct
-server-action requests tamper-proof. Existing Supabase RLS continues to isolate
-ordinary authenticated access to a person's own analyses, memories, and
-evidence. Supabase project owners and service-role holders are trusted
-operators who can bypass those ordinary row-level restrictions.
+The browser resolves the role to choose product controls. Every protected server
+action also verifies the session and loads the current persisted profile role;
+forged browser roles do not grant capabilities. Both application roles remain
+limited to their own analyses. Live contextual memory and evidence additionally
+require the administrator role, including direct authenticated database access.
+Normal users' existing live memories remain dormant, while their own historical
+analysis snapshots remain readable. Supabase project owners and service-role
+holders remain trusted operators outside the application-role boundary.
 
 ## Migration verification
 
@@ -76,7 +81,8 @@ SELECT
 ```
 
 Then use two ordinary authenticated browser sessions to confirm that each can
-read only its own profile and its own analyses, memories, and evidence. Attempt
+read only its own profile and analyses. Normal users must have no live memory or
+evidence access; administrators may access only their own live memory/evidence. Attempt
 to change the signed-in user's `profiles.role` from the browser; it must be
 rejected because no insert, update, or delete policy exists. Confirm that an
 account with existing analyses or contextual memory retains those records after

@@ -143,8 +143,8 @@ The system SHALL persist an ordered `image_generation_batches` collection for im
 - **AND** historical attribution SHALL NOT depend on the analysis-level image prompt
 
 #### Scenario: Dual mode batches are stored independently
-- **WHEN** a Dual mode request attempts Black Forest Labs and Midjourney
-- **THEN** the analysis SHALL store one batch per provider attempt in Black Forest Labs then Midjourney order
+- **WHEN** an authorized Dual mode request attempts the configured trial candidate and Midjourney
+- **THEN** the analysis SHALL store one batch per provider attempt in trial-candidate then Midjourney order
 
 ### Requirement: Keep flat paths and generation batches consistent
 The system SHALL retain `image_paths` for backward compatibility while using generation batches as the provider-provenance source of truth.
@@ -173,3 +173,21 @@ The system SHALL protect batch prompts with the same ownership and privacy contr
 #### Scenario: Generation batch is logged or diagnosed
 - **WHEN** application logs or test-mode diagnostics describe a persisted batch
 - **THEN** they SHALL NOT expose the batch's full prompt
+
+### Requirement: Preserve provenance for disabled image providers
+The system SHALL retain and read valid generation batches for known historical providers independently of their availability for new generation. Disabling a provider SHALL NOT delete or relabel its images, prompts, model identifiers, outcomes, timestamps, or attempt identities.
+
+#### Scenario: Historical trial is dormant
+- **WHEN** an analysis containing BFL or mixed-provider batches is loaded after the trial is disabled
+- **THEN** all valid batches SHALL remain readable with their original attribution and order
+- **AND** no provider credential or generation call SHALL be required to parse those batches
+
+#### Scenario: New images are appended after dormancy
+- **WHEN** Midjourney regeneration succeeds on an analysis containing historical BFL batches
+- **THEN** new Midjourney paths and batches SHALL be appended using the existing storage contract
+- **AND** all prior paths and batches SHALL remain intact
+
+#### Scenario: Legacy flat history has no attribution
+- **WHEN** an analysis has flat image paths without batches after the trial is disabled
+- **THEN** its images SHALL remain readable
+- **AND** the system SHALL NOT infer provider attribution

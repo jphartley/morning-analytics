@@ -5,52 +5,39 @@ Define route access rules that protect the main app while allowing public authen
 ## Requirements
 
 ### Requirement: Unauthenticated users redirected to signin
-The system SHALL prevent unauthenticated users from accessing the main app and redirect them to the signin page.
+The system SHALL check authentication on the server before returning protected page content and SHALL redirect unauthenticated page requests to `/signin`.
 
 #### Scenario: Unauthenticated user visits app
-- **WHEN** user without a valid session visits `/`
-- **THEN** user is redirected to `/signin`
+- **WHEN** a user without a valid session visits `/`
+- **THEN** the server SHALL redirect to `/signin` before returning protected content
 
 #### Scenario: Session expires during navigation
-- **WHEN** user's session expires while navigating within the app
-- **THEN** user is redirected to `/signin` on next page load or action
+- **WHEN** a session expires and cannot be refreshed
+- **THEN** the next protected page request SHALL redirect to sign-in
+- **AND** protected actions SHALL reject the request independently of page routing
 
 #### Scenario: Direct URL access without session
-- **WHEN** unauthenticated user attempts to access `/` or other protected routes
-- **THEN** AuthSessionProvider detects missing session and redirects to `/signin`
+- **WHEN** an unauthenticated request directly targets a protected route without browser JavaScript
+- **THEN** the server SHALL deny protected page content and redirect to `/signin`
 
 ### Requirement: Auth pages accessible without authentication
-The system SHALL allow unauthenticated users to access signup and signin pages without requiring a session.
+The system SHALL allow unauthenticated access to `/signup` and `/signin`, and SHALL redirect users with verified sessions from those pages to `/` without redirect loops.
 
 #### Scenario: Unauthenticated user accesses signup
-- **WHEN** user without session visits `/signup`
-- **THEN** signup page loads successfully
+- **WHEN** a user without a session visits `/signup`
+- **THEN** the signup page SHALL load
 
 #### Scenario: Unauthenticated user accesses signin
-- **WHEN** user without session visits `/signin`
-- **THEN** signin page loads successfully
+- **WHEN** a user without a session visits `/signin`
+- **THEN** the signin page SHALL load
 
 #### Scenario: Authenticated user redirected away from auth pages
-- **WHEN** authenticated user visits `/signin` or `/signup`
-- **THEN** user is redirected to `/` (main app) via onAuthStateChange SIGNED_IN event
+- **WHEN** a user with a verified session visits `/signin` or `/signup`
+- **THEN** the server SHALL redirect to `/` while preserving any refreshed session cookies
 
-### Requirement: Client-side route protection via AuthSessionProvider
-The system SHALL use a client-side AuthSessionProvider context to check session state and protect routes.
+### Requirement: Page protection does not substitute for action authorization
+The system SHALL authorize protected actions even when a caller bypasses navigation and submits a request directly.
 
-Note: Server-side middleware was evaluated but removed because Supabase JS stores auth tokens in localStorage (not cookies), making server-side cookie checks impossible without `@supabase/ssr`. See TechnicalDebt.md for the planned production upgrade.
-
-#### Scenario: AuthSessionProvider checks session on mount
-- **WHEN** any page in the app loads
-- **THEN** AuthSessionProvider checks for valid session before rendering content
-
-#### Scenario: AuthSessionProvider redirects unauthenticated users
-- **WHEN** AuthSessionProvider detects missing session on a protected path
-- **THEN** user is redirected to `/signin`
-
-#### Scenario: AuthSessionProvider allows public path access
-- **WHEN** unauthenticated request targets `/signin` or `/signup`
-- **THEN** AuthSessionProvider allows the page to render without redirect
-
-#### Scenario: Auth state listener handles sign-in/sign-out events
-- **WHEN** auth state changes (SIGNED_IN or SIGNED_OUT)
-- **THEN** AuthSessionProvider updates user state and redirects accordingly
+#### Scenario: Direct action request bypasses page checks
+- **WHEN** an unauthenticated caller invokes a protected action directly
+- **THEN** the action SHALL reject the request before protected side effects regardless of the page guard

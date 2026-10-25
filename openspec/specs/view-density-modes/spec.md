@@ -1,7 +1,8 @@
 # view-density-modes Specification
 
 ## Purpose
-TBD - created by archiving change add-view-density-modes. Update Purpose after archive.
+Define persisted Quiet, Insights and administrator Test views so each account sees controls appropriate to its role and enabled configuration.
+
 
 ## Requirements
 

@@ -1,7 +1,8 @@
 # analysis-reading-time Specification
 
 ## Purpose
-TBD - created by archiving change analysis-reading-time-estimate. Update Purpose after archive.
+Help readers judge the length of a generated analysis through a consistent reading-time estimate that respects the selected view mode.
+
 ## Requirements
 ### Requirement: Display analysis reading estimate
 The AnalysisPanel component SHALL display a reading time estimate for non-empty analysis text in insight and test modes. The AnalysisPanel component SHALL hide reading metadata in quiet mode.

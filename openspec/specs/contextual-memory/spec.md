@@ -155,12 +155,27 @@ The system SHALL use the same user-scoped memory catalog and relevance process f
 - **AND** the account's stored memory catalog SHALL remain available for later administrator analyses
 
 ### Requirement: Isolate memory by user
-The system SHALL prevent a user from reading, selecting, updating, rebuilding, or resetting another user's memory or evidence.
+The system SHALL require a verified administrator identity to read, select, update, rebuild, or reset live contextual memories or evidence, and SHALL restrict that access to the administrator's own records. These restrictions SHALL apply to both application operations and direct authenticated database requests. Existing memory records for normal-user accounts SHALL remain dormant and SHALL NOT be deleted by this change. Historical snapshots stored in an account's own analyses are not access to the live memory store.
 
 #### Scenario: User reads the memory store
-- **WHEN** an authenticated user requests memory records or evidence
-- **THEN** the system SHALL return only records owned by that user
+- **WHEN** a verified administrator requests memory records or evidence
+- **THEN** the system SHALL return only records owned by that administrator
 
 #### Scenario: Server receives a foreign memory identifier
-- **WHEN** a server mutation references a memory not owned by the supplied authenticated user context
+- **WHEN** a mutation references a memory, evidence parent, or source analysis owned by another account
 - **THEN** the system SHALL reject the mutation
+
+#### Scenario: Normal user directly accesses live memory tables
+- **WHEN** a normal user queries or mutates memory or evidence using their authenticated database session
+- **THEN** database grants and policies SHALL deny the operation or expose no rows as appropriate
+- **AND** the account's existing memories SHALL remain dormant
+
+#### Scenario: Account is demoted
+- **WHEN** an administrator becomes a normal user
+- **THEN** subsequent requests SHALL lose access to live memory and experiments
+- **AND** stored memories SHALL remain available if the operator later promotes the account again
+
+#### Scenario: Owner reads an old analysis
+- **WHEN** a normal user retrieves their own historical analysis containing a stored memory-context snapshot
+- **THEN** ownership policy SHALL continue to permit that analysis read
+- **AND** the read SHALL NOT enable live memory queries, inference, or experiment controls

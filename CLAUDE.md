@@ -156,9 +156,9 @@ Mock responses:
 Current pattern: `{analysisId}/{index}.jpg`
 
 To change:
-1. Update path construction in `lib/analytics-storage.ts` (uploadImagesToStorage function)
+1. Update path construction and path validation in `lib/authorized-image-storage.ts`
 2. Update path reading in `lib/analytics-storage-client.ts` (getPublicUrl conversion)
-3. No database schema changes needed (paths stored as strings/JSON)
+3. Keep persisted paths and server-managed resource manifests compatible; review schema changes through the Supabase runbook
 
 ### Adding a New Component
 
@@ -171,8 +171,14 @@ To change:
 
 1. Create migration file: `/supabase/migrations/{timestamp}_{description}.sql`
 2. Write DDL (ALTER TABLE, CREATE COLUMN, etc.)
-3. Push to Supabase via `supabase db push` (if CLI installed)
-4. Or apply manually in Supabase SQL editor
+3. Read `docs/supabase-cli-runbook.md` before any remote database command. Start
+   with its hidden-prompt, session-only `SUPABASE_DB_PASSWORD` setup; passwordless
+   `Initialising login role` has repeatedly stalled for this project. Never ask
+   for the password in chat, read credential stores, or save it in `.env`/Railway.
+4. Preview with `supabase db push --linked --dry-run --skip-vault`; review the
+   exact migration list, then apply with `supabase db push --linked --skip-vault`
+   only when rollout is authorized. Unset the temporary password after each use.
+   Do not replace the reviewed preview with a manual production migration.
 5. Update TypeScript types in `lib/supabase.ts` if needed
 
 ### Exporting History
@@ -188,18 +194,20 @@ Users might request export functionality. Current approach:
 
 ## Database Queries & RLS
 
-RLS is enabled on the `analyses` table. The anon client (used for reads) automatically filters by the authenticated user's session:
+RLS is enabled on `analyses` and applies to ordinary authenticated browser and
+server clients. Both use the verified user's session:
 
 ```sql
 -- Anon client queries (RLS enforced):
 SELECT * FROM analyses;  -- Returns only current user's analyses
 -- INSERT, UPDATE, DELETE similarly restricted to user's own rows
 
--- Service role client (bypasses RLS, used for server-side writes):
-INSERT INTO analyses (..., user_id) VALUES (..., '<userId>');
+-- New analyses also require a matching server-allocated ID/owner binding.
 ```
 
 **RLS policies**: SELECT, INSERT, UPDATE, DELETE all enforce `user_id = auth.uid()`.
+The private service-role client is confined to the authorized resource/image
+adapter; it is not the default client for journal or memory operations.
 
 ## Performance Notes
 
@@ -269,10 +277,13 @@ Users see analysis text within ~2 seconds, images load while they read.
 │  ├─ ErrorState.tsx            # Error message + retry button
 │  └─ PalettePicker.tsx         # Floating palette switcher (20 palettes, localStorage persistence)
 ├─ lib/                          # Utility libraries
-│  ├─ supabase.ts               # Supabase client (server + browser instances)
+│  ├─ supabase.ts               # Cookie-backed browser client and shared types
+│  ├─ supabase-server.ts        # Request-scoped authenticated server client
+│  ├─ server-authorization.ts   # Verified session and persisted role checks
+│  ├─ authorized-image-storage.ts # Constrained privileged storage/resource adapter
 │  ├─ useAuth.ts                # Auth hook (reads from AuthContext)
 │  ├─ gemini.ts                 # Gemini API client, loads persona prompts from disk
-│  ├─ analytics-storage.ts      # Supabase storage upload (base64 → JPEG) + DB insert
+│  ├─ analytics-storage.ts      # User-scoped analysis persistence and image metadata
 │  ├─ analytics-storage-client.ts # Supabase anon client reads (converts paths → public URLs)
 │  ├─ image-splitter.ts         # Sharp: download Discord grid → extract 4 quadrants as base64
 │  ├─ models.ts                 # Gemini model definitions
@@ -308,26 +319,29 @@ ERROR can occur at any phase:
   └─ Save failure → Non-blocking toast, user can continue
 ```
 
-### Three Server Actions (in `/app/app/actions.ts`)
+### Primary Server Actions (in `/app/app/actions.ts`)
 
-**analyzeText(journalText, userId, modelId?, persona?)**
-- Requires authenticated userId (passed from client's useAuth hook)
+All 12 protected exports verify the session and persisted role independently.
+The primary UI flow uses these object inputs:
+
+**analyzeText({ journalText, modelId?, persona?, memoryMode? })**
+- Derives identity from the verified session and authorizes model/memory options
 - Calls Gemini API with selected model + persona
 - Persona determines system instruction (loaded from `/app/prompts/{persona}.md`)
 - Returns: `{ success, analysisText, imagePrompt, error? }`
 - If `imagePrompt` is null (analysis doesn't warrant images), image generation skipped
 
-**generateImages(imagePrompt, userId)**
-- Requires authenticated userId
+**generateImages({ imagePrompt, providerOverride? })**
+- Verifies the session and allocates an analysis resource bound to that owner
 - **Mock mode** (`IMAGE_GENERATION_PROVIDER=mock`): Reads 4 local images from `/app/public/mock-images/`
 - **Real mode**: Discord user token → Midjourney → Discord bot listens → Download grid → Sharp splits → Upload to S3
 - Returns: `{ success, imageUrls: base64[], imagePaths: storagePaths[], analysisId, error? }`
 - `imageUrls` are base64 data URLs for immediate display
 - `imagePaths` are storage paths (e.g., `550e8400-123/0.jpg`) for DB storage
 
-**saveAnalysis(inputText, analysisText, imagePrompt, modelId, imagePaths, userId, analysisId?, persona?)**
-- Requires authenticated userId
-- Inserts row into `analyses` table with all metadata including user_id
+**saveAnalysis({ ...analysisBusinessInputs })**
+- Verifies the session, role, ownership binding and generated-image manifest
+- Inserts under the verified user's RLS client; client user IDs and roles are rejected
 - Returns: `{ success, id, error? }`
 
 ### Image Pipeline
@@ -351,7 +365,7 @@ Midjourney Pipeline:
   splitGridImage() with Sharp library
     Download 2×2 grid → Extract 4 quadrants → Convert to JPEG (90% quality)
     ↓ [base64]
-  uploadImagesToStorage()
+  uploadAuthorizedImages()
     Convert base64 → buffer → Upload to Supabase bucket `analysis-images`
     Path: `{analysisId}/{index}.jpg`
     ↓ [storage paths]
@@ -368,13 +382,13 @@ Public URLs (client-side only): `https://kjfzaflmpaqldrxkfija.supabase.co/storag
 
 | Column | Type | Purpose |
 |--------|------|---------|
-| `id` | UUID | Primary key (auto-generated by Supabase) |
+| `id` | UUID | Primary key, allocated and bound to the verified owner by the server |
 | `created_at` | TIMESTAMP | When analysis was created |
 | `input_text` | TEXT | Original morning pages text |
 | `analysis_text` | TEXT | Gemini's analysis output |
 | `image_prompt` | TEXT | Prompt sent to Midjourney (nullable) |
 | `model_id` | TEXT | Gemini model used (e.g., "gemini-3-pro-preview") |
-| `image_paths` | JSONB | Array of storage paths: `["id/0.jpg", "id/1.jpg", "id/2.jpg", "id/3.jpg"]` (nullable) |
+| `image_paths` | TEXT[] | Array of storage paths: `["id/0.jpg", "id/1.jpg", "id/2.jpg", "id/3.jpg"]` (nullable) |
 | `analyst_persona` | TEXT | Selected persona ("jungian", "mel-robbins", "loving-parent") (nullable) |
 | `user_id` | UUID | Owner of this analysis (NOT NULL, set from authenticated user) |
 
@@ -413,28 +427,32 @@ Why not official Midjourney API?
 **Current (Multi-User with Supabase Auth)**:
 - Email/password authentication via Supabase Auth
 - Signup at `/signup`, signin at `/signin`
-- Client-side route protection via `AuthSessionProvider` (wraps app in `layout.tsx`)
+- Server-side page protection via the Next.js proxy and protected page entry
 - `useAuth()` hook provides `user`, `loading`, `logout` throughout the app
-- RLS policies on `analyses` table enforce per-user data isolation for reads
-- Server actions receive `userId` from client session (see TechnicalDebt.md for production hardening)
-- Service role key used for writes (server-side, bypasses RLS)
-- Sessions stored in browser localStorage (14-day expiry configured in Supabase)
+- RLS policies enforce per-user data isolation for ordinary browser and server database operations
+- Every protected Server Action independently verifies the session and persisted role
+- Business inputs never provide identity or role authority
+- Privileged image operations use a constrained server-only adapter and owned resource allocations
+- Sessions use cookies shared by browser and server; obsolete local auth storage is cleared
+- Token refresh and session limits are controlled by Supabase Auth settings; do not infer a session lifetime from the access-token expiry
 
 **Auth flow**:
-1. `AuthSessionProvider` checks session on mount
-2. No session → redirect to `/signin`
-3. Session found → render app, provide user context via `AuthContext`
+1. The proxy refreshes/verifies the session and the server page checks authentication
+2. No valid session → server redirect to `/signin`
+3. Session found → render app; `AuthSessionProvider` supplies browser UI context
 4. `onAuthStateChange` listener handles SIGNED_IN/SIGNED_OUT events
-5. Server actions receive `userId` parameter from client's `useAuth().user.id`
+5. Each action derives identity and capabilities from its verified session before protected work
 
 **Key files**:
-- `/app/components/AuthSessionProvider.tsx` — Auth context provider, route protection
+- `/app/components/AuthSessionProvider.tsx` — Browser auth context and sign-in/sign-out UI
+- `/app/proxy.ts` and `/app/lib/session-proxy.ts` — Page checks, refresh and private caching
+- `/app/lib/server-authorization.ts` — Independent action identity and role checks
 - `/app/lib/useAuth.ts` — Hook to access auth state
 - `/app/components/AppHeader.tsx` — Shows user email + sign out button
 - `/app/app/(auth)/signin/page.tsx` — Sign in page
 - `/app/app/(auth)/signup/page.tsx` — Sign up page
 
-**Note**: Server-side middleware was removed during implementation because Supabase JS stores tokens in localStorage (not cookies), making server-side cookie checks impossible without `@supabase/ssr`. See TechnicalDebt.md for the planned production fix.
+**Note**: Page protection does not replace action authorization. Preserve both boundaries and the request-scoped authenticated database client.
 
 ### State Management
 
@@ -455,15 +473,15 @@ Why not official Midjourney API?
 
 User pastes "I felt stuck today..." and clicks Analyze with model=gemini-3-pro-preview, persona=jungian:
 
-1. **Client → Server**: `analyzeText("I felt stuck today...", userId, "gemini-3-pro-preview", "jungian")`
-2. **Server**: Load `/app/prompts/jungian.md` system instruction
+1. **Client → Server**: `analyzeText({ journalText: "I felt stuck today...", modelId: "gemini-3-pro-preview", persona: "jungian" })`
+2. **Server**: Verify the session, resolve the role/model/memory permissions, then load `/app/prompts/jungian.md`
 3. **Server**: Call Gemini API with both model and system instruction
 4. **Gemini Response**: `"<analysis about Jung archetypes>...\n---IMAGE PROMPT---\n<surreal imagery prompt>"`
 5. **Server**: Split on `---IMAGE PROMPT---` delimiter
 6. **Client**: Display analysis text (text-ready state)
-7. **Client → Server**: `generateImages("<surreal imagery prompt>", userId)`
+7. **Client → Server**: `generateImages({ imagePrompt: "<surreal imagery prompt>" })`
 8. **Server**:
-   - Generate unique analysisId (UUID)
+   - Verify the session and allocate a unique analysis ID bound to that owner
    - Trigger Midjourney via Discord user token (nonce-based)
    - Listen for Midjourney response via Discord bot token (120s timeout)
    - Download 2×2 grid image
@@ -471,8 +489,8 @@ User pastes "I felt stuck today..." and clicks Analyze with model=gemini-3-pro-p
    - Upload each quadrant to Supabase storage
    - Return base64 URLs for display + storage paths
 9. **Client**: Display 4 images (complete state)
-10. **Client → Server**: `saveAnalysis(input, analysis, imagePrompt, modelId, imagePaths, userId, analysisId, persona)`
-11. **Server**: Insert into `analyses` table
+10. **Client → Server**: `saveAnalysis({ ...analysisBusinessInputs })`, including an allocated analysis ID when images were generated
+11. **Server**: Verify the session, role, ownership and trusted image manifest; insert under the user's RLS client
 12. **Client**: Auto-refresh history sidebar
 13. **History Sidebar**: Queries `listAnalyses()`, displays new entry at top
 
@@ -508,7 +526,7 @@ DEBUG_DISCORD=true              # Optional: Verbose Discord/Midjourney listener 
 ```
 NEXT_PUBLIC_SUPABASE_URL=...           # Required: Supabase project URL (exposed to browser)
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...      # Required: Anon key for client reads (exposed to browser)
-SUPABASE_SERVICE_ROLE_KEY=...          # Required: Service role key for server writes (secret)
+SUPABASE_SERVICE_ROLE_KEY=...          # Required: Constrained server-only resource/image adapter (secret)
 ```
 
 ### Testing Modes

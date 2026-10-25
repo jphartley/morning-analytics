@@ -2,6 +2,7 @@
 
 Enable users to regenerate images for an existing analysis while preserving prior images and enforcing per-analysis limits.
 ## Requirements
+
 ### Requirement: Regenerate images for an existing analysis
 
 The system SHALL allow users to regenerate images for any analysis that has a stored image prompt, accumulating a new provider generation round alongside existing images.
@@ -75,6 +76,7 @@ The system SHALL enforce a maximum of 20 stored images per analysis and SHALL re
 
 - **WHEN** a permitted Dual mode regeneration produces one successful four-image group and one failed group
 - **THEN** only the four successfully stored images SHALL count toward the 20-image cap
+
 ### Requirement: Use the selected provider for regeneration
 The system SHALL resolve regeneration through the same provider-selection contract used for initial image generation.
 
@@ -88,6 +90,17 @@ The system SHALL resolve regeneration through the same provider-selection contra
 - **AND** server-side provider override support is enabled
 - **THEN** the system SHALL generate the new image round with the selected provider
 - **AND** existing images SHALL remain visible and unchanged
+
+#### Scenario: Historical BFL analysis is regenerated with no active trial
+- **WHEN** a user regenerates an analysis containing old BFL images with no active trial and Midjourney as the deployment default
+- **THEN** the system SHALL request four Midjourney images using the stored analysis prompt
+- **AND** the previous BFL images and batches SHALL remain intact
+- **AND** historical attribution SHALL NOT select BFL for the new round
+
+#### Scenario: Disabled provider is requested for regeneration
+- **WHEN** a regeneration request explicitly selects BFL or Dual without an authorized trial candidate
+- **THEN** the server SHALL reject that selection before invoking either provider
+- **AND** existing images and batches SHALL remain unchanged
 
 ### Requirement: Regenerate button visibility
 
@@ -143,8 +156,8 @@ The system SHALL keep image regeneration controls available across quiet, insigh
 The system SHALL apply the authorized Dual mode orchestration to regeneration using the analysis prompt selected for that round.
 
 #### Scenario: Dual regeneration succeeds
-- **WHEN** a user selects Dual mode and enough image capacity remains
-- **THEN** the system SHALL request four Black Forest Labs images and four Midjourney images using the exact same prompt
+- **WHEN** an administrator selects authorized Dual mode with an available trial candidate and enough image capacity remains
+- **THEN** the system SHALL request four trial-candidate images and four Midjourney images using the exact same prompt
 - **AND** it SHALL append successful paths and provider generation batches to the existing analysis
 - **AND** existing images SHALL remain visible and unchanged
 
