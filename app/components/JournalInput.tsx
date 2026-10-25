@@ -3,12 +3,20 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   countJournalWords,
   shouldAutoAnalyzePastedJournal,
 } from "@/lib/journal-submission";
 import { FIRST_USE_COPY } from "@/lib/first-use-copy";
+import { createJournalClipboardController } from "@/lib/journal-clipboard";
+
+type MarkdownStorage = {
+  markdown: {
+    getMarkdown: () => string;
+    parser: { parse: (text: string, options: { inline: boolean }) => string };
+  };
+};
 
 interface JournalInputProps {
   value: string;
@@ -43,8 +51,9 @@ export function JournalInput({
   actionLabel = FIRST_USE_COPY.actionLabel,
 }: JournalInputProps) {
   const isUpdatingFromProp = useRef(false);
-  const pasteDetected = useRef(false);
-  const shouldAutoAnalyze = useRef(false);
+  const [clipboardError, setClipboardError] = useState<string | null>(null);
+  const [clipboard] = useState(() => createJournalClipboardController(setClipboardError));
+  const pendingAutoAnalysis = useRef<string | null>(null);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -58,52 +67,51 @@ export function JournalInput({
         strike: false,
         dropcursor: false,
         gapcursor: false,
+        link: false,
+        underline: false,
       }),
       Markdown.configure({
         html: false,
         transformPastedText: true,
         transformCopiedText: true,
+        linkify: false,
       }),
     ],
     editable: !disabled,
     content: value,
-    onUpdate: ({ editor }) => {
+    onCreate: ({ editor }) => {
+      clipboard.setMarkdownParser((text) =>
+        (editor.storage as unknown as MarkdownStorage).markdown.parser.parse(text, { inline: true }));
+    },
+    onDestroy: () => { clipboard.setMarkdownParser(null); },
+    onUpdate: ({ editor, transaction }) => {
       if (isUpdatingFromProp.current) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const md = (editor.storage as any).markdown.getMarkdown() as string;
+      const md = (editor.storage as unknown as MarkdownStorage).markdown.getMarkdown();
+      const wasPaste = transaction.getMeta("paste") === true && !clipboard.isExternalDrop();
+      pendingAutoAnalysis.current = wasPaste && shouldAutoAnalyzePastedJournal(editor.getText(), disabled) ? md : null;
       onChange(md);
-
-      const wasPaste = pasteDetected.current;
-      pasteDetected.current = false;
-      if (wasPaste && shouldAutoAnalyzePastedJournal(md, disabled)) {
-        shouldAutoAnalyze.current = true;
-      }
     },
     editorProps: {
+      ...clipboard.editorProps,
       attributes: {
         class:
           "w-full min-h-[16rem] p-4 text-lg bg-surface text-ink outline-none",
-      },
-      handlePaste: () => {
-        pasteDetected.current = true;
-        return false;
       },
     },
   });
 
   // Trigger auto-analyze after React re-renders with updated value
   useEffect(() => {
-    if (shouldAutoAnalyze.current) {
-      shouldAutoAnalyze.current = false;
+    if (!disabled && pendingAutoAnalysis.current !== null && value === pendingAutoAnalysis.current) {
+      pendingAutoAnalysis.current = null;
       onAnalyze();
     }
-  }, [value, onAnalyze]);
+  }, [value, onAnalyze, disabled]);
 
   // Sync external value prop changes into editor
   useEffect(() => {
     if (!editor) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const currentMd = (editor.storage as any).markdown.getMarkdown() as string;
+    const currentMd = (editor.storage as unknown as MarkdownStorage).markdown.getMarkdown();
     if (value !== currentMd) {
       isUpdatingFromProp.current = true;
       editor.commands.setContent(value);
@@ -114,12 +122,12 @@ export function JournalInput({
   // Sync disabled prop
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(!disabled);
+    editor.setEditable(!disabled, false);
   }, [disabled, editor]);
 
   const wordCount = useMemo(
-    () => countJournalWords(value),
-    [value]
+    () => countJournalWords(editor?.getText() ?? value),
+    [editor, value]
   );
 
   const isThresholdMet = wordCount >= 300;
@@ -139,6 +147,7 @@ export function JournalInput({
         )}
         <EditorContent editor={editor} />
       </div>
+      {clipboardError && <p role="alert" className="text-sm text-ink">{clipboardError}</p>}
       {showWritingStats && (
         <div
           className={`text-sm text-right tabular-nums ${isThresholdMet ? "text-accent" : "text-ink-muted"}`}

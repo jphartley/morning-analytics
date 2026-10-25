@@ -14,8 +14,9 @@ values, access tokens, raw environment exports, or unredacted logs in this file.
 | Railway credential response | Complete, confirmed by the operator | In this chat on 23 October, the operator confirmed revocation in Google, Discord and Supabase, replacement values in Railway, redeployment, and review of Railway, Google and Supabase logs with nothing suspicious found. |
 | Dependency remediation | Scoped patch complete; production Node verified and temporary cache setting removed | Operator output confirms commit 1ad2218064f5f06168eebce3a9cb60166b8396e4 and PID 1/Next.js at Node 22.23.4. The operator subsequently confirmed NO_CACHE removal and continued 22.23.4 operation. [OpenSpec change](../openspec/changes/archive/2026-10-25-patch-october-2026-security-dependencies/proposal.md): 17 of 17 tasks complete. Separate findings below remain open. |
 | Server-side authorization | Scoped remediation complete | Deployed `5f3073c` and the reviewed forward migration on 25 October. Production ownership/policy metadata, signed-out and forged-cookie page denial, and operator sign-out/sign-in plus analysis create/read/delete checks passed. Operator runtime output confirms the commit and Node 22.23.4. Cross-account/role denial tests used isolated Supabase accounts. Detailed assessment evidence remains local and ignored. |
-| Editor and development tools | Open | Affected Markdown-it, Tiptap, Vite and Vitest dependency versions remain locked. |
-| Automated lockfile assessment | Completed through local registry mirror; findings remain open | All three lockfiles assessed on 23 October, including development dependencies. App: 14 High / 4 Moderate dependency-package findings; root and validation: 1 High each. These are not independent CVE counts. See triage below. |
+| Editor and Markdown | User-tested and approved; archived, production verification pending | [Editor hardening](#editor-hardening-verified-locally-25-october-2026) updates Tiptap, ProseMirror, Markdown-it and linkify-it, and adds restricted clipboard cleanup preserving headings and bold. Production adoption is not yet verified. |
+| Development tools | Open | Vite, Vitest and other independent tooling findings remain outside the editor change. |
+| Automated lockfile assessment | Updated app scan completed through local registry mirror; findings remain open | App reassessed on 25 October: 5 High / 4 Moderate dependency-package findings, none in the scoped editor/sanitizer packages. Root and validation were not rescanned for this change; their 23 October snapshot remains 1 High each. These are not independent CVE counts. |
 
 No evidence of misuse was reported in the reviewed logs. That does not prove that
 no misuse occurred. Production dependency versions are recorded from the operator's
@@ -176,11 +177,11 @@ alone is not an authorization check:
 
 ### C. Editor and development tools
 
-- [ ] Update Markdown-it to at least 14.3.3 on the compatible 14.x line.
-- [ ] Update the Tiptap dependency family together to a compatible release containing the 3.30.5 fixes; verify tiptap-markdown compatibility and include the ProseMirror paste-XSS and linkify findings from the complete scan.
+- [x] Update Markdown-it to at least 14.3.3 on the compatible 14.x line. Resolved locally to 14.3.3; user testing approved, production verification pending.
+- [x] Update the Tiptap dependency family together to a compatible release containing the 3.30.5 fixes; verify tiptap-markdown compatibility and include the ProseMirror paste-XSS and linkify findings from the complete scan. Resolved locally to Tiptap 3.32.0, ProseMirror View 1.42.8 and linkify-it 5.0.2; local compatibility and scoped audit checks pass. Production adoption remains pending.
 - [ ] Update Vitest and its coupled packages to at least 4.1.12 on 4.x.
 - [ ] Update Vite to a compatible patched version, at least 8.1.6 on 8.1.x, and check all installed copies.
-- [ ] Verify paste, Markdown formatting, copy, journal reload and bounded handling of unusually large input.
+- [x] Verify paste, Markdown formatting, copy, journal reload and a bounded synthetic parsing regression locally. See editor evidence below. A general entry-size limit remains deferred by the selected scope; this is not a guarantee for arbitrary input sizes.
 - [ ] Review image origin/redirect restrictions, accepted formats, download size, pixel limits and timeouts as a separately scoped hardening follow-up.
 - [ ] Keep development/test HTTP servers off public interfaces unless deliberately secured.
 
@@ -567,6 +568,10 @@ from this scoped change. No existing repository instruction file was edited.
 
 ### Remaining advisory findings after the targeted patch
 
+This is the historical 23 October snapshot. The editor row is superseded locally
+by the [25 October editor evidence](#editor-hardening-verified-locally-25-october-2026)
+below; the snapshot is retained to explain the original findings.
+
 Ran npm audit --package-lock-only --json against app/, repository root and
 validation/ through the working local npm mirror on 23 October. Coverage includes
 runtime and development dependencies. Direct public npm remains inaccessible.
@@ -601,3 +606,73 @@ Additional source records from the scan:
 - [source-map-js denial of service](https://github.com/advisories/GHSA-68fv-2mgg-jv7q).
 - [braces recursion](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), [brace-expansion recursion](https://github.com/advisories/GHSA-qhr7-859c-m2p7), and [brace-expansion rewrite complexity](https://github.com/advisories/GHSA-q2hr-2g5m-vwhr).
 - [js-yaml merge-key limit bypass](https://github.com/advisories/GHSA-2883-xcg3-v3hh).
+
+### Editor hardening verified locally, 25 October 2026
+
+Change: [harden-markdown-journal-editor](../openspec/changes/archive/2026-10-25-harden-markdown-journal-editor/proposal.md).
+Implemented on `main`. On 25 October the user confirmed "It works. All tested."
+and explicitly authorized spec sync, archive, commit and push. All five added
+requirements are synced to the main journal-editor specification and the change
+is archived. This approval does not establish production deployment success;
+production adoption and smoke verification remain pending.
+
+Resolved versions are Tiptap 3.32.0 throughout the installed family, ProseMirror
+View 1.42.8, ProseMirror Model 1.25.12, Markdown-it 14.3.3 and linkify-it 5.0.2.
+`tiptap-markdown` remains 0.9.0 with its supported Tiptap 3 peer range. DOMPurify
+3.4.17 provides the HTML cleanup boundary; jsdom 30.1.3 is a development-only
+dependency for browser-like regression tests. `npm ls` verified compatible,
+deduplicated versions; no overrides or unrelated direct dependency upgrades
+were added.
+
+Pasted and externally dropped HTML is cleaned before editor interpretation.
+The supported output retains headings, bold, italic, lists, paragraphs and line
+breaks. Recognized document heading markers and inline emphasis are normalized,
+then source styles, URLs, active content and clipboard metadata are removed.
+Raw Markdown paste and copy continue to work. Empty or failed cleanup preserves
+the existing entry. Automatic analysis waits until the parent has received the
+new Markdown value and uses visible words for the paste threshold.
+
+Local verification under Node 22.23.4:
+
+| Check | Result |
+| --- | --- |
+| Clean `npm ci --ignore-scripts --no-audit` and resolved dependency tree | Passed under Node 22.23.4. Initial metadata/install commands selected the machine's Node 26; the clean reinstall and reported verification used the explicit Node 22 PATH. |
+| `npm run test` | 269 passed across 38 files; 21 isolated Supabase integration tests skipped because their separate database configuration was not enabled. Includes 30 new clipboard/editor checks. |
+| `npm run lint` and `npm run check:lockfile-registry` | Passed. Lockfile contains no private registry URLs. |
+| `npm run build -- --webpack` | Passed with TypeScript and prerender checks, using local synthetic Supabase settings and mock providers. |
+| Default `npm run build` | Blocked locally by Turbopack's CSS worker port binding (`Operation not permitted`), including an escalated attempt. This is not recorded as a successful default build. |
+| Chrome browser checks | Passed synthetic semantic HTML, representative Word/Docs heading and emphasis conventions, raw Markdown paste, selection replacement, undo, safe fallback/failure, external drop, native copy, automatic analysis, four mock images, and saved-history reload preserving headings and bold. No browser errors, execution-marker changes or embedded external-resource requests were observed. |
+| `npm audit --package-lock-only --json` | No scoped editor, Markdown, sanitizer or jsdom findings. Remaining app entries: 5 High / 4 Moderate / 0 Critical. These package counts are not distinct vulnerability counts or a clean overall result. |
+
+The remaining audit entries are `ws`, `protobufjs`, `source-map-js`,
+`@humanfs/node`, `brace-expansion`, `js-yaml`, Vite, Vitest and `@vitest/mocker`.
+Their existing follow-ups remain open. The app scan did not rescan root or
+validation lockfiles, and does not establish current production dependency
+versions. No general risk exceptions were accepted.
+
+A bounded synthetic Markdown reference probe with HTML and automatic link
+recognition disabled processed an approximately 333 KB sample in 8.6 ms after
+the update; the same constructed sample took 384.4 ms before the update on the
+same Node 22 runtime. The approximately 83/166/333 KB updated samples took
+6.5/5.3/8.6 ms. These are local observations, not production performance
+guarantees or a substitute for a future input-size policy.
+
+Browser verification used an in-memory HTTP fixture on `127.0.0.1:54330`, mock
+analysis/images and synthetic content. It exercised application behavior, not
+real Supabase authorization, storage persistence across process restarts or
+production services. Detailed temporary scripts, reports and screenshots are
+under `/tmp/morning-editor-browser/`; the app audit response is
+`/tmp/morning-editor-audit.json`. The evidence summary here remains valid if
+those temporary files are removed.
+
+Review URL: [http://127.0.0.1:3101](http://127.0.0.1:3101). The synthetic login is
+`smoke@example.test` with password `local-fixture-only`; this is an isolated
+fixture account. Fixture data disappears when the fixture process stops. The
+user confirmed all testing passed. Arbitrary
+visual-only document styling is not a supported import format.
+
+**Environment / Railway variables:** none new, changed or removed. Temporary
+mock/fixture settings apply only to local verification commands. A normal
+application deployment and production smoke check remain necessary after
+the authorized push. Public image access, abuse controls, general input-size limits and
+other independent security findings remain separate work.

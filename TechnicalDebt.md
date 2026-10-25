@@ -27,10 +27,16 @@ also confirmed temporary NO_CACHE removal and continued 22.23.4 operation.
 Keep the permanent Node-only app/mise.toml policy. See the
 [Node runbook](docs/node-runtime-runbook.md) and
 [remediation tracker](docs/security-remediation-2026-10.md) for evidence and the
-remaining editor/tooling and other security findings. This patch is not a clean bill
+remaining tooling and other security findings, plus the locally verified editor
+follow-up approved after user testing; production deployment verification remains pending. This patch is not a clean bill
 of health for the whole dependency tree.
 
 - [ ] **Next.js standalone output mode**: Currently using default Next.js output. For leaner Railway deployments, switch to `output: "standalone"` in `next.config.ts`. This produces a self-contained `.next/standalone/` directory with only the files needed to run. Requires ensuring non-code assets (e.g., prompt files in `/app/prompts/`) are copied into the standalone output via `outputFileTracingIncludes`. Deferred during Railway prep to keep initial deployment simple.
+
+## Journal Editor
+
+- **Editor hardening approved after user testing:** `harden-markdown-journal-editor` updates the editor/Markdown dependencies and cleans external clipboard content while retaining headings and bold. Local verification passes and the user confirmed all testing passed on 25 October 2026. The change is archived; production deployment verification remains pending. See the [October evidence](docs/security-remediation-2026-10.md#editor-hardening-verified-locally-25-october-2026) for versions, checks and remaining dependency findings.
+- [ ] **Entry-size policy before text processing:** General paste/entry limits were deliberately excluded from the selected editor update and formatting-preserving clipboard scope. The reviewed parser bugs are patched locally, but very large inputs can still consume browser resources. Agree limits and a clear rejection message, then enforce them before parsing without silently truncating an existing journal. Origin: `harden-markdown-journal-editor`; small-to-medium effort including product review and browser checks.
 
 ## OpenSpec Delivery Queue
 
