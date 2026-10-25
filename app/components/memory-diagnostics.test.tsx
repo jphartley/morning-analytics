@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/actions", () => ({
+vi.mock("@/lib/action-client", () => ({
   getMemoryStore: vi.fn(),
   prepareMemoryRebuild: vi.fn(),
   rebuildMemoryEntry: vi.fn(),

@@ -1,46 +1,20 @@
 "use server";
 
-import { v4 as uuidv4 } from "uuid";
 import { analyzeWithGemini } from "@/lib/gemini";
-import { assertServerSupabaseEnv } from "@/lib/supabase";
-import {
-  saveAnalysis as saveToStorage,
-  updateAnalysisImageGeneration,
-  deleteAnalysisWithImages,
-  DeleteFailureCode,
-} from "@/lib/analytics-storage";
-import { getServerSupabase } from "@/lib/supabase";
-import {
-  ImageGenerationDiagnostics,
-} from "@/lib/image-generation-diagnostics";
+import { saveAnalysis as saveToStorage, updateAnalysisImageGeneration, deleteAnalysisWithImages } from "@/lib/analytics-storage";
+import { requireActor, requireAdministrator, authorizedModel, authorizedMemoryMode, authorizedProviderOverride, authorizedPersona } from "@/lib/server-authorization";
+import { ActionError, actionFailure, validateActionInput, requireResourceId, requireText, unavailable, type ActionErrorCode } from "@/lib/action-errors";
+import { allocateAnalysisResource, ownedImageResource, recordGeneratedImages, assertImagePaths } from "@/lib/authorized-image-storage";
+import type { ImageGenerationDiagnostics } from "@/lib/image-generation-diagnostics";
 import { executeImageGeneration } from "@/lib/image-generation-orchestrator";
-import {
-  ImageGenerationBatch,
-  ProviderResultGroup,
-  requiredImageCapacity,
-} from "@/lib/image-generation-types";
+import { type ImageGenerationBatch, type ProviderResultGroup, requiredImageCapacity, parseImageGenerationBatches } from "@/lib/image-generation-types";
 import { resolveImageGenerationSelection } from "@/lib/image-providers/registry";
 import { selectMemoryContext, updateMemoryForSavedAnalysis } from "@/lib/memory-service";
-import type { MemoryContextItem } from "@/lib/memory-types";
-import {
-  getNewestEntriesForReplay,
-  listMemoriesWithEvidence,
-  resetMemoryStore,
-} from "@/lib/memory-storage";
-import type { MemoryWithEvidence } from "@/lib/memory-types";
-import {
-  normalizeMemoryRebuildCount,
-  rebuildMemoryStore,
-} from "@/lib/memory-rebuild";
-import type { MemoryRebuildFailure } from "@/lib/memory-rebuild";
-import {
-  getMemoryActionErrorMessage,
-  getMemoryRebuildFailure,
-} from "@/lib/memory-errors";
-import type { MemoryRebuildFailureDetail } from "@/lib/memory-errors";
+import type { MemoryContextItem, MemoryWithEvidence } from "@/lib/memory-types";
+import { getNewestEntriesForReplay, listMemoriesWithEvidence, resetMemoryStore } from "@/lib/memory-storage";
+import { normalizeMemoryRebuildCount, rebuildMemoryStore, type MemoryRebuildFailure } from "@/lib/memory-rebuild";
+import { getMemoryRebuildFailure, type MemoryRebuildFailureDetail } from "@/lib/memory-errors";
 import type { SingleAnalysisMemoryMode } from "@/lib/analysis-memory-mode";
-
-assertServerSupabaseEnv();
 
 // Response types
 export interface TextAnalysisResponse {
@@ -50,6 +24,7 @@ export interface TextAnalysisResponse {
   memoryContext?: MemoryContextItem[];
   memoryWarning?: string;
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface BlindComparisonOption extends TextAnalysisResponse {
@@ -61,6 +36,7 @@ export interface BlindComparisonResponse {
   withMemory?: BlindComparisonOption;
   withoutMemory?: BlindComparisonOption;
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface ImageGenerationResponse {
@@ -74,24 +50,28 @@ export interface ImageGenerationResponse {
   partial?: boolean;
   uploadError?: string;
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface SaveAnalysisResponse {
   success: boolean;
   id?: string;
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface MemoryUpdateResponse {
   success: boolean;
   changedCount?: number;
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface MemoryStoreResponse {
   success: boolean;
   memories?: MemoryWithEvidence[];
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface MemoryRebuildResponse {
@@ -102,6 +82,7 @@ export interface MemoryRebuildResponse {
   total: number;
   failures: MemoryRebuildFailure[];
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface MemoryRebuildEntryReference {
@@ -113,12 +94,14 @@ export interface MemoryRebuildPreparationResponse {
   success: boolean;
   entries: MemoryRebuildEntryReference[];
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface MemoryRebuildEntryResponse {
   success: boolean;
   failure?: MemoryRebuildFailureDetail;
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface RegenerateImagesResponse {
@@ -130,460 +113,224 @@ export interface RegenerateImagesResponse {
   partial?: boolean;
   uploadError?: string;
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
 export interface DeleteAnalysisResponse {
   success: boolean;
   error?: string;
+  errorCode?: ActionErrorCode;
 }
 
-const MAX_IMAGES_PER_ANALYSIS = 20;
-
-// User-safe, secret-free messages for each internal delete failure code.
-// Full Supabase error detail is logged server-side only, inside deleteAnalysisWithImages.
-const DELETE_FAILURE_MESSAGES: Record<DeleteFailureCode, string> = {
-  not_found: "Analysis not found.",
-  forbidden: "Not authorized to delete this analysis.",
-  storage_failed: "Couldn't remove all images — please retry.",
-  db_failed: "Couldn't finish deleting — please retry.",
-};
-
-/**
- * Phase 1: Analyze text with Gemini
- * Returns analysis text and image prompt for Phase 2
- * Requires authenticated user - userId passed from client session
- */
-export async function analyzeText(
-  journalText: string,
-  userId: string,
-  modelId?: string,
-  persona: string = "jungian",
-  memoryMode: SingleAnalysisMemoryMode = "with-memory"
-): Promise<TextAnalysisResponse> {
-  try {
-    if (!userId) {
-      return {
-        success: false,
-        error: "User must be authenticated to analyze text.",
-      };
-    }
-
-    if (!journalText || journalText.trim().length === 0) {
-      return {
-        success: false,
-        error: "Please enter some text to analyze.",
-      };
-    }
-
-    const memorySelection = memoryMode === "with-memory"
-      ? await selectMemoryContext(journalText, userId, modelId)
-      : { context: [] as MemoryContextItem[] };
-    const geminiResult = await analyzeWithGemini(
-      journalText,
-      modelId,
-      persona,
-      memorySelection.context
-    );
-
-    return {
-      success: true,
-      analysisText: geminiResult.analysisText,
-      imagePrompt: geminiResult.imagePrompt || undefined,
-      memoryContext: memorySelection.context,
-      memoryWarning: memorySelection.warning,
-    };
-  } catch (error) {
-    console.error("Text analysis error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to analyze text.",
-    };
-  }
+export interface AnalyzeInput { journalText: string; modelId?: string; persona?: string; memoryMode?: SingleAnalysisMemoryMode }
+export interface GenerateImagesInput { imagePrompt: string; providerOverride?: string | null }
+export interface AnalysisInput { analysisId: string; modelId?: string }
+export interface RebuildInput { count: number; modelId?: string }
+export interface RegenerateInput { analysisId: string; providerOverride?: string | null }
+export interface SaveInput {
+  inputText: string; analysisText: string; imagePrompt: string | null; modelId?: string;
+  imagePaths?: string[]; analysisId?: string; analystPersona?: string;
+  imageGenerationBatches?: ImageGenerationBatch[]; memoryContext?: MemoryContextItem[];
 }
 
-export async function compareTextAnalyses(
-  journalText: string,
-  userId: string,
-  modelId?: string,
-  persona: string = "jungian"
-): Promise<BlindComparisonResponse> {
+export async function analyzeText(input: AnalyzeInput): Promise<TextAnalysisResponse> {
   try {
-    if (!userId) return { success: false, error: "User must be authenticated to compare analyses." };
-    if (!journalText || !journalText.trim()) {
-      return { success: false, error: "Please enter some text to analyze." };
-    }
+    const actor = await requireActor();
+    validateActionInput(input);
+    const model = authorizedModel(actor, input.modelId);
+    const persona = authorizedPersona(input.persona);
+    const mode = authorizedMemoryMode(actor, input.memoryMode);
+    requireText(input.journalText, "Please enter some text to analyze.");
+    const selected = mode === "with-memory"
+      ? await selectMemoryContext(input.journalText, actor, model) : { context: [] as MemoryContextItem[] };
+    const result = await analyzeWithGemini(input.journalText, model, persona, selected.context);
+    return { success: true, analysisText: result.analysisText, imagePrompt: result.imagePrompt || undefined,
+      memoryContext: selected.context, memoryWarning: selected.warning };
+  } catch (error) { return actionFailure(error, "Analysis could not be completed. Please retry."); }
+}
 
-    const memorySelection = await selectMemoryContext(journalText, userId, modelId);
-    const [withMemoryResult, withoutMemoryResult] = await Promise.all([
-      analyzeWithGemini(journalText, modelId, persona, memorySelection.context),
-      analyzeWithGemini(journalText, modelId, persona, []),
+export async function compareTextAnalyses(input: AnalyzeInput): Promise<BlindComparisonResponse> {
+  try {
+    const actor = await requireActor();
+    requireAdministrator(actor, true);
+    validateActionInput(input);
+    const model = authorizedModel(actor, input.modelId);
+    const persona = authorizedPersona(input.persona);
+    requireText(input.journalText, "Please enter some text to analyze.");
+    const selected = await selectMemoryContext(input.journalText, actor, model);
+    const [withMemory, withoutMemory] = await Promise.all([
+      analyzeWithGemini(input.journalText, model, persona, selected.context),
+      analyzeWithGemini(input.journalText, model, persona, []),
     ]);
-
-    return {
-      success: true,
-      withMemory: {
-        success: true,
-        usesMemory: true,
-        analysisText: withMemoryResult.analysisText,
-        imagePrompt: withMemoryResult.imagePrompt || undefined,
-        memoryContext: memorySelection.context,
-        memoryWarning: memorySelection.warning,
-      },
-      withoutMemory: {
-        success: true,
-        usesMemory: false,
-        analysisText: withoutMemoryResult.analysisText,
-        imagePrompt: withoutMemoryResult.imagePrompt || undefined,
-        memoryContext: [],
-      },
+    return { success: true,
+      withMemory: { success: true, usesMemory: true, analysisText: withMemory.analysisText,
+        imagePrompt: withMemory.imagePrompt || undefined, memoryContext: selected.context, memoryWarning: selected.warning },
+      withoutMemory: { success: true, usesMemory: false, analysisText: withoutMemory.analysisText,
+        imagePrompt: withoutMemory.imagePrompt || undefined, memoryContext: [] },
     };
-  } catch (error) {
-    console.error("Blind comparison error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to compare analyses.",
-    };
-  }
+  } catch (error) { return actionFailure(error, "Analysis comparison could not be completed."); }
 }
 
-/**
- * Phase 2: Generate exactly four images with the selected provider.
- * Also uploads them to Supabase storage and returns their paths.
- */
-export async function generateImages(
-  imagePrompt: string,
-  userId: string,
-  providerOverride?: string | null
-): Promise<ImageGenerationResponse> {
-  const analysisId = uuidv4();
-
+export async function generateImages(input: GenerateImagesInput): Promise<ImageGenerationResponse> {
+  let analysisId: string | undefined;
   try {
-    if (!userId) {
-      return {
-        success: false,
-        analysisId,
-        error: "User must be authenticated to generate images.",
-      };
-    }
-
-    if (!imagePrompt || imagePrompt.trim().length === 0) {
-      return {
-        success: false,
-        analysisId,
-        error: "No image prompt provided.",
-      };
-    }
-
-    const resolvedSelection = resolveImageGenerationSelection({
-      override: providerOverride,
-    });
-    const result = await executeImageGeneration({
-      analysisId,
-      userId,
-      prompt: imagePrompt,
-      startIndex: 0,
-      resolvedSelection,
-      context: "initial",
-    });
-
-    return {
-      ...result,
-      analysisId,
-    };
-  } catch (error) {
-    console.error("Image generation error:", error);
-    return {
-      success: false,
-      analysisId,
-      error: error instanceof Error ? error.message : "Failed to generate images.",
-    };
-  }
+    const actor = await requireActor();
+    validateActionInput(input);
+    const override = authorizedProviderOverride(actor, input.providerOverride);
+    const resolvedSelection = resolveImageGenerationSelection({ override });
+    requireText(input.imagePrompt, "No image prompt provided.");
+    analysisId = await allocateAnalysisResource(actor);
+    const result = await executeImageGeneration({ analysisId, actor, prompt: input.imagePrompt,
+      startIndex: 0, resolvedSelection, context: "initial" });
+    await recordGeneratedImages(actor, analysisId, result.imagePaths, result.batches, result.success);
+    return { ...result, analysisId };
+  } catch (error) { return { ...actionFailure(error, "Images could not be generated. Please retry."), analysisId }; }
 }
 
-/**
- * Save an analysis to persistent storage
- * imagePaths should be storage paths from generateImages, not base64 data
- * Requires authenticated user - userId passed from client session
- */
-export async function saveAnalysis(
-  inputText: string,
-  analysisText: string,
-  imagePrompt: string | null,
-  modelId: string,
-  imagePaths: string[],
-  userId: string,
-  analysisId?: string,
-  analystPersona: string = "jungian",
-  imageGenerationBatches: ImageGenerationBatch[] = [],
-  memoryContext: MemoryContextItem[] = []
-): Promise<SaveAnalysisResponse> {
+export async function saveAnalysis(input: SaveInput): Promise<SaveAnalysisResponse> {
   try {
-    if (!userId) {
-      return {
-        success: false,
-        error: "User must be authenticated to save analysis.",
-      };
+    const actor = await requireActor();
+    validateActionInput(input);
+    const model = authorizedModel(actor, input.modelId);
+    const persona = authorizedPersona(input.analystPersona);
+    requireText(input.inputText, "Original journal text is required.");
+    requireText(input.analysisText, "Analysis text is required.");
+    if (input.imagePrompt !== null && typeof input.imagePrompt !== "string") throw new ActionError("invalid-input", "Invalid image prompt.");
+    const memory = input.memoryContext ?? [];
+    if (!Array.isArray(memory)) throw new ActionError("invalid-input", "Invalid memory context.");
+    if (memory.length) requireAdministrator(actor);
+    if (!memory.every((item) => item && typeof item.id === "string" && Number.isInteger(item.version)
+      && typeof item.title === "string" && typeof item.summary === "string")) {
+      throw new ActionError("invalid-input", "Invalid memory context.");
     }
-
-    const result = await saveToStorage(
-      inputText,
-      analysisText,
-      imagePrompt,
-      modelId,
-      imagePaths,
-      analysisId,
-      analystPersona,
-      userId,
-      imageGenerationBatches,
-      memoryContext
-    );
-    return result;
-  } catch (error) {
-    console.error("Save analysis error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to save analysis.",
-    };
-  }
+    const requestedPaths = input.imagePaths ?? [];
+    const requestedBatches = input.imageGenerationBatches ?? [];
+    if (!Array.isArray(requestedPaths) || !Array.isArray(requestedBatches)) unavailable();
+    let id = input.analysisId;
+    let paths: string[] = [];
+    let batches: ImageGenerationBatch[] = [];
+    if (id) {
+      requireResourceId(id);
+      assertImagePaths(id, requestedPaths);
+      const resource = await ownedImageResource(actor, id);
+      if (resource.state === "legacy") unavailable();
+      const trustedBatches = parseImageGenerationBatches(resource.image_generation_batches);
+      const suppliedBatches = parseImageGenerationBatches(requestedBatches);
+      if (suppliedBatches.length !== requestedBatches.length) unavailable();
+      suppliedBatches.forEach((batch) => assertImagePaths(id!, batch.imagePaths));
+      if (requestedPaths.some((path) => !resource.image_paths.includes(path))) unavailable();
+      if (suppliedBatches.length && JSON.stringify(suppliedBatches) !== JSON.stringify(trustedBatches)) unavailable();
+      if (resource.image_paths.length && resource.state !== "complete") unavailable();
+      paths = resource.image_paths;
+      batches = trustedBatches;
+    } else {
+      if (requestedPaths.length || requestedBatches.length) unavailable();
+      id = await allocateAnalysisResource(actor);
+    }
+    return await saveToStorage(input.inputText, input.analysisText, input.imagePrompt, model,
+      paths, id, persona, actor, batches, memory);
+  } catch (error) { return actionFailure(error, "Analysis could not be saved. Please retry."); }
 }
 
-export async function updateMemory(
-  analysisId: string,
-  userId: string,
-  modelId?: string
-): Promise<MemoryUpdateResponse> {
+export async function updateMemory(input: AnalysisInput): Promise<MemoryUpdateResponse> {
   try {
-    if (!userId || !analysisId) {
-      return { success: false, error: "A saved analysis is required to update memory." };
-    }
-
-    const changedCount = await updateMemoryForSavedAnalysis(analysisId, userId, modelId);
+    const actor = await requireActor();
+    requireAdministrator(actor);
+    validateActionInput(input);
+    requireResourceId(input.analysisId);
+    const model = authorizedModel(actor, input.modelId);
+    const changedCount = await updateMemoryForSavedAnalysis(input.analysisId, actor, model);
     return { success: true, changedCount };
-  } catch (error) {
-    console.error("Memory update error:", error);
-    return {
-      success: false,
-      error: getMemoryActionErrorMessage(
-        error,
-        "Analysis saved, but contextual memory could not be updated."
-      ),
-    };
-  }
+  } catch (error) { return actionFailure(error, "Analysis saved, but contextual memory could not be updated."); }
 }
 
-export async function getMemoryStore(userId: string): Promise<MemoryStoreResponse> {
+export async function getMemoryStore(): Promise<MemoryStoreResponse> {
   try {
-    if (!userId) return { success: false, error: "Authentication is required." };
-    return { success: true, memories: await listMemoriesWithEvidence(userId) };
-  } catch (error) {
-    console.error("Memory store read error:", error);
-    return {
-      success: false,
-      error: getMemoryActionErrorMessage(error, "Contextual memory could not be loaded."),
-    };
-  }
+    const actor = await requireActor();
+    requireAdministrator(actor, true);
+    return { success: true, memories: await listMemoriesWithEvidence(actor) };
+  } catch (error) { return actionFailure(error, "Contextual memory could not be loaded."); }
 }
 
-export async function resetMemory(userId: string): Promise<MemoryStoreResponse> {
+export async function resetMemory(): Promise<MemoryStoreResponse> {
   try {
-    if (!userId) return { success: false, error: "Authentication is required." };
-    await resetMemoryStore(userId);
+    const actor = await requireActor();
+    requireAdministrator(actor, true);
+    await resetMemoryStore(actor);
     return { success: true, memories: [] };
-  } catch (error) {
-    console.error("Memory reset error:", error);
-    return {
-      success: false,
-      error: getMemoryActionErrorMessage(error, "Contextual memory could not be reset."),
-    };
-  }
+  } catch (error) { return actionFailure(error, "Contextual memory could not be reset."); }
 }
 
-export async function prepareMemoryRebuild(
-  userId: string,
-  count: number
-): Promise<MemoryRebuildPreparationResponse> {
+export async function prepareMemoryRebuild(input: RebuildInput): Promise<MemoryRebuildPreparationResponse> {
   try {
-    if (!userId) return { success: false, entries: [], error: "Authentication is required." };
-    const normalizedCount = normalizeMemoryRebuildCount(count);
-    if (normalizedCount === null) {
-      return { success: false, entries: [], error: "Enter a valid number of entries to rebuild." };
-    }
-
-    const entries = await getNewestEntriesForReplay(userId, normalizedCount);
-    await resetMemoryStore(userId);
-    return {
-      success: true,
-      entries: entries.map((entry) => ({ analysisId: entry.id, createdAt: entry.createdAt })),
-    };
-  } catch (error) {
-    console.error("Memory rebuild preparation error:", error);
-    return {
-      success: false,
-      entries: [],
-      error: getMemoryActionErrorMessage(error, "Contextual memory rebuild could not be prepared."),
-    };
-  }
+    const actor = await requireActor();
+    requireAdministrator(actor, true);
+    validateActionInput(input);
+    const count = normalizeMemoryRebuildCount(input.count);
+    if (count === null) throw new ActionError("invalid-input", "Enter a valid number of entries to rebuild.");
+    const entries = await getNewestEntriesForReplay(actor, count);
+    await resetMemoryStore(actor);
+    return { success: true, entries: entries.map((entry) => ({ analysisId: entry.id, createdAt: entry.createdAt })) };
+  } catch (error) { return { ...actionFailure(error, "Contextual memory rebuild could not be prepared."), entries: [] }; }
 }
 
-export async function rebuildMemoryEntry(
-  analysisId: string,
-  userId: string,
-  modelId?: string
-): Promise<MemoryRebuildEntryResponse> {
+export async function rebuildMemoryEntry(input: AnalysisInput): Promise<MemoryRebuildEntryResponse> {
   try {
-    if (!analysisId || !userId) {
-      return { success: false, error: "A saved journal entry is required." };
-    }
-    await updateMemoryForSavedAnalysis(analysisId, userId, modelId);
+    const actor = await requireActor();
+    requireAdministrator(actor, true);
+    validateActionInput(input);
+    requireResourceId(input.analysisId);
+    await updateMemoryForSavedAnalysis(input.analysisId, actor, authorizedModel(actor, input.modelId));
     return { success: true };
   } catch (error) {
-    console.error("Memory rebuild entry error:", error);
-    const failure = getMemoryRebuildFailure(error);
-    return { success: false, failure, error: failure.message };
+    return { ...actionFailure(error, getMemoryRebuildFailure(error).message), failure: getMemoryRebuildFailure(error) };
   }
 }
 
-export async function rebuildMemory(
-  userId: string,
-  count: number,
-  modelId?: string
-): Promise<MemoryRebuildResponse> {
+export async function rebuildMemory(input: RebuildInput): Promise<MemoryRebuildResponse> {
   try {
-    if (!userId) {
-      return {
-        success: false,
-        attempted: 0,
-        succeeded: 0,
-        skipped: 0,
-        total: 0,
-        failures: [],
-        error: "Authentication is required.",
-      };
-    }
-    const result = await rebuildMemoryStore(userId, count, modelId);
-    return { success: true, ...result };
-  } catch (error) {
-    console.error("Memory rebuild error:", error);
-    return {
-      success: false,
-      attempted: 0,
-      succeeded: 0,
-      skipped: 0,
-      total: 0,
-      failures: [],
-      error: getMemoryActionErrorMessage(error, "Contextual memory could not be rebuilt."),
-    };
-  }
+    const actor = await requireActor();
+    requireAdministrator(actor, true);
+    validateActionInput(input);
+    const model = authorizedModel(actor, input.modelId);
+    const count = normalizeMemoryRebuildCount(input.count);
+    if (count === null) throw new ActionError("invalid-input", "Enter a valid number of entries to rebuild.");
+    return { success: true, ...await rebuildMemoryStore(actor, count, model) };
+  } catch (error) { return { ...actionFailure(error, "Contextual memory could not be rebuilt."),
+    attempted: 0, succeeded: 0, skipped: 0, total: 0, failures: [] }; }
 }
 
-/**
- * Regenerate images for an existing analysis.
- * Reuses the stored image_prompt, appends new images to existing paths.
- */
-export async function regenerateImages(
-  analysisId: string,
-  userId: string,
-  providerOverride?: string | null
-): Promise<RegenerateImagesResponse> {
+export async function regenerateImages(input: RegenerateInput): Promise<RegenerateImagesResponse> {
   try {
-    if (!userId) {
-      return { success: false, error: "User must be authenticated to regenerate images." };
-    }
-
-    // Fetch the existing analysis (service role bypasses RLS)
-    const supabase = getServerSupabase();
-    const { data: analysis, error: fetchError } = await supabase
-      .from("analyses")
-      .select("image_prompt, image_paths, image_generation_batches, user_id")
-      .eq("id", analysisId)
-      .single();
-
-    if (fetchError || !analysis) {
-      return { success: false, error: "Analysis not found." };
-    }
-
-    if (analysis.user_id !== userId) {
-      return { success: false, error: "Not authorized to modify this analysis." };
-    }
-
-    if (!analysis.image_prompt) {
-      return { success: false, error: "This analysis has no image prompt." };
-    }
-
-    const resolvedSelection = resolveImageGenerationSelection({
-      override: providerOverride,
-    });
-    const currentPaths: string[] = analysis.image_paths || [];
-    const requiredCapacity = requiredImageCapacity(resolvedSelection.selection);
-    if (currentPaths.length + requiredCapacity > MAX_IMAGES_PER_ANALYSIS) {
-      return { success: false, error: `Maximum of ${MAX_IMAGES_PER_ANALYSIS} images reached.` };
-    }
-
-    const startIndex = currentPaths.length;
-    const result = await executeImageGeneration({
-      analysisId,
-      userId,
-      prompt: analysis.image_prompt,
-      startIndex,
-      resolvedSelection,
-      context: "regeneration",
-    });
-
-    const updateResult = await updateAnalysisImageGeneration(
-      analysisId,
-      result.imagePaths,
-      result.batches
-    );
-    if (!updateResult.success) {
-      return {
-        ...result,
-        uploadError: "Images generated but failed to update database: " + updateResult.error,
-      };
-    }
-
-    return result;
-  } catch (error) {
-    console.error("Image regeneration error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to regenerate images.",
-    };
-  }
+    const actor = await requireActor();
+    validateActionInput(input);
+    requireResourceId(input.analysisId);
+    const override = authorizedProviderOverride(actor, input.providerOverride);
+    const resolvedSelection = resolveImageGenerationSelection({ override });
+    const { data: analysis, error } = await actor.supabase.from("analyses")
+      .select("image_prompt,image_paths,user_id").eq("id", input.analysisId).eq("user_id", actor.userId).maybeSingle();
+    if (error || !analysis || analysis.user_id !== actor.userId) unavailable();
+    requireText(analysis.image_prompt, "This analysis has no image prompt.");
+    assertImagePaths(input.analysisId, analysis.image_paths || []);
+    await ownedImageResource(actor, input.analysisId);
+    const startIndex = (analysis.image_paths || []).length;
+    if (startIndex + requiredImageCapacity(resolvedSelection.selection) > 20) throw new ActionError("invalid-input", "Maximum of 20 images reached.");
+    const result = await executeImageGeneration({ analysisId: input.analysisId, actor,
+      prompt: analysis.image_prompt, startIndex, resolvedSelection, context: "regeneration" });
+    const update = await updateAnalysisImageGeneration(input.analysisId, result.imagePaths, result.batches, actor);
+    return update.success ? result : { ...result, uploadError: "Images generated but could not be saved. Please retry." };
+  } catch (error) { return actionFailure(error, "Images could not be regenerated. Please retry."); }
 }
 
-/**
- * Delete an analysis and its generated images.
- * Requires authenticated userId; ownership is re-verified server-side in
- * deleteAnalysisWithImages (the service role client bypasses RLS).
- */
-export async function deleteAnalysis(
-  analysisId: string,
-  userId: string
-): Promise<DeleteAnalysisResponse> {
+export async function deleteAnalysis(input: { analysisId: string }): Promise<DeleteAnalysisResponse> {
   try {
-    if (!userId) {
-      return { success: false, error: "User must be authenticated to delete analysis." };
-    }
-
-    if (!analysisId) {
-      return { success: false, error: "No analysis specified." };
-    }
-
-    const result = await deleteAnalysisWithImages(analysisId, userId);
-
-    if (result.success) {
-      return { success: true };
-    }
-
-    return {
-      success: false,
-      error: (result.code && DELETE_FAILURE_MESSAGES[result.code]) || "Failed to delete analysis.",
-    };
-  } catch (error) {
-    console.error("Delete analysis error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to delete analysis.",
-    };
-  }
+    const actor = await requireActor();
+    validateActionInput(input);
+    requireResourceId(input.analysisId);
+    const result = await deleteAnalysisWithImages(input.analysisId, actor);
+    if (result.success) return { success: true };
+    if (result.code === "not_found" || result.code === "forbidden") unavailable();
+    return { success: false, error: result.code === "storage_failed"
+      ? "Couldn't remove all images — please retry." : "Couldn't finish deleting — please retry." };
+  } catch (error) { return actionFailure(error, "Analysis could not be deleted. Please retry."); }
 }

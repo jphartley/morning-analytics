@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
-import { uploadImagesToStorage } from "./analytics-storage";
+import { uploadAuthorizedImages } from "./authorized-image-storage";
+import type { AuthorizedActor } from "./authorization-types";
 import {
   createImageGenerationDiagnosticsRecorder,
 } from "./image-generation-diagnostics";
@@ -19,7 +20,7 @@ const GENERATED_IMAGE_COUNT = 4;
 
 export interface ExecuteImageGenerationOptions {
   analysisId: string;
-  userId: string;
+  actor: AuthorizedActor;
   prompt: string;
   startIndex: number;
   resolvedSelection: ResolvedImageGenerationSelection;
@@ -43,7 +44,7 @@ async function executeProviderAttempt(
     resolvedProvider: ResolvedImageProvider;
   }
 ): Promise<ProviderResultGroup> {
-  const { analysisId, userId, prompt, startIndex, resolvedProvider, context } = options;
+  const { analysisId, actor, prompt, startIndex, resolvedProvider, context } = options;
   const attemptId = uuidv4();
   const diagnostics = createImageGenerationDiagnosticsRecorder(attemptId, resolvedProvider.id);
   diagnostics.add(
@@ -74,10 +75,10 @@ async function executeProviderAttempt(
       );
     }
 
-    const uploadResult = await uploadImagesToStorage(
+    const uploadResult = await uploadAuthorizedImages(
+      actor,
       analysisId,
       generated.imageDataUrls,
-      userId,
       startIndex,
       diagnostics
     );
@@ -115,7 +116,7 @@ async function executeProviderAttempt(
     };
   } catch (error) {
     const errorCode = error instanceof ImageProviderError ? error.code : "unexpected";
-    const message = error instanceof Error ? error.message : "Failed to generate images.";
+    const message = "Image generation could not be completed. Please retry.";
     diagnostics.add("attempt", "error", "Image generation failed.", {
       code: errorCode,
       error: message,

@@ -2,7 +2,7 @@
 
 import { createContext, useEffect, useState, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
-import { getBrowserSupabase } from '@/lib/supabase';
+import { getBrowserSupabase, clearObsoleteAuthStorage } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import { parseApplicationRole, type ApplicationRole } from '@/lib/role-capabilities';
 
@@ -32,11 +32,14 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<ApplicationRole>('user');
   const [profileError, setProfileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsSignin, setNeedsSignin] = useState(false);
 
   useEffect(() => {
     const publicPaths = ['/signin', '/signup'];
     const isPublicPath = publicPaths.includes(pathname);
     let isActive = true;
+    const requestSignin = () => setNeedsSignin(true);
+    window.addEventListener('morning-analytics:reauthenticate', requestSignin);
 
     const loadProfile = async (userId: string) => {
       const { data: profile, error: profileLookupError } = await supabase
@@ -63,12 +66,12 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       // database request made from that callback can deadlock the client, so
       // defer this work until after the callback has returned.
       window.setTimeout(() => {
-        void loadProfile(userId).catch((error) => {
+        void loadProfile(userId).catch(() => {
           if (!isActive) {
             return;
           }
 
-          console.error('AuthSessionProvider: Error loading profile:', error);
+          console.error('AuthSessionProvider: Profile lookup failed.');
           setRole('user');
           setProfileError('Your account settings could not be loaded. Experimental controls are unavailable; refresh to try again.');
         });
@@ -99,7 +102,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          console.error('AuthSessionProvider: Error checking session:', error);
+          console.error('AuthSessionProvider: Session lookup failed.');
           setUser(null);
 
           if (!isPublicPath) {
@@ -111,6 +114,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
 
         const sessionUser = session?.user || null;
         setUser(sessionUser);
+        if (sessionUser) setNeedsSignin(false);
 
         if (!session) {
           setRole('user');
@@ -127,7 +131,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        console.error('AuthSessionProvider: Error checking session:', error);
+        console.error('AuthSessionProvider: Session lookup failed.');
       } finally {
         setLoading(false);
       }
@@ -149,12 +153,14 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         setRole('user');
         setProfileError(null);
         scheduleProfileLoad(sessionUser!.id);
-        router.push('/');
+        setNeedsSignin(false);
+        if (isPublicPath) window.setTimeout(() => { router.replace('/'); router.refresh(); }, 0);
       }
     });
 
     return () => {
       isActive = false;
+      window.removeEventListener('morning-analytics:reauthenticate', requestSignin);
       subscription?.unsubscribe();
     };
   }, [supabase, router, pathname]);
@@ -173,17 +179,23 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       await supabase.auth.signOut();
+      clearObsoleteAuthStorage();
       setUser(null);
       setRole('user');
       setProfileError(null);
       router.push('/signin');
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch {
+      console.error('Logout failed.');
     }
   };
 
   return (
     <AuthContext.Provider value={{ user, role, profileError, loading, logout }}>
+      {needsSignin && (
+        <div role="alert" className="border-b border-outline bg-surface p-3 text-ink">
+          Your session has ended. <a href="/signin" className="underline">Sign in again</a>, then retry your operation.
+        </div>
+      )}
       {children}
     </AuthContext.Provider>
   );

@@ -1,3 +1,4 @@
+import { testActor } from "@/test/actor";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -53,12 +54,12 @@ describe("memory storage ownership", () => {
     mocks.getServerSupabase.mockReturnValue({ from });
 
     await expect(applyMemoryOperations(
-      "other-user",
+      testActor(mocks.getServerSupabase(), "other-user"),
       "analysis-1",
       "2026-07-19T08:00:00.000Z",
       "We leave for India soon.",
       []
-    )).rejects.toThrow("not owned");
+    )).rejects.toThrow("Analysis is unavailable");
     expect(from).toHaveBeenCalledTimes(1);
   });
 
@@ -84,7 +85,7 @@ describe("memory storage ownership", () => {
     };
 
     await expect(applyMemoryOperations(
-      "owner-1",
+      testActor(mocks.getServerSupabase(), "owner-1"),
       "analysis-1",
       "2026-07-19T08:00:00.000Z",
       "We are going to India next month.",
@@ -106,7 +107,7 @@ describe("memory storage ownership", () => {
     });
     mocks.getServerSupabase.mockReturnValue({ from });
 
-    await resetMemoryStore("owner-1");
+    await resetMemoryStore(testActor(mocks.getServerSupabase(), "owner-1"));
 
     expect(eq).toHaveBeenCalledWith("user_id", "owner-1");
     expect(from).not.toHaveBeenCalledWith("analyses");
@@ -123,7 +124,7 @@ describe("memory storage ownership", () => {
     const from = vi.fn((table: string) => makeQuery(table === "memories" ? [] : []));
     mocks.getServerSupabase.mockReturnValue({ from });
 
-    await expect(listMemoriesWithEvidence("owner-1")).resolves.toEqual([]);
+    await expect(listMemoriesWithEvidence(testActor(mocks.getServerSupabase(), "owner-1"))).resolves.toEqual([]);
     expect(from).toHaveBeenCalledWith("memories");
     expect(from).toHaveBeenCalledWith("memory_evidence");
   });

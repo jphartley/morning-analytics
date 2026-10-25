@@ -101,10 +101,7 @@ export async function analyzeWithGemini(
 
   if (useMocks) {
     await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
-    console.log(
-      `[MOCK] Gemini analysis (${persona}) for:`,
-      journalText.slice(0, 50) + "..."
-    );
+    console.log(`[MOCK] Gemini analysis (${persona}).`);
     return parseResponse(MOCK_RESPONSE);
   }
 

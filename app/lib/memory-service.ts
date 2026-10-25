@@ -9,7 +9,8 @@ import {
   resolveMemoryInferenceOperations,
 } from "./memory-source-blocks";
 import { boundMemoryContext, type MemoryContextItem } from "./memory-types";
-import { getServerSupabase } from "./supabase";
+import type { AuthorizedActor } from "./authorization-types";
+import { unavailable } from "./action-errors";
 
 export interface MemorySelectionResult {
   context: MemoryContextItem[];
@@ -18,15 +19,15 @@ export interface MemorySelectionResult {
 
 export async function selectMemoryContext(
   journalText: string,
-  userId: string,
+  actor: AuthorizedActor,
   modelId?: string
 ): Promise<MemorySelectionResult> {
   try {
-    const catalog = await listMemoryCatalog(userId);
+    const catalog = await listMemoryCatalog(actor);
     const rankedIds = await selectRelevantMemoryIds(journalText, catalog, modelId);
     return { context: boundMemoryContext(catalog, rankedIds) };
-  } catch (error) {
-    console.error("Memory selection failed; continuing without memory:", error);
+  } catch {
+    console.error("Memory selection failed; continuing without memory.");
     return {
       context: [],
       warning: "Contextual memory was unavailable, so this analysis continued without it.",
@@ -36,9 +37,9 @@ export async function selectMemoryContext(
 
 export async function getOwnedJournalEntry(
   analysisId: string,
-  userId: string
+  actor: AuthorizedActor
 ): Promise<JournalEntryForMemory> {
-  const supabase = getServerSupabase();
+  const { supabase, userId } = actor;
   const { data, error } = await supabase
     .from("analyses")
     .select("id, user_id, input_text, created_at")
@@ -46,7 +47,7 @@ export async function getOwnedJournalEntry(
     .single();
 
   if (error || !data || data.user_id !== userId) {
-    throw new Error("Analysis is unavailable or not owned by the current user.");
+    unavailable();
   }
 
   return { id: data.id, inputText: data.input_text, createdAt: data.created_at };
@@ -54,11 +55,11 @@ export async function getOwnedJournalEntry(
 
 export async function updateMemoryForSavedAnalysis(
   analysisId: string,
-  userId: string,
+  actor: AuthorizedActor,
   modelId?: string
 ): Promise<number> {
-  const entry = await getOwnedJournalEntry(analysisId, userId);
-  const catalog = await listMemoryCatalog(userId);
+  const entry = await getOwnedJournalEntry(analysisId, actor);
+  const catalog = await listMemoryCatalog(actor);
   const sourceBlocks = buildMemorySourceBlocks(entry.inputText);
   const inferredOperations = await inferMemoryUpdates(
     sourceBlocks,
@@ -68,7 +69,7 @@ export async function updateMemoryForSavedAnalysis(
   );
   const operations = resolveMemoryInferenceOperations(sourceBlocks, inferredOperations);
   await applyMemoryOperations(
-    userId,
+    actor,
     entry.id,
     entry.createdAt,
     entry.inputText,

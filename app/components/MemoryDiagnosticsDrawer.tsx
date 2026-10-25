@@ -6,7 +6,7 @@ import {
   prepareMemoryRebuild,
   rebuildMemoryEntry,
   resetMemory,
-} from "@/app/actions";
+} from "@/lib/action-client";
 import type { MemoryContextItem, MemoryEvidence, MemoryWithEvidence } from "@/lib/memory-types";
 import type { MemoryRebuildFailure } from "@/lib/memory-rebuild";
 import {
@@ -104,7 +104,7 @@ export function MemoryDiagnosticsDrawer({
   }, [memories, usedMemoryContext]);
 
   const loadMemories = async (preserveStatus = false) => {
-    const result = await getMemoryStore(userId);
+    const result = await getMemoryStore();
     if (result.success) {
       setMemories(result.memories || []);
       if (!preserveStatus) setStatus(null);
@@ -116,7 +116,7 @@ export function MemoryDiagnosticsDrawer({
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
-    void getMemoryStore(userId).then((result) => {
+    void getMemoryStore().then((result) => {
       if (!active) return;
       if (result.success) {
         setMemories(result.memories || []);
@@ -134,7 +134,7 @@ export function MemoryDiagnosticsDrawer({
     setRebuildProgress(null);
     setRebuildFailures([]);
     setStatus("Resetting memory...");
-    const result = await resetMemory(userId);
+    const result = await resetMemory();
     setIsWorking(false);
     if (result.success) {
       setMemories([]);
@@ -156,7 +156,7 @@ export function MemoryDiagnosticsDrawer({
     setRebuildProgress({ attempted: 0, succeeded: 0, total: rebuildCount });
     setStatus(`Preparing the newest ${rebuildCount} entries...`);
 
-    const preparation = await prepareMemoryRebuild(userId, rebuildCount);
+    const preparation = await prepareMemoryRebuild({ count: rebuildCount });
     if (!preparation.success) {
       setIsWorking(false);
       setRebuildProgress(null);
@@ -181,7 +181,7 @@ export function MemoryDiagnosticsDrawer({
       setRebuildProgress({ attempted: index, succeeded, total, currentDate: entryDate });
       setStatus(`Processing entry ${index + 1} of ${total} · ${entryDate}`);
 
-      const result = await rebuildMemoryEntry(entry.analysisId, userId, modelId);
+      const result = await rebuildMemoryEntry({ analysisId: entry.analysisId, modelId });
       if (!result.success) {
         failures.push({
           analysisId: entry.analysisId,

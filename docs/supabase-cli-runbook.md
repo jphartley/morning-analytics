@@ -10,7 +10,7 @@ has already run `supabase login`, and this repository has been linked with
 From the repository root, always preview the migration set first:
 
 ```zsh
-supabase db push --dry-run
+supabase db push --linked --dry-run --skip-vault
 ```
 
 Review the full list. It must contain the intended new migration(s) only. If
@@ -18,10 +18,14 @@ older migrations appear unexpectedly, stop before making any database change:
 the remote migration history needs reconciliation. Do not use
 `supabase db reset --linked` on production; it is destructive.
 
+Use `--linked` explicitly: a future CLI major version will default to the local
+database. These commands deploy SQL migrations only; `--skip-vault` prevents
+unrelated Vault-secret synchronization from the local configuration.
+
 When the preview is correct, apply it:
 
 ```zsh
-supabase db push
+supabase db push --linked --skip-vault
 ```
 
 Then run the migration-specific verification queries and deploy the compatible
@@ -44,10 +48,11 @@ migration.
    echo
    export SUPABASE_DB_PASSWORD
 
-   supabase db push --dry-run
+   supabase db push --linked --dry-run --skip-vault
    ```
 
-3. If the preview is correct, run `supabase db push` in that same terminal, then
+3. If the preview is correct and the coordinated rollout is authorized, run
+   `supabase db push --linked --skip-vault` in that same terminal, then
    clear the session secret:
 
    ```zsh
@@ -67,7 +72,7 @@ CLI; use it only after checking the official current troubleshooting guidance.
 ## Change handoff checklist
 
 - Confirm the exact migration filename shown by `--dry-run`.
-- Apply with `supabase db push`; never use a remote reset for this workflow.
+- Apply with `supabase db push --linked --skip-vault`; never use a remote reset for this workflow.
 - Record migration-specific verification results without copying secrets.
 - State whether a Railway deploy/redeploy is required by related app or
   environment-variable changes.

@@ -1,4 +1,5 @@
-import { getServerSupabase } from "./supabase";
+import type { AuthorizedActor } from "./authorization-types";
+import { unavailable } from "./action-errors";
 import {
   type MemoryCatalogItem,
   type MemoryEvidence,
@@ -25,8 +26,8 @@ export function selectNewestEntriesForReplay(
   return entriesDescending.slice(0, count).reverse();
 }
 
-export async function listMemoryCatalog(userId: string): Promise<MemoryCatalogItem[]> {
-  const supabase = getServerSupabase();
+export async function listMemoryCatalog(actor: AuthorizedActor): Promise<MemoryCatalogItem[]> {
+  const { supabase, userId } = actor;
   const { data, error } = await supabase
     .from("memories")
     .select("*")
@@ -40,8 +41,8 @@ export async function listMemoryCatalog(userId: string): Promise<MemoryCatalogIt
   return ((data || []) as MemoryRecord[]).map(toMemoryCatalogItem);
 }
 
-export async function listMemoriesWithEvidence(userId: string): Promise<MemoryWithEvidence[]> {
-  const supabase = getServerSupabase();
+export async function listMemoriesWithEvidence(actor: AuthorizedActor): Promise<MemoryWithEvidence[]> {
+  const { supabase, userId } = actor;
   const [{ data: memoryData, error: memoryError }, { data: evidenceData, error: evidenceError }] =
     await Promise.all([
       supabase
@@ -76,8 +77,8 @@ export async function listMemoriesWithEvidence(userId: string): Promise<MemoryWi
   }));
 }
 
-async function assertOwnedAnalysis(analysisId: string, userId: string): Promise<void> {
-  const supabase = getServerSupabase();
+async function assertOwnedAnalysis(analysisId: string, actor: AuthorizedActor): Promise<void> {
+  const { supabase, userId } = actor;
   const { data, error } = await supabase
     .from("analyses")
     .select("id, user_id")
@@ -85,18 +86,18 @@ async function assertOwnedAnalysis(analysisId: string, userId: string): Promise<
     .single();
 
   if (error || !data || data.user_id !== userId) {
-    throw new Error("Analysis is unavailable or not owned by the current user.");
+    unavailable();
   }
 }
 
 async function insertEvidence(
   memoryId: string,
-  userId: string,
+  actor: AuthorizedActor,
   analysisId: string,
   entryDate: string,
   operation: MemoryUpdateOperation
 ): Promise<void> {
-  const supabase = getServerSupabase();
+  const { supabase, userId } = actor;
   const { error } = await supabase.from("memory_evidence").insert({
     memory_id: memoryId,
     user_id: userId,
@@ -112,20 +113,20 @@ async function insertEvidence(
 }
 
 export async function applyMemoryOperations(
-  userId: string,
+  actor: AuthorizedActor,
   analysisId: string,
   entryDate: string,
   journalText: string,
   operations: MemoryUpdateOperation[]
 ): Promise<MemoryRecord[]> {
-  await assertOwnedAnalysis(analysisId, userId);
+  await assertOwnedAnalysis(analysisId, actor);
   for (const operation of operations) {
     if (!isExactEvidenceBlock(journalText, operation.evidence.excerpt)) {
       throw new Error("Memory evidence was not an exact source block from the original journal entry.");
     }
   }
 
-  const supabase = getServerSupabase();
+  const { supabase, userId } = actor;
   const updateIds = operations
     .filter((operation): operation is Extract<MemoryUpdateOperation, { action: "update" }> =>
       operation.action === "update"
@@ -198,15 +199,15 @@ export async function applyMemoryOperations(
       memory = data as MemoryRecord;
     }
 
-    await insertEvidence(memory.id, userId, analysisId, entryDate, operation);
+    await insertEvidence(memory.id, actor, analysisId, entryDate, operation);
     changed.push(memory);
   }
 
   return changed;
 }
 
-export async function resetMemoryStore(userId: string): Promise<void> {
-  const supabase = getServerSupabase();
+export async function resetMemoryStore(actor: AuthorizedActor): Promise<void> {
+  const { supabase, userId } = actor;
   const { error } = await supabase.from("memories").delete().eq("user_id", userId);
   if (error) {
     throw new Error(`Failed to reset memory store: ${error.message}`);
@@ -214,10 +215,10 @@ export async function resetMemoryStore(userId: string): Promise<void> {
 }
 
 export async function getNewestEntriesForReplay(
-  userId: string,
+  actor: AuthorizedActor,
   count: number
 ): Promise<JournalEntryForMemory[]> {
-  const supabase = getServerSupabase();
+  const { supabase, userId } = actor;
   const { data, error } = await supabase
     .from("analyses")
     .select("id, input_text, created_at")

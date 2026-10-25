@@ -1,4 +1,6 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getSupabasePublicEnv, sessionCookieOptions } from "./supabase-config";
 import type { ImageGenerationBatch } from "./image-generation-types";
 import type { MemoryContextItem } from "./memory-types";
 
@@ -43,85 +45,33 @@ export interface AnalysisListItem {
   input_preview: string;
 }
 
-const SERVER_ENV_VARS = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
+let browserClient: SupabaseClient | null = null;
 
-// Environment validation
-function getEnvVar(name: string, required: boolean = true): string {
-  const value = process.env[name];
-  if (required && !value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+export function clearObsoleteAuthStorage(): void {
+  if (typeof window === "undefined") return;
+  const { url } = getSupabasePublicEnv();
+  const key = `sb-${new URL(url).hostname.split(".")[0]}-auth-token`;
+  try {
+    [key, `${key}-code-verifier`, `${key}-user`].forEach((name) => window.localStorage.removeItem(name));
+  } catch {
+    // Cookie authentication still works when local storage is unavailable.
   }
-  return value || "";
-}
-
-function validateEnvVars(names: string[]): void {
-  names.forEach((name) => {
-    getEnvVar(name);
-  });
-}
-
-function getClientEnv(): { url: string; anonKey: string } {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url) {
-    throw new Error("Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL");
-  }
-
-  if (!anonKey) {
-    throw new Error("Missing required environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  }
-
-  return { url, anonKey };
-}
-
-export function assertServerSupabaseEnv(): void {
-  validateEnvVars(SERVER_ENV_VARS);
 }
 
 export function assertClientSupabaseEnv(): void {
-  getClientEnv();
+  getSupabasePublicEnv();
 }
 
-// Lazy initialization to avoid errors during build
-let serverClient: SupabaseClient | null = null;
-let browserClient: SupabaseClient | null = null;
-
-/**
- * Get Supabase client for server-side operations (Server Actions)
- * Uses service role key to bypass RLS
- */
-export function getServerSupabase(): SupabaseClient {
-  if (!serverClient) {
-    assertServerSupabaseEnv();
-    const url = getEnvVar("NEXT_PUBLIC_SUPABASE_URL");
-    const serviceKey = getEnvVar("SUPABASE_SERVICE_ROLE_KEY");
-    serverClient = createClient(url, serviceKey);
-  }
-  return serverClient;
-}
-
-/**
- * Get Supabase client for client-side operations
- * Uses anon key with RLS policies
- */
 export function getBrowserSupabase(): SupabaseClient {
   if (!browserClient) {
-    assertClientSupabaseEnv();
-    const { url, anonKey } = getClientEnv();
-    browserClient = createClient(url, anonKey);
+    const { url, anonKey } = getSupabasePublicEnv();
+    clearObsoleteAuthStorage();
+    browserClient = createBrowserClient(url, anonKey, { cookieOptions: sessionCookieOptions() });
   }
   return browserClient;
 }
 
-/**
- * Get current user session on client
- * Returns user ID and email for authenticated operations
- */
 export async function getClientAuth() {
-  const supabase = getBrowserSupabase();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { session } } = await getBrowserSupabase().auth.getSession();
   return session?.user;
 }

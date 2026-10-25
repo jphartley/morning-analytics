@@ -1,3 +1,4 @@
+import { testActor } from "@/test/actor";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -19,6 +20,8 @@ import {
   normalizeMemoryRebuildCount,
   rebuildMemoryStore,
 } from "./memory-rebuild";
+
+const actor = testActor({}, "user-1");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,7 +45,7 @@ describe("memory rebuild", () => {
     ]);
 
     const progress = vi.fn();
-    await expect(rebuildMemoryStore("user-1", 3, "model", progress))
+    await expect(rebuildMemoryStore(actor, 3, "model", progress))
       .resolves.toEqual({
         attempted: 3,
         succeeded: 3,
@@ -51,7 +54,7 @@ describe("memory rebuild", () => {
         failures: [],
       });
 
-    expect(mocks.getNewestEntriesForReplay).toHaveBeenCalledWith("user-1", 3);
+    expect(mocks.getNewestEntriesForReplay).toHaveBeenCalledWith(actor, 3);
     expect(mocks.resetMemoryStore).toHaveBeenCalledTimes(1);
     expect(mocks.updateMemoryForSavedAnalysis.mock.calls.map((call) => call[0]))
       .toEqual(["oldest-selected", "middle-selected", "newest-selected"]);
@@ -69,7 +72,7 @@ describe("memory rebuild", () => {
       .mockRejectedValueOnce(new Error("Memory updater returned malformed output after one retry."))
       .mockResolvedValueOnce(1);
 
-    await expect(rebuildMemoryStore("user-1", 3)).resolves.toEqual({
+    await expect(rebuildMemoryStore(actor, 3)).resolves.toEqual({
       attempted: 3,
       succeeded: 2,
       skipped: 1,

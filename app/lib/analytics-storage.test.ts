@@ -1,65 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ImageGenerationBatch,
-  parseImageGenerationBatches,
-} from "./image-generation-types";
-
-const mocks = vi.hoisted(() => ({
-  getServerSupabase: vi.fn(),
+import { testActor } from "@/test/actor";
+import { type ImageGenerationBatch, parseImageGenerationBatches } from "./image-generation-types";
+const mocks = vi.hoisted(() => ({ remove: vi.fn() }));
+vi.mock("./authorized-image-storage", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./authorized-image-storage")>(), removeAuthorizedImages: mocks.remove,
 }));
-
-vi.mock("./supabase", () => ({
-  getServerSupabase: mocks.getServerSupabase,
-}));
-
-import {
-  appendImageGenerationState,
-  deleteAnalysisWithImages,
-  resolveDeletionPaths,
-} from "./analytics-storage";
-
-interface SupabaseMockOptions {
-  fetchResult?: { data: unknown; error: unknown };
-  listResult?: { data: unknown; error: unknown };
-  removeResult?: { error: unknown };
-  deleteResult?: { error: unknown };
-}
-
-function buildSupabaseMock(options: SupabaseMockOptions = {}) {
-  const single = vi.fn(async () => options.fetchResult ?? { data: null, error: null });
-  const deleteEq = vi.fn(async () => options.deleteResult ?? { error: null });
-  const list = vi.fn(async () => options.listResult ?? { data: [], error: null });
-  const remove = vi.fn(async () => options.removeResult ?? { error: null });
-
-  const from = vi.fn(() => ({
-    select: vi.fn(() => ({
-      eq: vi.fn(() => ({ single })),
-    })),
-    delete: vi.fn(() => ({
-      eq: deleteEq,
-    })),
-  }));
-
-  const storageFrom = vi.fn(() => ({ list, remove }));
-
-  return {
-    client: { from, storage: { from: storageFrom } },
-    single,
-    deleteEq,
-    list,
-    remove,
-  };
-}
-
-function ownedRow(imagePaths: string[] | null = ["analysis-1/0.jpg", "analysis-1/1.jpg"]) {
-  return {
-    fetchResult: {
-      data: { id: "analysis-1", user_id: "owner-1", image_paths: imagePaths },
-      error: null,
-    },
-  };
-}
-
+import { appendImageGenerationState, deleteAnalysisWithImages, resolveDeletionPaths } from "./analytics-storage";
 function batch(
   attemptId: string,
   provider: ImageGenerationBatch["provider"],
@@ -154,97 +100,38 @@ describe("resolveDeletionPaths", () => {
   });
 });
 
-describe("deleteAnalysisWithImages", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe("authorized analysis deletion", () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  beforeEach(() => { vi.resetAllMocks(); mocks.remove.mockResolvedValue(undefined); });
+  function fixture(owner: string | null, failedDelete = false) {
+    const fetch = { eq: vi.fn(), maybeSingle: vi.fn(async () => ({ data: owner ? { id, user_id: owner, image_paths: [`${id}/0.jpg`] } : null, error: null })) };
+    fetch.eq.mockReturnValue(fetch);
+    const mutation = { eq: vi.fn(), select: vi.fn(async () => ({ data: failedDelete ? null : [{ id }], error: failedDelete ? { message: "unavailable" } : null })) };
+    mutation.eq.mockReturnValue(mutation);
+    const removeRow = vi.fn(() => mutation);
+    const from = vi.fn(() => ({ select: () => fetch, delete: removeRow }));
+    return { actor: testActor({ from }, "owner"), removeRow, mutation };
+  }
+  it("removes only authorized images before deleting the owner's row", async () => {
+    const f=fixture("owner");
+    expect(await deleteAnalysisWithImages(id,f.actor)).toEqual({success:true});
+    expect(mocks.remove).toHaveBeenCalledWith(f.actor,id,[`${id}/0.jpg`]);
+    expect(mocks.remove.mock.invocationCallOrder[0]).toBeLessThan(f.removeRow.mock.invocationCallOrder[0]);
+    expect(f.mutation.eq).toHaveBeenCalledWith("user_id","owner");
   });
-
-  it("Scenario: Server deletes DB record and owned storage objects — owner match removes storage then deletes the row", async () => {
-    const mock = buildSupabaseMock(ownedRow(["analysis-1/0.jpg", "analysis-1/1.jpg"]));
-    mocks.getServerSupabase.mockReturnValue(mock.client);
-
-    const result = await deleteAnalysisWithImages("analysis-1", "owner-1");
-
-    expect(result).toEqual({ success: true });
-    expect(mock.remove).toHaveBeenCalledWith(["analysis-1/0.jpg", "analysis-1/1.jpg"]);
-    expect(mock.deleteEq).toHaveBeenCalledWith("id", "analysis-1");
+  it.each([null,"another-owner"])("makes missing and foreign rows indistinguishable without storage side effects", async owner => {
+    const f=fixture(owner);
+    expect(await deleteAnalysisWithImages(id,f.actor)).toEqual({success:false,code:"not_found"});
+    expect(mocks.remove).not.toHaveBeenCalled();expect(f.removeRow).not.toHaveBeenCalled();
   });
-
-  it("Scenario: A user cannot delete another user's analysis — wrong owner deletes nothing", async () => {
-    const mock = buildSupabaseMock({
-      fetchResult: {
-        data: { id: "analysis-1", user_id: "owner-1", image_paths: ["analysis-1/0.jpg"] },
-        error: null,
-      },
-    });
-    mocks.getServerSupabase.mockReturnValue(mock.client);
-
-    const result = await deleteAnalysisWithImages("analysis-1", "someone-else");
-
-    expect(result).toEqual({ success: false, code: "forbidden" });
-    expect(mock.remove).not.toHaveBeenCalled();
-    expect(mock.deleteEq).not.toHaveBeenCalled();
+  it("keeps the row available when image cleanup fails", async () => {
+    const f=fixture("owner");mocks.remove.mockRejectedValue(new Error("storage unavailable"));
+    expect(await deleteAnalysisWithImages(id,f.actor)).toEqual({success:false,code:"storage_failed"});
+    expect(f.removeRow).not.toHaveBeenCalled();
   });
-
-  it("returns not_found and deletes nothing when the row is missing", async () => {
-    const mock = buildSupabaseMock({ fetchResult: { data: null, error: { message: "no rows" } } });
-    mocks.getServerSupabase.mockReturnValue(mock.client);
-
-    const result = await deleteAnalysisWithImages("missing-analysis", "owner-1");
-
-    expect(result).toEqual({ success: false, code: "not_found" });
-    expect(mock.remove).not.toHaveBeenCalled();
-    expect(mock.deleteEq).not.toHaveBeenCalled();
-  });
-
-  it("Scenario: Partial storage failure is reported and retry-safe — storage remove error leaves the row intact", async () => {
-    const mock = buildSupabaseMock({
-      ...ownedRow(["analysis-1/0.jpg"]),
-      removeResult: { error: { message: "storage unavailable" } },
-    });
-    mocks.getServerSupabase.mockReturnValue(mock.client);
-
-    const result = await deleteAnalysisWithImages("analysis-1", "owner-1");
-
-    expect(result).toEqual({ success: false, code: "storage_failed" });
-    expect(mock.remove).toHaveBeenCalled();
-    expect(mock.deleteEq).not.toHaveBeenCalled();
-  });
-
-  it("reports db_failed when the row delete errors after storage is already clean", async () => {
-    const mock = buildSupabaseMock({
-      ...ownedRow(["analysis-1/0.jpg"]),
-      deleteResult: { error: { message: "db unavailable" } },
-    });
-    mocks.getServerSupabase.mockReturnValue(mock.client);
-
-    const result = await deleteAnalysisWithImages("analysis-1", "owner-1");
-
-    expect(result).toEqual({ success: false, code: "db_failed" });
-    expect(mock.remove).toHaveBeenCalled();
-  });
-
-  it("falls back to image_paths (without aborting) when the storage list sweep errors", async () => {
-    const mock = buildSupabaseMock({
-      ...ownedRow(["analysis-1/0.jpg"]),
-      listResult: { data: null, error: { message: "list unavailable" } },
-    });
-    mocks.getServerSupabase.mockReturnValue(mock.client);
-
-    const result = await deleteAnalysisWithImages("analysis-1", "owner-1");
-
-    expect(result).toEqual({ success: true });
-    expect(mock.remove).toHaveBeenCalledWith(["analysis-1/0.jpg"]);
-  });
-
-  it("skips storage.remove entirely when there are no owned objects to delete", async () => {
-    const mock = buildSupabaseMock(ownedRow([]));
-    mocks.getServerSupabase.mockReturnValue(mock.client);
-
-    const result = await deleteAnalysisWithImages("analysis-1", "owner-1");
-
-    expect(result).toEqual({ success: true });
-    expect(mock.remove).not.toHaveBeenCalled();
-    expect(mock.deleteEq).toHaveBeenCalled();
+  it("reports a failed row deletion after successful cleanup", async () => {
+    const f=fixture("owner",true);
+    expect(await deleteAnalysisWithImages(id,f.actor)).toEqual({success:false,code:"db_failed"});
+    expect(mocks.remove).toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import type { AuthorizedActor } from "./authorization-types";
 import { getNewestEntriesForReplay, resetMemoryStore } from "./memory-storage";
 import { updateMemoryForSavedAnalysis } from "./memory-service";
 import {
@@ -41,7 +42,7 @@ export function normalizeMemoryRebuildCount(value: number): number | null {
 }
 
 export async function rebuildMemoryStore(
-  userId: string,
+  actor: AuthorizedActor,
   count: number,
   modelId?: string,
   onProgress?: (attempted: number, succeeded: number, total: number) => void
@@ -55,14 +56,14 @@ export async function rebuildMemoryStore(
     );
   }
 
-  const entries = await getNewestEntriesForReplay(userId, normalizedCount);
-  await resetMemoryStore(userId);
+  const entries = await getNewestEntriesForReplay(actor, normalizedCount);
+  await resetMemoryStore(actor);
   let attempted = 0;
   let succeeded = 0;
   const failures: MemoryRebuildFailure[] = [];
   for (const entry of entries) {
     try {
-      await updateMemoryForSavedAnalysis(entry.id, userId, modelId);
+      await updateMemoryForSavedAnalysis(entry.id, actor, modelId);
       succeeded += 1;
     } catch (error) {
       failures.push({

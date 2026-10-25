@@ -1,3 +1,5 @@
+import { testActor } from "@/test/actor";
+import type { AuthorizedActor } from "./authorization-types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ImageProviderError } from "./image-providers/types";
 import type { ImageProvider } from "./image-providers/types";
@@ -8,13 +10,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("uuid", () => ({ v4: mocks.uuidv4 }));
-vi.mock("./analytics-storage", () => ({
-  uploadImagesToStorage: mocks.uploadImagesToStorage,
+vi.mock("./authorized-image-storage", () => ({
+  uploadAuthorizedImages: mocks.uploadImagesToStorage,
 }));
 
 import { executeImageGeneration } from "./image-generation-orchestrator";
 import type { ResolvedImageGenerationSelection } from "./image-providers/registry";
 
+const actor = testActor({}, "user-1");
 const IMAGES = ["a", "b", "c", "d"].map((value) => `data:image/jpeg;base64,${value}`);
 
 function selection(
@@ -40,7 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.uuidv4.mockReturnValueOnce("attempt-bfl").mockReturnValueOnce("attempt-midjourney");
   mocks.uploadImagesToStorage.mockImplementation(
-    async (analysisId: string, _images: string[], _userId: string, startIndex: number) => ({
+    async (_actor: AuthorizedActor, analysisId: string, _images: string[], startIndex: number) => ({
       paths: IMAGES.map((_, index) => `${analysisId}/${startIndex + index}.jpg`),
     })
   );
@@ -60,7 +63,7 @@ describe("image generation orchestration", () => {
 
     const result = await executeImageGeneration({
       analysisId: "analysis-1",
-      userId: "user-1",
+      actor,
       prompt: "one shared prompt",
       startIndex: 0,
       resolvedSelection: selection(bfl, midjourney),
@@ -88,9 +91,9 @@ describe("image generation orchestration", () => {
     }));
     expect(mocks.uploadImagesToStorage).toHaveBeenNthCalledWith(
       2,
+      actor,
       "analysis-1",
       IMAGES,
-      "user-1",
       4,
       expect.anything()
     );
@@ -112,7 +115,7 @@ describe("image generation orchestration", () => {
 
     const result = await executeImageGeneration({
       analysisId: "analysis-1",
-      userId: "user-1",
+      actor,
       prompt: "shared",
       startIndex: 0,
       resolvedSelection: selection(
@@ -137,7 +140,7 @@ describe("image generation orchestration", () => {
     });
     const result = await executeImageGeneration({
       analysisId: "analysis-1",
-      userId: "user-1",
+      actor,
       prompt: "shared",
       startIndex: 0,
       resolvedSelection: selection(failed),
@@ -156,7 +159,7 @@ describe("image generation orchestration", () => {
     });
     const result = await executeImageGeneration({
       analysisId: "analysis-1",
-      userId: "user-1",
+      actor,
       prompt: "shared",
       startIndex: 0,
       resolvedSelection: selection(failed(), failed()),
