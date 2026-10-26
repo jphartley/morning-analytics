@@ -71,6 +71,11 @@ Install a clean dependency tree after selecting the patched Node 22 runtime:
 npm ci
 ```
 
+If the local registry returns 401, follow the
+[JFrog npm login runbook](research/jfrog-npm-login-workflow.md): sign into JFrog
+through browser SSO before refreshing the `npm-virtual` login in Terminal.
+That runbook also covers local mirror URLs and restoring public lockfile URLs.
+
 `npm ci` may report dependency deprecations or audit findings. Do not run
 `npm audit fix --force` as setup: it can make unreviewed breaking dependency
 changes. Address dependency security work in a dedicated reviewed change.

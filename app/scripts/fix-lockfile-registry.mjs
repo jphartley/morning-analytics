@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const lockfilePath = path.resolve(process.cwd(), "package-lock.json");
-const sourcePattern = /https:\/\/jfrog\.booking\.com(?::443)?\/artifactory\/api\/npm\/npm\//g;
+const sourcePattern = /https:\/\/jfrog\.booking\.com(?::443)?\/artifactory\/api\/npm\/npm(?:-virtual)?\//g;
 const targetHost = "https://registry.npmjs.org/";
 
 if (!fs.existsSync(lockfilePath)) {

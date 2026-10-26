@@ -1,120 +1,121 @@
-# JFrog npm Registry Login & Lockfile Workflow
+# JFrog npm login and lockfile runbook
 
-**Last updated**: 2026-03-10
+Updated: 26 October 2026.
 
-This documents the full workflow for authenticating with Booking's JFrog Artifactory npm registry and keeping `package-lock.json` compatible with both local development and Railway deployments.
+Use this for local npm registry authentication and lockfile cleanup. Select the
+repository's patched Node 22 runtime first; see the
+[Node runbook](../node-runtime-runbook.md).
 
----
+## Recover an expired JFrog login
 
-## When You Need This
+An `E401`, HTTP 401, or `Token failed verification: expired` response from
+Artifactory means the local npm login needs attention. A public npm DNS failure
+is a separate connectivity problem; logging into JFrog does not repair public
+DNS.
 
-You'll hit `E401 Incorrect or missing password` or `ECONNRESET` errors when running `npm install` in the `/app` directory. This means your JFrog auth token has expired.
+The following sequence was verified on 26 October 2026. The operator completed
+browser SSO and then refreshed npm login; subsequent dependency audits through
+the mirror succeeded for app, root scripts and validation.
 
-Typical error:
+1. Open [JFrog](https://jfrog.booking.com) in your browser and complete company SSO.
+2. In your own Terminal, run:
 
-```
-npm error code E401
-npm error Incorrect or missing password.
-```
-
----
-
-## Step 1: Log In to JFrog
-
-Run this from any directory:
-
-```bash
-npm login --registry=https://jfrog.booking.com:443/artifactory/api/npm/npm/
-```
-
-### What happens next (this is the confusing part):
-
-1. **Terminal shows a login URL and "Press ENTER to open in the browser..."**
-
-   ```
-   npm notice Log in on https://jfrog.booking.com:443/artifactory/api/npm/npm/
-   Login at:
-   https://jfrog.booking.com:443/ui/auth-provider/npm?uuid=...
-   Press ENTER to open in the browser...
+   ```zsh
+   npm login --registry=https://jfrog.booking.com/artifactory/api/npm/npm-virtual/
    ```
 
-2. **Press Enter.** A browser tab opens.
+3. Complete the browser/Terminal flow until npm reports a successful login.
+   If the browser reports that anonymous token generation is prohibited, first
+   establish the signed-in browser session and retry the login. That page alone
+   is not evidence of success.
+4. Verify an authenticated metadata request:
 
-3. **The browser shows a confusing page:** "Token generation for user : anonymous is prohibited"
-
-   This looks like an error, but **it is not a failure**. Just close/ignore this browser tab.
-
-4. **Go back to the terminal.** It will look like it's hanging — the cursor changes shape and sits there in a waiting state. **This is normal.** It is waiting for the auth flow to complete server-side.
-
-5. **Wait.** This can take anywhere from 30 seconds to several minutes. Don't Ctrl+C — just leave it. Go grab a coffee.
-
-6. **Eventually the terminal prompts for credentials:**
-
-   ```
-   Username: jhartley
-   Password:
+   ```zsh
+   npm view ws version --registry=https://jfrog.booking.com/artifactory/api/npm/npm-virtual/
    ```
 
-   - **Username**: Your unix username (e.g., `jhartley`), NOT your email address. Format is typically first initial + surname (e.g., `jdoe` for Jane Doe).
-   - **Password**: Your Booking SSO / LDAP password.
+Keep passwords and generated tokens in the approved local authentication flow.
+Do not copy them into chat, repository files or Railway.
 
-7. **Success:**
+The verified registry is `npm-virtual`. Older notes used the separate `/npm/`
+endpoint; use the same registry URL for the current login and package commands.
+Pass `--registry` per command when needed; this workflow does not require changing
+global npm configuration.
 
-   ```
-   Logged in on https://jfrog.booking.com:443/artifactory/api/npm/npm/.
-   ```
+## Audit or install through the local mirror
 
----
+From the dependency root being assessed (`app/`, repository root or
+`validation/`), a lockfile audit is:
 
-## Step 2: Install Packages
-
-Now `npm install` will work:
-
-```bash
-cd app
-npm install @tiptap/react @tiptap/starter-kit @tiptap/pm tiptap-markdown
+```zsh
+npm audit --package-lock-only --json --registry=https://jfrog.booking.com/artifactory/api/npm/npm-virtual/
 ```
 
-(Or whatever packages you need.)
+A JSON report containing vulnerabilities is a successful audit response even
+when npm exits with status 1. An authentication or network error is not a scan.
+Do not use `npm audit fix --force` as a login or installation recovery step.
 
----
+Use the same `--registry` argument for local package installations and targeted
+updates. Always review manifest and lockfile changes before delivery.
 
-## Step 3: Fix the Lockfile Before Committing
+### If a tarball URL loses the Artifactory path
 
-JFrog URLs leak into `package-lock.json` during local installs. Railway can't reach JFrog, so these must be normalized to public npm before committing.
+npm 10.9.9 was observed replacing the public registry host with only
+`https://jfrog.booking.com`, omitting `/artifactory/api/npm/npm-virtual/`. The
+resulting tarball request returned 404 despite working authentication. This is
+separate from an expired login.
 
-```bash
-cd app
+When public npm is inaccessible, temporarily use the full mirror prefix in the
+local lockfile and disable npm's host-only replacement for the operation. From
+the relevant dependency root:
 
-# Check for leaked JFrog URLs
-npm run check:lockfile-registry
+```zsh
+node --input-type=module <<'NODE'
+import fs from "node:fs";
+const file = "package-lock.json";
+const contents = fs.readFileSync(file, "utf8");
+fs.writeFileSync(file, contents.replaceAll(
+  "https://registry.npmjs.org/",
+  "https://jfrog.booking.com/artifactory/api/npm/npm-virtual/"
+));
+NODE
+npm ci --replace-registry-host=never --registry=https://jfrog.booking.com/artifactory/api/npm/npm-virtual/
+```
 
-# If check fails, fix them
+Normalize and check the lockfile below after the operation, including after a
+failed install. Temporary mirror URLs must not be committed. The same approach
+can be used in a temporary directory containing copies of the manifest and
+lockfile when resolving a targeted dependency update.
+
+## Restore public lockfile URLs before delivery
+
+Railway uses public npm and cannot rely on the local JFrog login. The cleanup
+helper supports both `/npm/` and `/npm-virtual/`, with or without explicit port
+443. From `app/`:
+
+```zsh
 npm run fix:lockfile-registry
-
-# Verify the fix
 npm run check:lockfile-registry
 ```
 
-This rewrites all `https://jfrog.booking.com:443/artifactory/api/npm/npm/...` URLs in the lockfile to `https://registry.npmjs.org/...`.
+For a changed root or validation lockfile, run the same helpers from that
+dependency root, using their repository-relative paths:
 
-**Always do this before committing any lockfile changes.**
+```zsh
+# Repository root
+node app/scripts/fix-lockfile-registry.mjs
+node app/scripts/check-lockfile-registry.mjs
 
----
+# validation/
+node ../app/scripts/fix-lockfile-registry.mjs
+node ../app/scripts/check-lockfile-registry.mjs
+```
 
-## Quick Reference
+Review the diff to ensure resolved URLs use `https://registry.npmjs.org/` and
+package versions, integrity hashes and dependency changes are intentional.
 
-| Step | Command | Notes |
-|------|---------|-------|
-| Login | `npm login --registry=https://jfrog.booking.com:443/artifactory/api/npm/npm/` | Browser opens, looks broken, wait for terminal prompt |
-| Install | `cd app && npm install <packages>` | Works after login |
-| Check lockfile | `cd app && npm run check:lockfile-registry` | Run before every commit with lockfile changes |
-| Fix lockfile | `cd app && npm run fix:lockfile-registry` | Normalizes JFrog URLs to public npm |
+## See also
 
----
-
-## See Also
-
-- `/docs/research/railway-npm-ci-failure.md` — Original postmortem for why this matters
-- `/docs/railway-deployment-plan.md` — Railway deployment guide (Phase 3 and "Local Dev Parity" section)
-- `CLAUDE.md` — "Local vs Railway npm Registry Workflow" section
+- [Node runtime runbook](../node-runtime-runbook.md)
+- [Railway npm installation investigation](railway-npm-ci-failure.md)
+- [Railway deployment plan](../railway-deployment-plan.md)

@@ -1,6 +1,6 @@
 # October 2026 security remediation
 
-Last updated: 25 October 2026 (Europe/Amsterdam).
+Last updated: 26 October 2026 (Europe/Amsterdam).
 
 This is the working checklist for the security review started on 23 October.
 Keep completed incident response separate from dependency patching and application
@@ -15,14 +15,46 @@ values, access tokens, raw environment exports, or unredacted logs in this file.
 | Dependency remediation | Scoped patch complete; production Node verified and temporary cache setting removed | Operator output confirms commit 1ad2218064f5f06168eebce3a9cb60166b8396e4 and PID 1/Next.js at Node 22.23.4. The operator subsequently confirmed NO_CACHE removal and continued 22.23.4 operation. [OpenSpec change](../openspec/changes/archive/2026-10-25-patch-october-2026-security-dependencies/proposal.md): 17 of 17 tasks complete. Separate findings below remain open. |
 | Server-side authorization | Scoped remediation complete | Deployed `5f3073c` and the reviewed forward migration on 25 October. Production ownership/policy metadata, signed-out and forged-cookie page denial, and operator sign-out/sign-in plus analysis create/read/delete checks passed. Operator runtime output confirms the commit and Node 22.23.4. Cross-account/role denial tests used isolated Supabase accounts. Detailed assessment evidence remains local and ignored. |
 | Editor and Markdown | User-tested and approved; archived, production verification pending | [Editor hardening](#editor-hardening-verified-locally-25-october-2026) updates Tiptap, ProseMirror, Markdown-it and linkify-it, and adds restricted clipboard cleanup preserving headings and bold. Production adoption is not yet verified. |
-| Development tools | Open | Vite, Vitest and other independent tooling findings remain outside the editor change. |
-| Automated lockfile assessment | Updated app scan completed through local registry mirror; findings remain open | App reassessed on 25 October: 5 High / 4 Moderate dependency-package findings, none in the scoped editor/sanitizer packages. Root and validation were not rescanned for this change; their 23 October snapshot remains 1 High each. These are not independent CVE counts. |
+| Remaining dependencies (SEC-10) | Patched and verified locally; production verification open | All named copies are patched without overrides or forced upgrades. [Version and verification record](security/2026-10-26-dependency-patch.md). |
+| Automated lockfile assessment | All three scans complete with 0 advisory matches | On 26 October, authenticated JFrog lockfile audits covered app, root scripts and validation, including development dependencies. These results do not establish production versions or a complete security assessment. |
 
 No evidence of misuse was reported in the reviewed logs. That does not prove that
 no misuse occurred. Production dependency versions are recorded from the operator's
 console output below; the latest application process check meets the Node
 security minimum. The database patch level remains unverified. The operator's confirmation above
 supersedes the earlier, provisional incident status in the chat.
+
+## Remaining dependencies verified locally, 26 October 2026
+
+SEC-10 now patches all named dependency findings without overrides or forced
+upgrades. `ws` resolves to 8.22.0 across app, root scripts and validation. The app
+also updates protobufjs, source-map-js, Vite, Vitest and its coupled packages,
+humanfs, both brace-expansion lines and js-yaml.
+
+Fresh npm lockfile audits through the authenticated JFrog mirror report **0
+advisory matches in each of the three roots**, including development packages.
+Before the patch, the same day's scans reported app 5 High / 4 Moderate, root 1
+High and validation 1 High package entries. The withdrawn `braces` advisory did
+not trigger an ESLint downgrade.
+
+Under Node 22.23.4, clean installs, 269 app tests, lint, all registry checks,
+WebSocket/SDK smoke checks and the Webpack production build passed. The 21
+separately configured database tests were skipped. The default Turbopack build
+still hits the existing local CSS-worker port restriction. Chrome checks passed
+for signed-out forms and redirects; authenticated and production smoke results
+are not established by those checks.
+
+Production confirmation remains open until the reviewed patch is released and
+its actual installed versions and normal application flows are checked. These
+package checks do not establish that all security risks or native/container
+components are clear.
+
+[Detailed version and verification record](security/2026-10-26-dependency-patch.md).
+
+[Archived OpenSpec change](../openspec/changes/archive/2026-10-26-patch-remaining-security-dependencies/proposal.md).
+Archived at the user's request with production verification still open.
+
+Environment / Railway variables: none new, changed or removed for this patch.
 
 ## 1. Completed Railway response
 
