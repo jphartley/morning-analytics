@@ -101,22 +101,11 @@ The project began as a minimal MVP (paste text → get analysis + 4 images, stat
 
 ---
 
-## Risks & Mitigations
+## Further development
 
-- Midjourney Discord automation uses user token (against ToS) → Personal use only; fallback to DALL-E 3, Flux, or third-party MJ API documented
-- User token may expire or get invalidated → Monitor; fallback options ready
-- Server actions receive userId from client session → Production hardening tracked in TechnicalDebt.md
-
----
-
-## What's Next
-
-See [TechnicalDebt.md](../TechnicalDebt.md) for the full list of deferred work, including:
-- Password reset and account deletion flows
-- Server-side auth middleware (replace client-side userId passing)
-- Email confirmation enforcement
-- Performance optimizations (parallel uploads, caching)
-- Export functionality
+Public product and reliability improvements are tracked in
+[TechnicalDebt.md](../TechnicalDebt.md). Security assessments and operational
+records follow the [publication policy](publication-policy.md).
 
 ---
 

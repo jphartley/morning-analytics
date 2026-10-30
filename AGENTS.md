@@ -161,3 +161,12 @@ PRs should include:
 3. local verification steps and results,
 4. screenshots/GIFs for UI changes,
 5. any env or migration updates (for example, `supabase/migrations/...`).
+
+## Public and private documentation
+
+Follow `docs/publication-policy.md` for every documentation and OpenSpec change.
+Keep security backlogs, findings, exploit/reproduction details, incident records
+and production audit evidence under ignored `private/`. Before security work,
+read `private/security/backlog.md` if available; private files are not present in
+a fresh clone. Keep public specs about intended behavior and generic procedures.
+Never force-add private material or copy it into issues, PRs or commit messages.

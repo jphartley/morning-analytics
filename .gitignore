@@ -8,14 +8,25 @@ node_modules/
 /supabase/.temp/
 
 # Environment
-.env
-.env.local
+.env*
+!.env.example
+!.env.*.example
 
 # Local reports
 gitleaks-report.json
 
-# Local security assessment and planning
-/docs/security-review-2026-10-24*
+# Private documentation and evidence (see docs/publication-policy.md)
+/private/
+
+# Legacy sensitive paths: prevent accidental reintroduction
+/SecurityDebt.md
+/docs/security/
+/docs/security-remediation*.md
+/docs/security-review*
+/openspec/changes/archive/*-add-user-auth/
+/openspec/changes/archive/*-harden-markdown-journal-editor/
+/openspec/changes/archive/*-patch-october-2026-security-dependencies/
+/openspec/changes/archive/*-patch-remaining-security-dependencies/
 /openspec/changes/enforce-server-authorization/
 /openspec/changes/archive/*-enforce-server-authorization/
 

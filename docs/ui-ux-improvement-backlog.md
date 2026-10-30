@@ -115,7 +115,7 @@ The current authentication screens support sign-in and sign-up but offer no reco
 
 ### Context
 
-- **Current behavior:** The sign-in screen only offers sign-in and sign-up; password reset is listed in `TechnicalDebt.md`.
+- **Design guidance:** Keep account-recovery behavior consistent with the acceptance criteria above. Security assessments are maintained under the [publication policy](publication-policy.md).
 - **Size:** M | **Difficulty:** Medium
 - **Category:** Authentication & Recovery
 

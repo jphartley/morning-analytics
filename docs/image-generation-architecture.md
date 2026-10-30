@@ -20,20 +20,12 @@ The recommended direction is therefore:
 3. Put image generation behind a provider interface and durable job model.
 4. Let the browser observe job state instead of waiting inside a long-running server action.
 
-## Evidence
+## Provider visibility
 
-The clearest diagnostic was attempt `d8a0f610-84e4-42bf-94ec-69a9c8f06bcd` on July 11, 2026:
-
-- Discord accepted the `/imagine` interaction immediately.
-- The bot listener received a Midjourney `messageCreate`, followed by progress `messageUpdate` events for the same message ID.
-- The matching progress message was later deleted.
-- Direct recovery with the bot token returned `404 Not Found`.
-- Direct recovery with the user token returned `403 Forbidden`.
-- Repeated channel-history recovery calls inspected zero messages after the attempt start.
-- Discord displayed the completed grid on the user's phone with "Original message was deleted" and "Only you can see this."
-- The app timed out only because the successful result was outside every API view available to the current listener.
-
-The common observation that a first generation succeeds while a later generation fails is consistent with Midjourney sometimes producing a normal channel-visible result and sometimes producing this private fallback. The evidence does not explain what causes Midjourney to choose the private path, but the architecture cannot safely depend on that undocumented choice.
+Discord ephemeral interaction responses are visible only to the invoking user.
+Provider integrations must account for that visibility when selecting an API.
+Deployment-specific traces and investigation evidence are maintained privately
+under the [publication policy](publication-policy.md).
 
 ## Current Failure Path
 

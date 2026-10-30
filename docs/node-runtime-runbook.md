@@ -142,10 +142,8 @@ commands and repository-root admin scripts.
 
 ### Railway Node security releases and Mise
 
-On 24 October 2026, Railpack 0.43.0 reported Node 22.23.4 in its build summary,
-but actually installed and ran 22.23.3. The same failure occurred with build
-caching disabled. npm emitted EBADENGINE for the app's >=22.23.4 <23 constraint
-but continued the build; an engine declaration alone did not enforce the floor.
+Verify the actual installed executable rather than relying on a build-summary
+label. npm engine warnings alone do not enforce the required runtime floor.
 
 Railpack generates a system Mise configuration with minimum_release_age = "14d".
 During installation, that policy excluded the newly released Node security patch
@@ -163,13 +161,6 @@ Mise-managed tools retain the builder's release-age delay. This deliberately
 trades Node's waiting period for timely security patches; it does not disable
 the delay globally or change the project's npm dependency lockfiles. Local nvm
 setup is unchanged.
-
-The correction was reproduced with Mise v2026.10.14 and isolated configuration:
-
-| Configuration | Global release age | Excluded tools | mise latest node@22 |
-| --- | --- | --- | --- |
-| Railpack defaults | 14d | None | 22.23.3 |
-| With app/mise.toml | 14d | node | 22.23.4 |
 
 ### Verify the deployed Node executable
 
@@ -200,8 +191,7 @@ status or dashboard version label does not replace this check. Reconnect the
 Console after a deployment so the evidence comes from the new container.
 
 If the Console reports `node: command not found`, it may lack the service's Mise
-directories on PATH. On 24 October, node was unavailable by name in a fresh
-Console, but /proc/1/exe --version returned v22.23.4. This proves PID 1's Node
+directories on PATH. Verify PID 1 with `/proc/1/exe --version`. This proves PID 1's Node
 version; it does not prove the Next.js child's version or identify the source
 commit. The process loop above does not depend on node being on PATH.
 
@@ -233,13 +223,8 @@ mise settings get minimum_release_age_excludes
 ```
 
 For the observed builder, the expected values are 14d and a list containing node.
-Record the actual build and runtime evidence in
-[`the remediation tracker`](security-remediation-2026-10.md). For the October
-correction, the operator verified commit
-1ad2218064f5f06168eebce3a9cb60166b8396e4, PID 1 and Next.js at 22.23.4, then
-confirmed removal of the temporary NO_CACHE variable and continued 22.23.4
-operation. Future deployments still require their own executable checks; local
-reproduction and a historical pass do not establish a later container's version.
+Record deployment-specific versions, commits and verification results in the
+private operations record described by the [publication policy](publication-policy.md).
 
 References: [Railpack Mise configuration](https://railpack.com/config/mise) and
 [Mise Node-only release-age exclusion](https://mise.jdx.dev/configuration/settings.html#minimum_release_age_excludes).

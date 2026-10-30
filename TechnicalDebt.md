@@ -2,49 +2,19 @@
 
 This document tracks technical decisions deferred from MVP and features planned for future versions.
 
-## Authentication (v2+)
-
-- [ ] **Email confirmation enforcement**: MVP allows signin before email confirmation for easier testing. Future versions should enforce email confirmation before granting access. See `openspec/changes/archive/2026-02-15-add-user-auth/design.md` for context.
-- [ ] **Password reset flow**: MVP does not include password reset. Users who forget passwords will need manual support. Add in v2.
-- [ ] **Account deletion**: Account self-deletion remains deferred. Analysis deletion already exists, including image cleanup, and passed the operator's production smoke check on 25 October 2026.
-- [x] **Server-side route protection**: Deployed on 25 October 2026 in `5f3073c`. Cookie-backed sessions, the Next.js proxy and a protected server page entry now check authentication before returning the app. Browser session context continues to support the UI.
-
-- [x] **Server-side session verification and ownership**:
-
-  **Completed, 25 October 2026:** All 12 protected Server Actions verify the session, resolve the persisted role and enforce resource ownership. Routine database work uses the authenticated user's client and RLS; necessary privileged image operations are confined to a server-only adapter and server-managed resource allocations.
-
-  **Verification:** 239 unit tests and 21 isolated Supabase integration tests passed. The production migration, ownership constraints and restrictive policies were checked; the operator verified sign-out/sign-in and analysis creation, reading and deletion. Railway runtime output identifies `5f3073ce8d9cad8c6d8952f54207267684ae6dd8` on Node 22.23.4. Cross-account and role denial tests ran locally against isolated real Supabase services, not other people's production data.
-
-  See the [October authorization checklist](docs/security-remediation-2026-10.md#b-server-side-authorization) for the completion record. Detailed assessment evidence remains local and ignored. Independent security findings remain separate work.
-
-  **Role-aware UI note:** Administrator-only operations now enforce the persisted role on the server as well as in the UI. Administrator status does not grant access to another account's content.
+Security assessments, operational evidence and security backlogs are maintained
+privately under the [publication policy](docs/publication-policy.md).
 
 ## Deployment & Infrastructure
 
-**October 2026 security patch:** Framework, Sharp and Undici updates are deployed.
-The Node release-age correction is verified in production at 22.23.4; the operator
-also confirmed temporary NO_CACHE removal and continued 22.23.4 operation.
-Keep the permanent Node-only app/mise.toml policy. See the
-[Node runbook](docs/node-runtime-runbook.md) and
-[remediation tracker](docs/security-remediation-2026-10.md) for evidence and the
-remaining tooling and other security findings, plus the locally verified editor
-follow-up approved after user testing; production deployment verification remains pending. This patch is not a clean bill
-of health for the whole dependency tree.
+Keep the Node runtime policy and release-age exception documented in the
+[Node runbook](docs/node-runtime-runbook.md).
 
 - [ ] **Next.js standalone output mode**: Currently using default Next.js output. For leaner Railway deployments, switch to `output: "standalone"` in `next.config.ts`. This produces a self-contained `.next/standalone/` directory with only the files needed to run. Requires ensuring non-code assets (e.g., prompt files in `/app/prompts/`) are copied into the standalone output via `outputFileTracingIncludes`. Deferred during Railway prep to keep initial deployment simple.
-
-## Journal Editor
-
-- **Editor hardening approved after user testing:** `harden-markdown-journal-editor` updates the editor/Markdown dependencies and cleans external clipboard content while retaining headings and bold. Local verification passes and the user confirmed all testing passed on 25 October 2026. The change is archived; production deployment verification remains pending. See the [October evidence](docs/security-remediation-2026-10.md#editor-hardening-verified-locally-25-october-2026) for versions, checks and remaining dependency findings.
-- [ ] **Entry-size policy before text processing:** General paste/entry limits were deliberately excluded from the selected editor update and formatting-preserving clipboard scope. The reviewed parser bugs are patched locally, but very large inputs can still consume browser resources. Agree limits and a clear rejection message, then enforce them before parsing without silently truncating an existing journal. Origin: `harden-markdown-journal-editor`; small-to-medium effort including product review and browser checks.
 
 ## OpenSpec Delivery Queue
 
 - [ ] **Parallel worktree stress test**: The `parallel-openspec-delivery-queue` change validated the single-change `/opsx:start` path and finalization flow through real use (`add-view-density-modes`), including archive, squash merge, push, and cleanup. A deliberate two-worktree stress test with unique ports and conflict detection was deferred because parallel execution is not needed immediately. Before relying on parallel queue execution, create two harmless queued changes and verify unique port allocation, low-risk overlap handling, and high-risk conflict sequencing.
-
-## Analytics & Monitoring
-
-- [ ] **Auth metrics**: Track signup rate, signin failures, auth errors, session timeout events. Useful for debugging production issues and understanding user behavior.
 
 ## Contextual Memory
 

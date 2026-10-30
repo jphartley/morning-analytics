@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+node scripts/check-publication-boundary.mjs
+
 if ! command -v gitleaks >/dev/null 2>&1; then
   echo "gitleaks is required for this repository's pre-commit secret scan." >&2
   echo "Install it with: brew install gitleaks" >&2

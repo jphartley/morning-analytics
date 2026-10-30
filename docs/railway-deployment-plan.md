@@ -216,8 +216,8 @@ from the build and running service. Require Node 22.23.4 or later within 22.x;
 an existing deployment does not update itself when a newer 22.x patch is released.
 Verify the installed Next.js, React pair, Sharp/native libraries and Undici
 versions against the reviewed dependency graph. Keep local test success and
-production verification as separate entries in
-[`security-remediation-2026-10.md`](security-remediation-2026-10.md).
+production verification as separate entries in the private operations record
+described by the [publication policy](publication-policy.md).
 
 Railpack's generated Mise configuration delays new tool releases for 14 days.
 The committed app/mise.toml excludes only Node from that delay so urgent security
@@ -225,54 +225,9 @@ patches can be adopted while retaining latest 22.x selection. Other tools retain
 the builder's policy. Verify the actual Node installation output and running
 executable: a package-summary label can disagree with the installed version.
 
-If NO_CACHE=1 was added for the October diagnostic rebuild, it is temporary.
-After the corrected deployment's versions are verified, remove NO_CACHE from the
-morning-analytics production service, review and deploy the staged removal, and
-verify the resulting deployment. No permanent new Railway variable is required
-for the Node release-age correction.
-
-### October 2026 Node mismatch: verification and cleanup
-
-The incident, fix and executable-check commands are documented in the
-[`Node runtime runbook`](node-runtime-runbook.md#railway-node-security-releases-and-mise).
-The observed cause was the builder's 14-day tool-release delay: a build summary
-selected 22.23.4 while Mise installed 22.23.3. Disabling caching did not fix it.
-Keep app/mise.toml's Node-only exclusion when updating the runtime policy; do not
-replace it with a global release-age override or a permanent single-patch pin.
-
-For each corrective deployment:
-
-1. Wait for the new deployment to become Active. Record its source commit and
-   actual Node installation output from Build Logs; app EBADENGINE warnings
-   mean the required runtime floor has not been met.
-2. Open a fresh Console and follow the runbook's checks for the actual npm and
-   Next.js process executables. Require Node 22.23.4 or later within 22.x.
-   If the Console cannot find node, follow the runbook's verified-executable
-   fallback; a missing interactive PATH entry does not establish a bad runtime.
-3. Record the installed package and image-library versions using:
-
-   ```sh
-   npm ls next react react-dom sharp undici --all
-   node -p 'JSON.stringify(require("sharp").versions, null, 2)'
-   ```
-
-4. Repeat the relevant production smoke checks and add the results to the
-   remediation tracker. Keep unresolved version checks open even if the app works.
-5. If the temporary NO_CACHE setting is present, remove it from this service's
-   production Variables, review and deploy the staged removal, reconnect the
-   Console, and verify the final deployment again. Normal cached builds should
-   retain the Node-only release-age correction through the committed file.
-
-Environment / Railway variables: the permanent fix adds no new variables.
-NO_CACHE was a temporary diagnostic addition; its removal is a separate staged
-production change requiring deployment. No credential changes or database
-migration are required by this correction.
-
-**Verified outcome, 24 October 2026:** The operator retrieved commit
-1ad2218064f5f06168eebce3a9cb60166b8396e4 and confirmed both PID 1 and Next.js
-use Node 22.23.4. The operator then confirmed NO_CACHE was removed and Node
-still reported 22.23.4. The temporary setting is no longer required. The process
-checks and cleanup sequence above remain the procedure for future incidents.
+If a diagnostic rebuild uses `NO_CACHE=1`, remove it after verification, review
+and deploy the staged removal, then verify the resulting deployment. Keep
+incident timelines and actual deployment evidence in private operations records.
 
 ## Fallback: railway.toml
 
@@ -291,13 +246,8 @@ Then set root directory to `app` in the dashboard and redeploy.
 
 ---
 
-## Credential response status
+## Credential handling
 
-The earlier deployment-era rotation checklist is superseded by the
-[October response record](security-remediation-2026-10.md#1-completed-railway-response).
-On 23 October, the operator confirmed revocation/reset at Google, Discord and
-Supabase, replacement values in Railway, redeployment and provider-log review.
-Do not repeat that completed response solely because another dependency finding
-is open. New evidence or provider notices require their own assessment. Never
-put credential values in these documents or logs; production variable updates
-must still be reviewed and deployed as staged changes.
+Enter production secrets directly in Railway. Review and deploy staged variable
+changes before treating them as active. Keep credential-response records private
+under the [publication policy](publication-policy.md).

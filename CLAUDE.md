@@ -67,7 +67,7 @@ JFrog auth token has expired. Follow the login and lockfile fix steps in `/docs/
 
 Detailed references:
 - `/docs/node-runtime-runbook.md`
-- `/docs/security-remediation-2026-10.md`
+- `/docs/publication-policy.md`
 - `/docs/railway-deployment-plan.md`
 - `/docs/research/railway-npm-ci-failure.md`
 - `/docs/research/jfrog-npm-login-workflow.md`
@@ -689,7 +689,8 @@ Skips Gemini API calls, uses mock responses. 2-second total time instead of 65-9
 
 **⚠️ IMPORTANT: See `/TechnicalDebt.md` at the project root.** This file maintains a prioritized list of deferred features, known limitations, and planned future work:
 
-- Features deferred from MVP (password reset, account deletion, email confirmation enforcement)
+- Public product improvements and reliability work
+- Security and account-protection planning is maintained privately under the publication policy
 - Performance optimizations not yet implemented
 - Monitoring and analytics to be added later
 
@@ -721,3 +722,10 @@ git push origin main
 ```
 
 **Reminder**: After archiving a change, also check and update `/TechnicalDebt.md` with any deferred work. This is important for maintaining a complete picture of the project's remaining work.
+
+## Public and private documentation
+
+Follow `docs/publication-policy.md`. Security findings, backlogs, incident records
+and production evidence belong in ignored `private/` files. Read
+`private/security/backlog.md` when available before security work. Do not publish
+private findings through OpenSpec artifacts, issues, PRs or commit messages.

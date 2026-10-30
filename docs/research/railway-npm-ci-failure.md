@@ -9,9 +9,9 @@
 **Historical snapshot:** Versions and runtime declarations below describe the
 February incident. The current runtime policy is latest stable Node 22.x with
 minimum 22.23.4 and a Node-only Mise release-age exception. See the
-[Node runtime runbook](../node-runtime-runbook.md) and
-[October remediation record](../security-remediation-2026-10.md) for current
-configuration and verified production evidence.
+[Node runtime runbook](../node-runtime-runbook.md) for current configuration.
+Deployment-specific evidence is kept privately under the
+[publication policy](../publication-policy.md).
 
 ---
 

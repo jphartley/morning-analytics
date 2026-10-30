@@ -1,5 +1,11 @@
 # Gitleaks secret-scanning runbook
 
+Follow [the publication policy](publication-policy.md) as well as secret scanning.
+Security findings and operational evidence remain private even when they contain
+no credential values. The pre-commit hook first runs
+`node scripts/check-publication-boundary.mjs` to reject staged ignored files,
+including force-added private material. This requires Node on the local PATH.
+
 Use Gitleaks before commits and pushes to prevent credentials, API keys, and
 other secrets from entering Git history. It scans committed Git patches and
 does not require or print values from ignored local environment files.

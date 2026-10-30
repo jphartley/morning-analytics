@@ -184,7 +184,7 @@ after explicit approval or in a dedicated hygiene change.
 - [Supabase CLI runbook](docs/supabase-cli-runbook.md): standard session-only database-password setup, production migration preview/push, and connection recovery.
 - [Node runtime runbook](docs/node-runtime-runbook.md): patched Node 22 setup, Railway release-age policy, and actual-process checks, including the Console PATH fallback.
 - [Railway deployment plan](docs/railway-deployment-plan.md): production deployment and environment-change verification.
-- [October security remediation](docs/security-remediation-2026-10.md): completed dependency patch, production evidence and remaining security work.
+- [Publication policy](docs/publication-policy.md): what belongs in public Git and what must stay private.
 - `docs/gitleaks-runbook.md`: local secret-scanner setup, pre-commit protection, and release scanning.
 - `docs/prd.md`: product requirements and MVP scope.
 - `docs/prompt.md`: Gemini prompt and analysis structure.
